@@ -1,0 +1,50 @@
+[package]
+name = "local-network-harness"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "local_network_harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stack-runner"
+path = "src/main.rs"
+
+[[example]]
+name = "service_inspection"
+path = "examples/service_inspection.rs"
+
+[[example]]
+name = "event_handler_demo"
+path = "examples/event_handler_demo.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+tracing = { version = "0.1.37" }
+tracing-subscriber = { version = "0.3.17" }
+serde = "1"
+serde_json = "1.0.124"
+serde_yaml = "0.9.21"
+reqwest = { version = "0.12.15", features = ["json"] }
+duct = "0.13"
+
+indexer-common = { path = "../rs-indexer-agent/crates/common" }
+agent = { path = "../rs-indexer-agent/crates/agent" }
+bollard = "0.17"
+uuid = { version = "1.11", features = ["v4"] }
+tempfile = "3.13"
+futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
+notify = "6.1"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.11"
+base64 = "0.21"
+async-trait = "0.1"
+pin-project-lite = "0.2"
+tokio-stream = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"

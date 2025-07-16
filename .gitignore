@@ -1,0 +1,14 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Test activity directory - contains logs, volumes, and other test artifacts
+/test-activity/
+
+# Legacy log directories (can be removed after migration)
+/logs/
+/container-logs/
+
+# Since this is part of a workspace, Cargo.lock is at the workspace root
+# and should not be tracked here

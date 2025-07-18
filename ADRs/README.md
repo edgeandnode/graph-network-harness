@@ -11,6 +11,14 @@ This directory contains the architectural decision records for the local-network
 | [003](003-logging-sessions.md) | Session-based Logging Architecture | Accepted | 2025-07-16 |
 | [004](004-project-structure.md) | Project Structure and Binary Naming | Accepted | 2025-07-16 |
 | [005](005-service-events.md) | Service Event Streaming and Inspection API | Proposed | 2025-07-16 |
+| [006](006-container-paths.md) | Container Path Management | Accepted | 2025-07-16 |
+| [007](007-wireguard-mesh-networking.md) | WireGuard Mesh Networking for Distributed Services | Proposed | 2025-07-17 |
+| [008](008-service-deployment-packaging.md) | Service Deployment and Packaging System | Proposed | 2025-07-17 |
+| [009](009-hybrid-process-container-execution.md) | Hybrid Process and Container Execution Model | Proposed | 2025-07-17 |
+| [010](010-bare-lan-nodes-support.md) | Bare LAN Node Support | Proposed | 2025-07-17 |
+| [011](011-dns-based-service-discovery.md) | DNS-Based Service Discovery | Proposed | 2025-07-17 |
+| [012](012-yaml-service-registry.md) | YAML-Based Service Registry | Proposed | 2025-07-17 |
+| [013](013-project-rename-workspace.md) | Project Rename and Workspace Structure | Proposed | 2025-07-17 |
 
 ## ADR Lifecycle
 

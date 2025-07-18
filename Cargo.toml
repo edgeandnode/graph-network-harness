@@ -1,39 +1,35 @@
-[package]
-name = "local-network-harness"
+[workspace]
+members = [
+    "crates/harness",
+    "crates/harness-cli", 
+    "crates/service-registry",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
+authors = ["The Graph Network Harness Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/graphprotocol/graph-network-harness"
 
-[lib]
-name = "local_network_harness"
-path = "src/lib.rs"
-
-[[bin]]
-name = "stack-runner"
-path = "src/main.rs"
-
-[[example]]
-name = "service_inspection"
-path = "examples/service_inspection.rs"
-
-[[example]]
-name = "event_handler_demo"
-path = "examples/event_handler_demo.rs"
-
-[dependencies]
+[workspace.dependencies]
+# Core dependencies
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-tracing = { version = "0.1.37" }
-tracing-subscriber = { version = "0.3.17" }
-serde = "1"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.124"
 serde_yaml = "0.9.21"
 reqwest = { version = "0.12.15", features = ["json"] }
-duct = "0.13"
 
-indexer-common = { path = "../rs-indexer-agent/crates/common" }
-agent = { path = "../rs-indexer-agent/crates/agent" }
+# Container and process management
+duct = "0.13"
 bollard = "0.17"
+
+# Utilities
 uuid = { version = "1.11", features = ["v4"] }
 tempfile = "3.13"
 futures-util = "0.3"
@@ -46,5 +42,20 @@ async-trait = "0.1"
 pin-project-lite = "0.2"
 tokio-stream = "0.1"
 
-[dev-dependencies]
-tokio-test = "0.4"
+# New dependencies for distributed features
+wireguard-control = "1.5"
+openssh = "0.10"
+trust-dns-resolver = "0.23"
+trust-dns-server = "0.23"
+dirs = "5.0"
+
+# Internal crates
+graph-network-harness = { path = "crates/harness" }
+service-registry = { path = "crates/service-registry" }
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"

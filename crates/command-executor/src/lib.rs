@@ -6,23 +6,16 @@
 #![warn(missing_docs)]
 
 pub mod backend;
-pub mod command;
+pub mod backends;
 pub mod error;
 pub mod event;
 pub mod executor;
 pub mod process;
-pub mod signal;
 pub mod target;
 
 pub use backend::Backend;
-pub use command::Command;
 pub use error::{Error, Result};
-pub use event::{ServiceEvent, EventType, EventSeverity};
+pub use event::{ProcessEvent, ProcessEventType, LogFilter, LogSource, NoOpFilter};
 pub use executor::Executor;
-pub use process::Process;
-pub use signal::Signal;
+pub use process::{ProcessHandle, ExitStatus};
 pub use target::ExecutionTarget;
-
-// Re-export common traits
-pub use futures::stream::Stream;
-pub use futures::future::Future;

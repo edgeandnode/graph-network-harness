@@ -5,6 +5,17 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
 
 ## Implementation Phases
 
+### Phase 0: Command Executor (In Progress)
+- [x] Create command-executor crate structure
+- [x] Implement core types (Executor<T>, Backend trait, Process trait)
+- [x] Implement LocalBackend with basic Command/ManagedProcess support
+- [x] Add tests for local command execution (8 passing tests)
+- [x] Implement event streaming with line buffering (9 passing tests)
+- [ ] Add SystemdService support to LocalBackend
+- [ ] Add SystemdPortable support to LocalBackend
+- [ ] Implement SSH backend
+- [ ] Implement Docker backend (pending runtime-agnostic solution)
+
 ### Phase 1: Core Infrastructure
 - [ ] Create service registry module
   - [ ] Service registration/deregistration
@@ -12,8 +23,8 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [ ] Service dependency tracking
   - [ ] Registry persistence
 
-- [ ] Implement service runtime trait
-  - [ ] Process runtime (local execution)
+- [ ] Integrate command-executor with service registry
+  - [x] Process runtime trait (Backend trait in command-executor)
   - [ ] Docker runtime (container execution)
   - [ ] Remote runtime (SSH execution)
 

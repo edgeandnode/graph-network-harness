@@ -12,9 +12,10 @@ async-process = "2.0"
 async-trait = { workspace = true }
 futures = "0.3"
 futures-util = { workspace = true }
+futures-lite = "2.0"
 
 # Error handling and utilities
-anyhow = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -33,8 +34,8 @@ openssh = { workspace = true, optional = true }
 [features]
 default = []
 ssh = ["openssh"]
-# docker = ["bollard"]  # Disabled until we find a runtime-agnostic solution
-full = ["ssh"]
+docker = []  # Feature flag exists but no implementation yet
+full = ["ssh", "docker"]
 
 [dev-dependencies]
 # Use smol for testing - it's lightweight and runtime-agnostic

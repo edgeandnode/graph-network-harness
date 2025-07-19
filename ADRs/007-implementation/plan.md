@@ -7,14 +7,20 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
 
 ### Phase 0: Command Executor (In Progress)
 - [x] Create command-executor crate structure
-- [x] Implement core types (Executor<T>, Backend trait, Process trait)
+- [x] Implement core types (Executor<T>, Backend trait, ProcessHandle trait)
 - [x] Implement LocalBackend with basic Command/ManagedProcess support
 - [x] Add tests for local command execution (8 passing tests)
 - [x] Implement event streaming with line buffering (9 passing tests)
-- [ ] Add SystemdService support to LocalBackend
-- [ ] Add SystemdPortable support to LocalBackend
-- [ ] Implement SSH backend
-- [ ] Implement Docker backend (pending runtime-agnostic solution)
+- [x] Refactor API to split event streams and process handles
+- [ ] **Architecture Change**: Split Backend into Launcher/Attacher paradigms
+  - [ ] Refactor Backend trait to Launcher trait (for things we spawn)
+  - [ ] Create Attacher trait (for things we connect to)
+  - [ ] Split LocalTarget into LaunchedTarget and AttachedTarget
+  - [ ] Update Executor to support both paradigms
+- [ ] Implement ManagedService for generic service attachment
+- [ ] Add SystemdPortable support to LocalLauncher
+- [ ] Implement SSH launcher
+- [ ] Implement Docker launcher (pending runtime-agnostic solution)
 
 ### Phase 1: Core Infrastructure
 - [ ] Create service registry module

@@ -7,19 +7,33 @@ use thiserror::Error;
 pub enum Error {
     /// Failed to spawn a process
     #[error("failed to spawn process: {reason}")]
-    SpawnFailed { reason: String },
+    SpawnFailed { 
+        /// The reason for the spawn failure
+        reason: String 
+    },
     
     /// Process terminated by signal
     #[error("process terminated by signal {signal}")]
-    SignalTerminated { signal: i32 },
+    SignalTerminated { 
+        /// The signal number that terminated the process
+        signal: i32 
+    },
     
     /// Failed to send signal to process
     #[error("failed to send signal {signal}: {reason}")]
-    SignalFailed { signal: i32, reason: String },
+    SignalFailed { 
+        /// The signal number that failed to send
+        signal: i32, 
+        /// The reason for the signal failure
+        reason: String 
+    },
     
     /// Command not found
     #[error("command not found: {command}")]
-    CommandNotFound { command: String },
+    CommandNotFound { 
+        /// The command that was not found
+        command: String 
+    },
     
     /// SSH connection failed
     #[cfg(feature = "ssh")]

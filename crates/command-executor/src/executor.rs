@@ -1,27 +1,27 @@
-//! Main executor type that wraps different backends
+//! Main executor type that wraps different launchers
 
 use async_process::Command;
-use crate::backend::Backend;
+use crate::launcher::Launcher;
 use crate::error::Result;
 use crate::event::LogFilter;
 use crate::process::ExitStatus;
 
-/// An executor that can run commands via a specific backend
-pub struct Executor<B: Backend> {
+/// An executor that can run commands via a specific launcher
+pub struct Executor<L: Launcher> {
     /// The service name for logging/identification
     service_name: String,
-    /// The backend implementation
-    backend: B,
+    /// The launcher implementation
+    launcher: L,
     /// Optional log filter
     log_filter: Option<Box<dyn LogFilter>>,
 }
 
-impl<B: Backend> Executor<B> {
-    /// Create a new executor with the given backend
-    pub fn new(service_name: String, backend: B) -> Self {
+impl<L: Launcher> Executor<L> {
+    /// Create a new executor with the given launcher
+    pub fn new(service_name: String, launcher: L) -> Self {
         Self {
             service_name,
-            backend,
+            launcher,
             log_filter: None,
         }
     }
@@ -37,19 +37,19 @@ impl<B: Backend> Executor<B> {
         &self.service_name
     }
     
-    /// Spawn a command and return event stream and process handle
-    pub async fn spawn(&self, target: &B::Target, command: Command) -> Result<(B::EventStream, B::Handle)> {
-        self.backend.spawn(target, command).await
+    /// Launch a command and return event stream and process handle
+    pub async fn launch(&self, target: &L::Target, command: Command) -> Result<(L::EventStream, L::Handle)> {
+        self.launcher.launch(target, command).await
     }
     
     /// Execute a command and wait for it to complete
-    pub async fn execute(&self, target: &B::Target, command: Command) -> Result<ExitStatus> {
-        self.backend.execute(target, command).await
+    pub async fn execute(&self, target: &L::Target, command: Command) -> Result<ExitStatus> {
+        self.launcher.execute(target, command).await
     }
     
-    /// Get a reference to the backend
-    pub fn backend(&self) -> &B {
-        &self.backend
+    /// Get a reference to the launcher
+    pub fn launcher(&self) -> &L {
+        &self.launcher
     }
 }
 

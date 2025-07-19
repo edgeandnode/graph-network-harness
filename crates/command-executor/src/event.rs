@@ -38,9 +38,17 @@ impl ProcessEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProcessEventType {
     /// Process has started
-    Started { pid: u32 },
+    Started { 
+        /// The process ID of the started process
+        pid: u32 
+    },
     /// Process has exited
-    Exited { code: Option<i32>, signal: Option<i32> },
+    Exited { 
+        /// The exit code if the process exited normally
+        code: Option<i32>, 
+        /// The signal number if the process was terminated by a signal
+        signal: Option<i32> 
+    },
     /// Log line from stdout
     Stdout,
     /// Log line from stderr  

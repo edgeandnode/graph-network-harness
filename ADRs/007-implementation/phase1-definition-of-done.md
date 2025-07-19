@@ -35,50 +35,66 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] Line buffering for stdout/stderr
 - [x] LogFilter trait for optional filtering
 
-### 4. Backend Trait ✓ When:
-- [x] `Backend` trait uses associated type for Process
+### 4. Launcher/Attacher Traits ✓ When:
+- [x] `Backend` trait renamed to `Launcher` trait
+- [x] `Launcher` trait uses associated types for EventStream and Handle
 - [x] No unnecessary dynamic dispatch
-- [x] `execute()` and `spawn()` methods are implemented
+- [x] `execute()` and `launch()` methods are implemented
+- [ ] `Attacher` trait created for connecting to existing services
+- [ ] `AttachedHandle` trait for service lifecycle control
 - [x] Proper error handling with custom error types
 
-### 5. Local Backend Implementation ✓ When:
-- [x] `LocalBackend` fully implements Backend trait
-- [ ] Handles all ExecutionTarget types:
+### 5. Local Launcher Implementation ✓ When:
+- [x] `LocalLauncher` fully implements Launcher trait
+- [ ] Handles LaunchedTarget types:
 - [x] Command: Direct process spawning with async-process
+- [x] ManagedProcess: Process lifecycle management
+- [ ] SystemdPortable: Portable service attachment/start
 - [x] Concurrent stdout/stderr reading
 - [x] Signal handling on Unix (via nix crate)
 - [x] Graceful degradation on Windows
 - [ ] Process cleanup on drop
 
-### 6. Docker Backend Implementation ✓ When:
-- [ ] `DockerBackend` implements Backend trait
-- [ ] Can execute in existing containers
-- [ ] Can execute in compose service containers
+### 6. Local Attacher Implementation ✓ When:
+- [ ] `LocalAttacher` implements Attacher trait
+- [ ] Handles AttachedTarget types:
+- [ ] ManagedService: Generic service with configurable commands
+- [ ] Service status checking
+- [ ] Service lifecycle control (start/stop/restart/reload)
+- [ ] Log streaming via configurable commands
+- [ ] Support for systemd, rc.d, and custom services
+
+### 7. Docker Launcher Implementation ✓ When:
+- [ ] `DockerLauncher` implements Launcher trait
+- [ ] Can launch containers
+- [ ] Can launch compose services
 - [ ] Handles container stdout/stderr streaming
-- [ ] Converts Docker events to ServiceEvents
+- [ ] Converts Docker events to ProcessEvents
 - [ ] Supports exec with environment variables
 
-### 7. SSH Backend Implementation ✓ When:
-- [ ] `SshBackend` implements Backend trait
+### 8. SSH Launcher Implementation ✓ When:
+- [ ] `SshLauncher` implements Launcher trait
 - [ ] Connection management with key-based auth
 - [ ] Remote command execution
 - [ ] Remote process management
 - [ ] File upload/download capabilities
 - [ ] Handles connection failures gracefully
 
-### 8. Process Management ✓ When:
-- [x] `Process` trait with event streaming for all backends
-- [x] `signal()` method works appropriately for each backend:
-  - [x] Local: Unix signals via nix
-  - [ ] Docker: docker kill with signal support
-  - [ ] SSH: remote kill command
+### 9. Process Management ✓ When:
+- [x] `ProcessHandle` trait with event streaming for launched processes
+- [x] `AttachedHandle` trait for attached service control
+- [x] Signal methods work appropriately for each handle type:
+  - [x] Local launched: Unix signals via nix
+  - [ ] Local attached: Service control commands
+  - [ ] Docker launched: docker kill with signal support
+  - [ ] SSH launched: remote kill command
 - [x] `wait()` for process completion
 - [x] `terminate()` and `kill()` convenience methods
-- [x] Events can only be taken once (ownership transfer)
+- [x] Event streams and handles are separate from spawn/attach
 
-### 9. Comprehensive Testing ✓ When:
+### 10. Comprehensive Testing ✓ When:
 
-#### `tests/local_executor.rs`
+#### `tests/local_launcher.rs`
 - [x] Basic command execution (echo, cat) - runs on host
 - [x] Long-running processes
 - [x] Signal handling (SIGTERM, SIGKILL)
@@ -87,100 +103,116 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] Error cases (command not found)
 - [x] ManagedProcess lifecycle (PID tracking, restart)
 
-#### `tests/systemd_executor.rs`
+#### `tests/local_attacher.rs`
+- [ ] ManagedService with systemd commands
+- [ ] Service status checking
+- [ ] Service lifecycle control (start/stop/restart)
+- [ ] Log streaming from services
+- [ ] Custom service command configuration
+
+#### `tests/systemd_integration.rs`
 - [ ] Create Docker container with systemd (e.g., using systemd/systemd image)
-- [ ] Test SystemdService execution:
-  - [ ] Start/stop/restart services
+- [ ] Test ManagedService with systemd commands:
+  - [ ] Start/stop/restart services via attacher
   - [ ] Status checking
-  - [ ] Enable/disable services
   - [ ] Journal log streaming
-- [ ] Test SystemdPortable execution:
+- [ ] Test SystemdPortable via launcher:
   - [ ] Attach/detach portable services
   - [ ] Start/stop portable services
   - [ ] List attached services
 - [ ] Cleanup container after tests
 
-#### `tests/docker_executor.rs`
-- [ ] Create test container
+#### `tests/docker_launcher.rs`
+- [ ] Create test container via launcher
 - [ ] Execute commands in container
 - [ ] Environment variable injection
 - [ ] Volume mounts
 - [ ] Container cleanup
 
-#### `tests/compose_executor.rs`
+#### `tests/compose_launcher.rs`
 - [ ] Create test docker-compose.yml
-- [ ] Start compose stack
+- [ ] Start compose stack via launcher
 - [ ] Execute in specific service
 - [ ] Access service by name
 - [ ] Stack cleanup
 
-#### `tests/ssh_executor.rs`
+#### `tests/ssh_launcher.rs`
 - [ ] Create Docker container with sshd
 - [ ] Generate test SSH keys
-- [ ] Connect and execute commands
+- [ ] Connect and execute commands via launcher
 - [ ] File upload/download
 - [ ] Long-running commands over SSH
 - [ ] Connection error handling
 
-### 10. Examples ✓ When:
-- [ ] `examples/basic_exec.rs` - Simple command execution (all backends)
-- [ ] `examples/streaming_logs.rs` - Event streaming from long process
-- [ ] `examples/process_control.rs` - Start, signal, kill
-- [ ] `examples/docker_exec.rs` - Docker-specific features
-- [ ] `examples/ssh_exec.rs` - SSH with file transfer
+### 11. Examples ✓ When:
+- [ ] `examples/basic_launch.rs` - Simple command execution (all launchers)
+- [ ] `examples/service_attach.rs` - Service attachment and control
+- [ ] `examples/streaming_logs.rs` - Event streaming from processes and services
+- [ ] `examples/process_control.rs` - Launch, signal, kill
+- [ ] `examples/docker_launch.rs` - Docker-specific features
+- [ ] `examples/ssh_launch.rs` - SSH with file transfer
 - [ ] Examples have comments explaining usage
 - [ ] Examples actually run and produce expected output
 
-### 11. Documentation ✓ When:
+### 12. Documentation ✓ When:
 - [ ] All public types have doc comments
-- [ ] Module-level documentation explains design
+- [ ] Module-level documentation explains Launcher/Attacher design
 - [ ] Examples in doc comments
 - [ ] README.md in crate root
-- [ ] Backend-specific features documented
+- [ ] Launcher/Attacher-specific features documented
 - [ ] No missing_docs warnings
 
-### 12. API Quality ✓ When:
+### 13. API Quality ✓ When:
 - [ ] API is ergonomic (easy to use correctly)
 - [ ] Hard to misuse (type safety)
 - [ ] Good error messages
-- [ ] Consistent naming across backends
-- [ ] Backend-specific features are discoverable
+- [ ] Consistent naming across launchers and attachers
+- [ ] Launcher/Attacher-specific features are discoverable
+- [ ] Clear distinction between launch vs attach semantics
 - [ ] Follows Rust conventions
 
 ## Success Criteria
 
 Phase 1 is complete when:
 1. All checkboxes above are checked
-2. All three backends (Local, Docker, SSH) are fully functional
+2. All launchers (Local, Docker, SSH) and attachers (Local) are fully functional
 3. Test coverage demonstrates real-world usage:
-   - Local process execution works
-   - Docker container execution works
-   - Docker compose service execution works
-   - SSH to a test container works
-4. The following example works for all backends:
+   - Local process launching works
+   - Local service attachment works
+   - Docker container launching works
+   - Docker compose service launching works
+   - SSH remote launching works
+4. The following examples work:
+
+   **Launching processes:**
    ```rust
-   // Local
-   let executor = Executor::local("my-service");
+   // All launchers use same API
+   let (events, handle) = launcher.launch(&target, command).await?;
    
-   // Docker
-   let executor = Executor::docker("my-service", "container-id").await?;
-   
-   // SSH
-   let executor = Executor::ssh("my-service", "localhost", "user", key_path).await?;
-   
-   // All use same API
-   let mut result = executor.execute(
-       Command::new("echo").arg("hello")
-   ).await?;
-   
-   while let Some(event) = result.events.recv().await {
+   // Process events and control lifecycle
+   while let Some(event) = events.next().await {
        println!("{:?}", event);
+   }
+   let status = handle.wait().await?;
+   ```
+
+   **Attaching to services:**
+   ```rust
+   // Service attachment and control
+   let (events, handle) = attacher.attach(&service, config).await?;
+   
+   // Monitor service and control as needed
+   while let Some(event) = events.next().await {
+       if should_restart(&event) {
+           handle.restart().await?;
+       }
    }
    ```
 5. PR is reviewed and merged
 
 ## Non-Goals (Future Phases)
-- Complex ExecutionTarget types (systemd services, etc.)
 - Integration with service registry
 - Package management
 - WireGuard networking
+- Kubernetes launcher/attacher
+- Complex service orchestration

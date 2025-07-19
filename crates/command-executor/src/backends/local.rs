@@ -7,7 +7,7 @@ use futures_lite::io::{AsyncBufReadExt, BufReader, Lines};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::backend::Backend;
+use crate::launcher::Launcher;
 use crate::error::{Error, Result};
 use crate::event::{ProcessEvent, ProcessEventType, LogSource, LogFilter, NoOpFilter};
 use crate::process::{ExitStatus, ProcessHandle};
@@ -45,6 +45,25 @@ pub struct SystemdPortable {
     pub unit_name: String,
 }
 
+/// A generic managed service with configurable commands
+#[derive(Debug, Clone)]
+pub struct ManagedService {
+    /// Service identifier
+    pub name: String,
+    /// How to check if service is running
+    pub status_command: Vec<String>,
+    /// How to start the service
+    pub start_command: Vec<String>,
+    /// How to stop the service
+    pub stop_command: Vec<String>,
+    /// How to restart the service (optional, will use stop+start if not provided)
+    pub restart_command: Option<Vec<String>>,
+    /// How to reload the service (optional)
+    pub reload_command: Option<Vec<String>>,
+    /// How to tail the logs
+    pub log_command: Vec<String>,
+}
+
 /// Target types supported by the local backend
 #[derive(Debug, Clone)]
 pub enum LocalTarget {
@@ -58,9 +77,9 @@ pub enum LocalTarget {
     SystemdPortable(SystemdPortable),
 }
 
-/// Backend for executing processes locally
+/// Launcher for executing processes locally
 #[derive(Debug, Clone, Copy)]
-pub struct LocalBackend;
+pub struct LocalLauncher;
 
 /// A handle to control a local process
 pub struct LocalProcessHandle {
@@ -79,12 +98,12 @@ pub struct ProcessEventStream {
 }
 
 #[async_trait]
-impl Backend for LocalBackend {
+impl Launcher for LocalLauncher {
     type Target = LocalTarget;
     type EventStream = ProcessEventStream;
     type Handle = LocalProcessHandle;
 
-    async fn spawn(
+    async fn launch(
         &self,
         target: &Self::Target,
         mut command: AsyncCommand,
@@ -346,10 +365,10 @@ impl Default for ManagedProcess {
     }
 }
 
-// Convenience constructor for Executor with LocalBackend
-impl crate::executor::Executor<LocalBackend> {
+// Convenience constructor for Executor with LocalLauncher
+impl crate::executor::Executor<LocalLauncher> {
     /// Create an executor for local process execution
     pub fn local(service_name: impl Into<String>) -> Self {
-        Self::new(service_name.into(), LocalBackend)
+        Self::new(service_name.into(), LocalLauncher)
     }
 }

@@ -5,7 +5,7 @@
 
 #![warn(missing_docs)]
 
-pub mod backend;
+pub mod launcher;
 pub mod backends;
 pub mod error;
 pub mod event;
@@ -13,7 +13,7 @@ pub mod executor;
 pub mod process;
 pub mod target;
 
-pub use backend::Backend;
+pub use launcher::{Launcher, Attacher, AttachedHandle, AttachConfig, ServiceStatus};
 pub use error::{Error, Result};
 pub use event::{ProcessEvent, ProcessEventType, LogFilter, LogSource, NoOpFilter};
 pub use executor::Executor;

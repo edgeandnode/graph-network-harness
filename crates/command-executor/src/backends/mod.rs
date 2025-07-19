@@ -1,47 +1,50 @@
-//! Backend implementations for different execution contexts
+//! Launcher implementations for different execution contexts
 //! 
-//! This module provides built-in backends for common execution contexts.
-//! Users can also implement their own backends by implementing the [`Backend`](crate::backend::Backend) trait.
+//! This module provides built-in launchers for common execution contexts.
+//! Users can also implement their own launchers by implementing the [`Launcher`](crate::launcher::Launcher) trait.
 //! 
-//! # Example: Custom Backend
+//! # Example: Custom Launcher
 //! 
 //! ```ignore
-//! use command_executor::{Backend, Process, ProcessEvent, ExitStatus};
+//! use command_executor::{Launcher, ProcessHandle, ProcessEvent, ExitStatus};
 //! use async_trait::async_trait;
 //! use async_process::Command;
+//! use futures::stream::Stream;
 //! 
-//! struct MyCustomBackend {
-//!     // backend-specific fields
+//! struct MyCustomLauncher {
+//!     // launcher-specific fields
 //! }
 //! 
-//! struct MyCustomProcess {
-//!     // process-specific fields
+//! struct MyCustomHandle {
+//!     // handle-specific fields
 //! }
 //! 
 //! #[async_trait]
-//! impl Backend for MyCustomBackend {
-//!     type Process = MyCustomProcess;
+//! impl Launcher for MyCustomLauncher {
+//!     type Target = MyTarget;
+//!     type EventStream = MyEventStream;
+//!     type Handle = MyCustomHandle;
 //!     
-//!     async fn spawn(&self, target: &ExecutionTarget, command: Command) -> Result<Self::Process> {
+//!     async fn launch(&self, target: &Self::Target, command: Command) -> Result<(Self::EventStream, Self::Handle)> {
 //!         // Custom implementation
 //!     }
 //! }
 //! 
 //! #[async_trait]
-//! impl Process for MyCustomProcess {
+//! impl ProcessHandle for MyCustomHandle {
 //!     // Implement required methods
 //! }
 //! ```
 
 pub mod local;
-pub use local::LocalBackend;
+pub use local::LocalLauncher;
 
 #[cfg(feature = "ssh")]
 pub mod ssh;
 #[cfg(feature = "ssh")]
-pub use ssh::SshBackend;
+pub use ssh::SshLauncher;
 
 #[cfg(feature = "docker")]
 pub mod docker;
 #[cfg(feature = "docker")]
-pub use docker::DockerBackend;
+pub use docker::DockerLauncher;

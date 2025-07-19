@@ -91,7 +91,7 @@ fn test_spawn_and_wait() {
         let mut cmd = AsyncCommand::new("sleep");
         cmd.arg("0.1");
         
-        let (_events, mut handle) = executor.spawn(&target, cmd).await.unwrap();
+        let (_events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         
         // Process should have a PID
         assert!(handle.pid().is_some());
@@ -112,7 +112,7 @@ fn test_signal_handling() {
         let mut cmd = AsyncCommand::new("sleep");
         cmd.arg("10");
         
-        let (_events, mut handle) = executor.spawn(&target, cmd).await.unwrap();
+        let (_events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         
         // Give it a moment to start
         smol::Timer::after(Duration::from_millis(100)).await;
@@ -156,7 +156,7 @@ fn test_event_streaming() {
         let mut cmd = AsyncCommand::new("sh");
         cmd.arg("-c").arg("echo stdout; echo stderr >&2");
         
-        let (mut events, mut handle) = executor.spawn(&target, cmd).await.unwrap();
+        let (mut events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         
         // Collect all events from the stream
         let mut collected: Vec<ProcessEvent> = Vec::new();

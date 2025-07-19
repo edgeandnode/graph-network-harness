@@ -10,8 +10,6 @@ use super::handlers::{ServiceEventHandler, GenericEventHandler};
 pub struct ServiceEventRegistry {
     /// Registered handlers by service name
     handlers: HashMap<String, Box<dyn ServiceEventHandler>>,
-    /// Fallback handler for services without specific handlers
-    fallback_handler: GenericEventHandler,
 }
 
 impl ServiceEventRegistry {
@@ -19,7 +17,6 @@ impl ServiceEventRegistry {
     pub fn new() -> Self {
         Self {
             handlers: HashMap::new(),
-            fallback_handler: GenericEventHandler::new("unknown".to_string()),
         }
     }
 

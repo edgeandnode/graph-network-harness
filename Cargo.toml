@@ -1,9 +1,5 @@
 [workspace]
-members = [
-    "crates/harness",
-    "crates/harness-cli", 
-    "crates/service-registry",
-]
+members = [ "crates/command-executor","crates/harness", "crates/harness-cli", "crates/service-registry"]
 resolver = "2"
 
 [workspace.package]
@@ -45,8 +41,6 @@ tokio-stream = "0.1"
 # New dependencies for distributed features
 wireguard-control = "1.5"
 openssh = "0.10"
-trust-dns-resolver = "0.23"
-trust-dns-server = "0.23"
 dirs = "5.0"
 
 # Internal crates

@@ -325,6 +325,20 @@ tail -f test-activity/logs/current/*.log
 less test-activity/logs/*/session.json
 ```
 
+## Development
+
+### Prerequisites
+
+For development, you'll need the following tools:
+- Rust toolchain
+- Docker
+- cargo-deny (for dependency constraint checking)
+
+Install cargo-deny:
+```bash
+cargo install cargo-deny
+```
+
 ## Development Workflow
 
 1. **Local Development**:

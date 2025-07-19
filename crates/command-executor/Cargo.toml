@@ -1,0 +1,45 @@
+[package]
+name = "command-executor"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Runtime-agnostic async primitives
+async-process = "2.0"
+async-trait = { workspace = true }
+futures = "0.3"
+futures-util = { workspace = true }
+
+# Error handling and utilities
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+
+# For signal handling on Unix
+nix = { version = "0.29", features = ["signal", "process"] }
+
+# For SSH execution (optional)
+openssh = { workspace = true, optional = true }
+
+# For Docker execution (optional) - note: bollard requires tokio
+# We'll need to create our own abstraction or find an alternative
+# bollard = { workspace = true, optional = true }
+
+[features]
+default = []
+ssh = ["openssh"]
+# docker = ["bollard"]  # Disabled until we find a runtime-agnostic solution
+full = ["ssh"]
+
+[dev-dependencies]
+# Use smol for testing - it's lightweight and runtime-agnostic
+smol = "2.0"
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

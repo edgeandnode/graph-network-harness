@@ -1,0 +1,14 @@
+# cargo-deny configuration for command-executor crate
+# This crate must remain runtime-agnostic
+
+[bans]
+# Deny tokio completely - no direct or transitive dependencies allowed
+deny = [
+    { name = "tokio" },
+    { name = "tokio-util" },
+    { name = "tokio-stream" },
+    { name = "tokio-macros" },
+    { name = "tokio-test" },
+]
+
+# No exceptions - we want to ensure complete runtime independence

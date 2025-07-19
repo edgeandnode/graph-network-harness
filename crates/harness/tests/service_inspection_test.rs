@@ -1,14 +1,14 @@
 //! Integration tests for service inspection functionality
 
-use local_network_harness::inspection::{
-    ServiceEventHandler, GenericEventHandler, PostgresEventHandler, GraphNodeEventHandler,
-    EventType, EventSeverity,
+use graph_network_harness::inspection::{
+    EventSeverity, EventType, GenericEventHandler, GraphNodeEventHandler, PostgresEventHandler,
+    ServiceEventHandler,
 };
 
 #[tokio::test]
 async fn test_generic_event_handler() {
     let handler = GenericEventHandler::new("test-service".to_string());
-    
+
     // Test error detection
     let event = handler.handle_log_line("ERROR: Something went wrong").await;
     assert!(event.is_some());
@@ -16,19 +16,21 @@ async fn test_generic_event_handler() {
     assert_eq!(event.service_name, "test-service");
     assert!(matches!(event.event_type, EventType::Error));
     assert!(matches!(event.severity, EventSeverity::Error));
-    
+
     // Test warning detection
     let event = handler.handle_log_line("WARNING: This is a warning").await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.severity, EventSeverity::Warning));
-    
+
     // Test startup detection
-    let event = handler.handle_log_line("Service started successfully").await;
+    let event = handler
+        .handle_log_line("Service started successfully")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.event_type, EventType::Started));
-    
+
     // Test that debug messages are filtered out
     let event = handler.handle_log_line("Just a normal log line").await;
     assert!(event.is_none());
@@ -37,24 +39,30 @@ async fn test_generic_event_handler() {
 #[tokio::test]
 async fn test_postgres_event_handler() {
     let handler = PostgresEventHandler::new();
-    
+
     // Test database ready detection
-    let event = handler.handle_log_line("database system is ready to accept connections").await;
+    let event = handler
+        .handle_log_line("database system is ready to accept connections")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert_eq!(event.service_name, "postgres");
     assert!(matches!(event.event_type, EventType::Started));
     assert_eq!(event.message, "Database system ready to accept connections");
-    
+
     // Test error detection
-    let event = handler.handle_log_line("FATAL: password authentication failed").await;
+    let event = handler
+        .handle_log_line("FATAL: password authentication failed")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.event_type, EventType::Error));
     assert!(matches!(event.severity, EventSeverity::Error));
-    
+
     // Test connection event (should be debug level)
-    let event = handler.handle_log_line("connection received from 127.0.0.1").await;
+    let event = handler
+        .handle_log_line("connection received from 127.0.0.1")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.event_type, EventType::Network));
@@ -64,22 +72,28 @@ async fn test_postgres_event_handler() {
 #[tokio::test]
 async fn test_graph_node_event_handler() {
     let handler = GraphNodeEventHandler::new();
-    
+
     // Test startup detection
-    let event = handler.handle_log_line("Listening on http://0.0.0.0:8000").await;
+    let event = handler
+        .handle_log_line("Listening on http://0.0.0.0:8000")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert_eq!(event.service_name, "graph-node");
     assert!(matches!(event.event_type, EventType::Started));
-    
+
     // Test subgraph deployment
-    let event = handler.handle_log_line("Subgraph deployed: QmTest123").await;
+    let event = handler
+        .handle_log_line("Subgraph deployed: QmTest123")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.event_type, EventType::StateChange));
-    
+
     // Test sync events
-    let event = handler.handle_log_line("Syncing subgraph to block 12345").await;
+    let event = handler
+        .handle_log_line("Syncing subgraph to block 12345")
+        .await;
     assert!(event.is_some());
     let event = event.unwrap();
     assert!(matches!(event.event_type, EventType::StateChange));
@@ -94,7 +108,7 @@ async fn test_event_severity_ordering() {
     assert!(EventSeverity::Info < EventSeverity::Warning);
     assert!(EventSeverity::Warning < EventSeverity::Error);
     assert!(EventSeverity::Error < EventSeverity::Critical);
-    
+
     // Test needs_attention method
     assert!(!EventSeverity::Info.needs_attention());
     assert!(EventSeverity::Warning.needs_attention());
@@ -114,33 +128,31 @@ async fn test_event_type_helpers() {
 #[cfg(test)]
 mod registry_tests {
     use super::*;
-    use local_network_harness::inspection::ServiceEventRegistry;
-    
+    use graph_network_harness::inspection::ServiceEventRegistry;
+
     #[tokio::test]
     async fn test_registry_handler_registration() {
         let mut registry = ServiceEventRegistry::new();
-        
+
         // Register handlers
         registry.register_handler(Box::new(PostgresEventHandler::new()));
         registry.register_handler(Box::new(GraphNodeEventHandler::new()));
-        
+
         // Verify registration
         assert!(registry.has_handler("postgres"));
         assert!(registry.has_handler("graph-node"));
         assert!(!registry.has_handler("unknown-service"));
-        
+
         // Test processing with registered handler
-        let event = registry.process_log_line(
-            "postgres", 
-            "database system is ready"
-        ).await;
+        let event = registry
+            .process_log_line("postgres", "database system is ready")
+            .await;
         assert!(event.is_some());
-        
+
         // Test fallback for unregistered service
-        let event = registry.process_log_line(
-            "unknown-service",
-            "ERROR: Something failed"
-        ).await;
+        let event = registry
+            .process_log_line("unknown-service", "ERROR: Something failed")
+            .await;
         assert!(event.is_some());
         let event = event.unwrap();
         assert_eq!(event.service_name, "unknown-service");

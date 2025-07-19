@@ -1,0 +1,26 @@
+[package]
+name = "service-registry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+
+# File watching
+notify = { workspace = true }
+
+# Utilities
+dirs = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = { workspace = true }

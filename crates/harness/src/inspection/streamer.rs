@@ -8,10 +8,9 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, error, info, warn};
 
-use super::events::{ServiceEvent, ContainerEvent};
+use super::events::ServiceEvent;
 use super::registry::ServiceEventRegistry;
 
 /// Main service inspector that provides async streaming of service events
@@ -109,12 +108,6 @@ impl ServiceInspector {
                     RawServiceEvent::LogLine { service_name, line } => {
                         if let Some(event) = registry.process_log_line(&service_name, &line).await {
                             debug!("Generated event from log: {:?}", event);
-                            // In a full implementation, you'd broadcast this event
-                        }
-                    }
-                    RawServiceEvent::ContainerEvent { service_name, event } => {
-                        if let Some(service_event) = registry.process_container_event(&service_name, &event).await {
-                            debug!("Generated event from container: {:?}", service_event);
                             // In a full implementation, you'd broadcast this event
                         }
                     }
@@ -245,14 +238,10 @@ impl ServiceStreamer {
 
 /// Raw service events before processing through handlers
 #[derive(Debug, Clone)]
-enum RawServiceEvent {
+pub enum RawServiceEvent {
     LogLine {
         service_name: String,
         line: String,
-    },
-    ContainerEvent {
-        service_name: String,
-        event: ContainerEvent,
     },
 }
 

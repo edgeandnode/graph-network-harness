@@ -1,0 +1,26 @@
+services:
+  systemd-test:
+    build: .
+    container_name: command-executor-systemd-test
+    # Required for systemd to function
+    privileged: true
+    # Temporary filesystems for systemd
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    volumes:
+      # Mount cgroup for systemd
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      # Mount the command-executor crate for testing
+      - ../../../:/workspace/command-executor:ro
+    # Additional options for systemd
+    security_opt:
+      - seccomp:unconfined
+    working_dir: /workspace/command-executor
+    # Keep container running
+    stdin_open: true
+    tty: true
+    # Stop signal for systemd
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s

@@ -37,7 +37,7 @@
 //! ```
 
 pub mod local;
-pub use local::LocalLauncher;
+pub use local::{LocalLauncher, LocalAttacher};
 
 #[cfg(feature = "ssh")]
 pub mod ssh;

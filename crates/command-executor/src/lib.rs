@@ -7,6 +7,7 @@
 
 pub mod launcher;
 pub mod backends;
+pub mod command;
 pub mod error;
 pub mod event;
 pub mod executor;
@@ -14,6 +15,7 @@ pub mod process;
 pub mod target;
 
 pub use launcher::{Launcher, Attacher, AttachedHandle, AttachConfig, ServiceStatus};
+pub use command::Command;
 pub use error::{Error, Result};
 pub use event::{ProcessEvent, ProcessEventType, LogFilter, LogSource, NoOpFilter};
 pub use executor::Executor;

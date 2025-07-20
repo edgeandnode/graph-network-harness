@@ -40,29 +40,29 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] `Launcher` trait uses associated types for EventStream and Handle
 - [x] No unnecessary dynamic dispatch
 - [x] `execute()` and `launch()` methods are implemented
-- [ ] `Attacher` trait created for connecting to existing services
-- [ ] `AttachedHandle` trait for service lifecycle control
+- [x] `Attacher` trait created for connecting to existing services
+- [x] `AttachedHandle` trait for service lifecycle control
 - [x] Proper error handling with custom error types
 
 ### 5. Local Launcher Implementation ✓ When:
 - [x] `LocalLauncher` fully implements Launcher trait
-- [ ] Handles LaunchedTarget types:
+- [x] Handles LaunchedTarget types:
 - [x] Command: Direct process spawning with async-process
 - [x] ManagedProcess: Process lifecycle management
-- [ ] SystemdPortable: Portable service attachment/start
+- [x] SystemdPortable: Portable service attachment/start
 - [x] Concurrent stdout/stderr reading
 - [x] Signal handling on Unix (via nix crate)
 - [x] Graceful degradation on Windows
-- [ ] Process cleanup on drop
+- [x] Process cleanup on drop
 
 ### 6. Local Attacher Implementation ✓ When:
-- [ ] `LocalAttacher` implements Attacher trait
-- [ ] Handles AttachedTarget types:
-- [ ] ManagedService: Generic service with configurable commands
-- [ ] Service status checking
-- [ ] Service lifecycle control (start/stop/restart/reload)
-- [ ] Log streaming via configurable commands
-- [ ] Support for systemd, rc.d, and custom services
+- [x] `LocalAttacher` implements Attacher trait
+- [x] Handles AttachedTarget types:
+- [x] ManagedService: Generic service with configurable commands
+- [x] Service status checking
+- [x] Service lifecycle control (start/stop/restart/reload)
+- [x] Log streaming via configurable commands
+- [x] Support for systemd, rc.d, and custom services
 
 ### 7. Docker Launcher Implementation ✓ When:
 - [ ] `DockerLauncher` implements Launcher trait
@@ -85,7 +85,7 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] `AttachedHandle` trait for attached service control
 - [x] Signal methods work appropriately for each handle type:
   - [x] Local launched: Unix signals via nix
-  - [ ] Local attached: Service control commands
+  - [x] Local attached: Service control commands
   - [ ] Docker launched: docker kill with signal support
   - [ ] SSH launched: remote kill command
 - [x] `wait()` for process completion
@@ -104,23 +104,24 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] ManagedProcess lifecycle (PID tracking, restart)
 
 #### `tests/local_attacher.rs`
-- [ ] ManagedService with systemd commands
-- [ ] Service status checking
-- [ ] Service lifecycle control (start/stop/restart)
-- [ ] Log streaming from services
-- [ ] Custom service command configuration
+- [x] ManagedService with systemd commands
+- [x] Service status checking
+- [x] Service lifecycle control (start/stop/restart)
+- [x] Log streaming from services
+- [x] Custom service command configuration
 
 #### `tests/systemd_integration.rs`
-- [ ] Create Docker container with systemd (e.g., using systemd/systemd image)
-- [ ] Test ManagedService with systemd commands:
-  - [ ] Start/stop/restart services via attacher
-  - [ ] Status checking
-  - [ ] Journal log streaming
-- [ ] Test SystemdPortable via launcher:
-  - [ ] Attach/detach portable services
-  - [ ] Start/stop portable services
-  - [ ] List attached services
-- [ ] Cleanup container after tests
+- [x] Create Docker container with systemd (e.g., using systemd/systemd image)
+- [x] Test ManagedService with systemd commands:
+  - [x] Start/stop/restart services via attacher
+  - [x] Status checking
+  - [x] Journal log streaming
+- [x] Test SystemdPortable via launcher:
+  - [x] Attach/detach portable services
+  - [x] Start/stop portable services
+  - [x] List attached services
+- [x] Cleanup container after tests
+**Note:** Tests are implemented but marked with `#[ignore]` until SSH/Docker infrastructure is ready for remote execution.
 
 #### `tests/docker_launcher.rs`
 - [ ] Create test container via launcher
@@ -209,6 +210,24 @@ Phase 1 is complete when:
    }
    ```
 5. PR is reviewed and merged
+
+## Recent Enhancements
+
+### Command API
+- Introduced a reusable `Command` struct with builder pattern
+- Replaced direct use of `AsyncCommand` throughout the codebase
+- Provides cloneable, configurable command building
+- Method `prepare()` converts to `AsyncCommand` when needed
+
+### API Improvements
+- Made all struct fields private for proper encapsulation
+- Added constructors and builders:
+  - `ManagedProcess::new()` and `ManagedProcess::builder()`
+  - `SystemdService::new()`
+  - `SystemdPortable::new()`
+  - `ManagedService::builder()` with comprehensive builder pattern
+- Added necessary getter methods for accessing private fields
+- All tests updated to use the new Command API
 
 ## Non-Goals (Future Phases)
 - Integration with service registry

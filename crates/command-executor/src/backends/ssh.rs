@@ -3,10 +3,10 @@
 use async_trait::async_trait;
 use std::path::PathBuf;
 
-use crate::command::Command as ServiceCommand;
+use crate::command::Command as Command;
 use crate::error::Result;
 use crate::launcher::Launcher;
-use crate::attacher::{Attacher, AttachConfig};
+use crate::attacher::{Attacher, AttachConfig, AttachedHandle, ServiceStatus};
 
 /// SSH connection configuration
 #[derive(Debug, Clone)]
@@ -105,10 +105,10 @@ where
     async fn launch(
         &self,
         target: &Self::Target,
-        command: ServiceCommand,
+        command: Command,
     ) -> Result<(Self::EventStream, Self::Handle)> {
         // Build SSH command that wraps the incoming command
-        let mut ssh_cmd = ServiceCommand::new("ssh");
+        let mut ssh_cmd = Command::new("ssh");
 
         // Add SSH options
         if let Some(port) = self.config.port {
@@ -132,8 +132,9 @@ where
         let remote_command = format_remote_command(&command);
         ssh_cmd.arg(remote_command);
 
-        // Delegate to inner launcher
+        // Delegate to inner launcher with error context
         self.inner.launch(target, ssh_cmd).await
+            .map_err(|e| e.with_layer_context(format!("SSH[{}]", self.config.host_string())))
     }
 }
 
@@ -142,6 +143,45 @@ where
 pub struct SshAttacher<A> {
     inner: A,
     config: SshConfig,
+}
+
+/// Wrapper for remote service handles that transforms commands through SSH
+pub struct SshServiceHandle<H: AttachedHandle> {
+    inner_handle: H,
+    ssh_config: SshConfig,
+}
+
+#[async_trait]
+impl<H: AttachedHandle> AttachedHandle for SshServiceHandle<H> {
+    fn id(&self) -> String {
+        format!("ssh:{}/{}", self.ssh_config.host_string(), self.inner_handle.id())
+    }
+
+    async fn status(&self) -> Result<ServiceStatus> {
+        // Status checks are already handled by the inner handle
+        // which should have SSH-wrapped commands
+        self.inner_handle.status().await
+    }
+
+    async fn start(&mut self) -> Result<()> {
+        self.inner_handle.start().await
+    }
+
+    async fn stop(&mut self) -> Result<()> {
+        self.inner_handle.stop().await
+    }
+
+    async fn restart(&mut self) -> Result<()> {
+        self.inner_handle.restart().await
+    }
+
+    async fn reload(&mut self) -> Result<()> {
+        self.inner_handle.reload().await
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        self.inner_handle.disconnect().await
+    }
 }
 
 impl<A> SshAttacher<A> {
@@ -165,30 +205,70 @@ impl SshAttacher<crate::backends::local::LocalAttacher> {
 impl<A> Attacher for SshAttacher<A>
 where
     A: Attacher,
+    A::Target: SshTransformable,
 {
     type Target = A::Target;
     type EventStream = A::EventStream;
-    type Handle = A::Handle;
+    type Handle = SshServiceHandle<A::Handle>;
 
     async fn attach(
         &self,
         target: &Self::Target,
         config: AttachConfig,
     ) -> Result<(Self::EventStream, Self::Handle)> {
-        // For SSH attacher, we need to wrap the target's commands
-        // This is complex because we need to transform the target itself
-        // For now, we'll delegate directly and handle command wrapping
-        // in a future iteration when we have concrete target types
+        // Transform the target to wrap its commands with SSH
+        let ssh_target = target.transform_for_ssh(&self.config);
         
-        // TODO: Implement target transformation for SSH
-        // This will require modifying the target's commands to run via SSH
+        // Attach using the transformed target with error context
+        let (events, inner_handle) = self.inner.attach(&ssh_target, config).await
+            .map_err(|e| e.with_layer_context(format!("SSH[{}]", self.config.host_string())))?;
         
-        self.inner.attach(target, config).await
+        // Wrap the handle to ensure control commands go through SSH
+        let handle = SshServiceHandle {
+            inner_handle,
+            ssh_config: self.config.clone(),
+        };
+        
+        Ok((events, handle))
     }
 }
 
+/// Trait for targets that can be transformed for SSH execution
+pub trait SshTransformable: Send + Sync {
+    /// Transform this target's commands to run via SSH
+    fn transform_for_ssh(&self, ssh_config: &SshConfig) -> Self;
+}
+
+/// Helper function to wrap a command with SSH
+pub fn wrap_command_with_ssh(cmd: &Command, config: &SshConfig) -> Command {
+    let mut ssh_cmd = Command::new("ssh");
+    
+    // Add SSH options
+    if let Some(port) = config.port {
+        ssh_cmd.arg("-p").arg(port.to_string());
+    }
+    
+    if let Some(identity) = &config.identity_file {
+        ssh_cmd.arg("-i").arg(identity.to_string_lossy().to_string());
+    }
+    
+    // Add any extra SSH arguments
+    for arg in &config.extra_args {
+        ssh_cmd.arg(arg);
+    }
+    
+    // Add the host
+    ssh_cmd.arg(config.host_string());
+    
+    // Format the remote command
+    let remote_command = format_remote_command(cmd);
+    ssh_cmd.arg(remote_command);
+    
+    ssh_cmd
+}
+
 /// Format a command for remote execution via SSH
-fn format_remote_command(cmd: &ServiceCommand) -> String {
+fn format_remote_command(cmd: &Command) -> String {
     let program = cmd.get_program().to_string_lossy();
     let args: Vec<String> = cmd
         .get_args()

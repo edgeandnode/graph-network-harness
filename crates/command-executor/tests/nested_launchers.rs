@@ -1,6 +1,6 @@
 //! Tests for the nested launcher architecture
 
-use command_executor::backends::local::{LocalLauncher, Command as LocalCommand};
+use command_executor::backends::local::{LocalLauncher};
 use command_executor::command::Command;
 
 #[cfg(feature = "ssh")]
@@ -18,8 +18,8 @@ mod ssh_tests {
             .with_port(2222);
         let ssh_launcher = SshLauncher::new(local, ssh_config);
         
-        // The target type should be LocalTarget
-        let _target = LocalCommand::new();
+        // The target type should be Target
+        let _cmd = Command::new("echo").arg("test");
         
         // This should compile, proving our type system works
         let _ = ssh_launcher;
@@ -73,8 +73,8 @@ fn test_command_preparation() {
 fn test_local_launcher_types() {
     // Test that LocalLauncher works with our type system
     let launcher = LocalLauncher;
-    let target = LocalCommand::new();
+    let _cmd = Command::new("echo");
     
     // This should compile correctly
-    let _ = (launcher, target);
+    let _ = (launcher, _cmd);
 }

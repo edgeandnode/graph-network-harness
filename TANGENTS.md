@@ -24,6 +24,13 @@ Template:
   - Steps: `cargo build 2>&1 | grep warning | wc -l` shows 17 warnings
   - Fix: Run cargo fix or manually clean up
 
+## Architecture Improvements
+- [ ] Explore generic command wrapper launcher type
+  - Context: SudoLauncher manually builds sudo commands; similar pattern could apply to other wrappers (timeout, nice, etc.)
+  - Idea: Generic `CommandWrapperLauncher<L, F>` where F: Fn(Command) -> Command transforms commands before delegation
+  - Benefits: Reusable for sudo, timeout, nice, strace, etc. without code duplication
+  - Examples: `CommandWrapperLauncher::new(inner, |cmd| Command::builder("sudo").arg(cmd.program()).args(cmd.args()))`
+
 ## Missing Examples
 - [ ] No example showing real-time event streaming
   - Steps: Check examples/, no use of `inspector.start_streaming(containers)`

@@ -24,23 +24,23 @@ chrono = { workspace = true }
 # For signal handling on Unix
 nix = { version = "0.29", features = ["signal", "process"] }
 
-# For SSH execution (optional)
-openssh = { workspace = true, optional = true }
-
-# For Docker execution (optional) - note: bollard requires tokio
-# We'll need to create our own abstraction or find an alternative
-# bollard = { workspace = true, optional = true }
-
 [features]
 default = []
-ssh = ["openssh"]
+ssh = []
 docker = []  # Docker support via CLI wrapper
 full = ["ssh", "docker"]
+
+# Test features
+integration-tests = []
+docker-tests = ["docker", "integration-tests"]
+ssh-tests = ["ssh", "integration-tests"]
 
 [dev-dependencies]
 # Use smol for testing - it's lightweight and runtime-agnostic
 smol = "2.0"
 tempfile = { workspace = true }
+anyhow = "1.0"
+futures = "0.3"
 
 [lints]
 workspace = true

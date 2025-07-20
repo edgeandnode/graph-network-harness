@@ -38,6 +38,27 @@ pub struct ExitStatus {
     pub signal: Option<i32>,
 }
 
+/// Process execution result including exit status and captured output
+#[derive(Debug, Clone)]
+pub struct ExitResult {
+    /// The exit status of the process
+    pub status: ExitStatus,
+    /// Captured stdout and stderr output
+    pub output: String,
+}
+
+impl ExitResult {
+    /// Returns true if the process exited successfully (code 0)
+    pub fn success(&self) -> bool {
+        self.status.success()
+    }
+    
+    /// Get the exit code if available
+    pub fn code(&self) -> Option<i32> {
+        self.status.code
+    }
+}
+
 impl ExitStatus {
     /// Returns true if the process exited successfully (code 0)
     pub fn success(&self) -> bool {

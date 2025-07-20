@@ -59,3 +59,8 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
 ### Phase 5: Testing & Documentation
 - [ ] Integration tests
 - [ ] Example services
+- [ ] **Self-hosted test orchestration**
+  - [ ] Use command-executor to orchestrate its own integration tests
+  - [ ] Replace shell scripts with Rust test harness
+  - [ ] Implement test container lifecycle management using library's own features
+  - [ ] Benefits: dogfooding, real-world usage validation, self-contained tests

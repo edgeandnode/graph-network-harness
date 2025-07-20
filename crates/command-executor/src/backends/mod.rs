@@ -44,3 +44,6 @@ pub mod ssh;
 #[cfg(feature = "ssh")]
 pub use ssh::{SshLauncher, SshAttacher, SshConfig};
 
+pub mod sudo;
+pub use sudo::SudoLauncher;
+

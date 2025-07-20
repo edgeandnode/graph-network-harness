@@ -1,7 +1,6 @@
 //! Tests for local command execution
 
-use command_executor::{Executor, ProcessHandle, ProcessEvent, ProcessEventType, Command};
-use command_executor::backends::local::{Command as LocalCommand, ManagedProcess, LocalTarget};
+use command_executor::{Executor, ProcessHandle, ProcessEvent, ProcessEventType, Command, Target, ManagedProcess};
 use futures::StreamExt;
 use std::time::Duration;
 
@@ -9,17 +8,17 @@ use std::time::Duration;
 fn test_basic_echo() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-echo");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("echo")
             .arg("hello world")
             .build();
         
-        let exit_status = executor.execute(&target, cmd).await.unwrap();
+        let result = executor.execute(&target, cmd).await.unwrap();
         
-        assert_eq!(exit_status.code, Some(0));
+        assert!(result.success());
         #[cfg(unix)]
-        assert_eq!(exit_status.signal, None);
+        assert_eq!(result.status.signal, None);
     });
 }
 
@@ -27,7 +26,7 @@ fn test_basic_echo() {
 fn test_command_with_env_vars() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-env");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("sh")
             .arg("-c")
@@ -35,9 +34,9 @@ fn test_command_with_env_vars() {
             .env("TEST_VAR", "test_value")
             .build();
         
-        let exit_status = executor.execute(&target, cmd).await.unwrap();
+        let result = executor.execute(&target, cmd).await.unwrap();
         
-        assert_eq!(exit_status.code, Some(0));
+        assert!(result.success());
     });
 }
 
@@ -45,15 +44,15 @@ fn test_command_with_env_vars() {
 fn test_working_directory() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-pwd");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("pwd")
             .current_dir("/tmp")
             .build();
         
-        let exit_status = executor.execute(&target, cmd).await.unwrap();
+        let result = executor.execute(&target, cmd).await.unwrap();
         
-        assert_eq!(exit_status.code, Some(0));
+        assert!(result.success());
     });
 }
 
@@ -61,9 +60,9 @@ fn test_working_directory() {
 fn test_command_not_found() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-not-found");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
-        let mut cmd = Command::new("this_command_does_not_exist_12345");
+        let cmd = Command::new("this_command_does_not_exist_12345");
         
         let result = executor.execute(&target, cmd).await;
         assert!(result.is_err());
@@ -74,16 +73,16 @@ fn test_command_not_found() {
 fn test_exit_code_propagation() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-exit-code");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("sh")
             .arg("-c")
             .arg("exit 42")
             .build();
         
-        let exit_status = executor.execute(&target, cmd).await.unwrap();
+        let result = executor.execute(&target, cmd).await.unwrap();
         
-        assert_eq!(exit_status.code, Some(42));
+        assert_eq!(result.status.code, Some(42));
     });
 }
 
@@ -91,7 +90,7 @@ fn test_exit_code_propagation() {
 fn test_spawn_and_wait() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-spawn");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("sleep")
             .arg("0.1")
@@ -113,7 +112,7 @@ fn test_spawn_and_wait() {
 fn test_signal_handling() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-signal");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("sleep")
             .arg("10")
@@ -139,15 +138,15 @@ fn test_signal_handling() {
 fn test_managed_process_target() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-managed");
-        let target = LocalTarget::ManagedProcess(ManagedProcess::new());
+        let target = Target::ManagedProcess(ManagedProcess::new());
         
         let cmd = Command::builder("echo")
             .arg("managed process")
             .build();
         
-        let exit_status = executor.execute(&target, cmd).await.unwrap();
+        let result = executor.execute(&target, cmd).await.unwrap();
         
-        assert_eq!(exit_status.code, Some(0));
+        assert!(result.success());
     });
 }
 
@@ -156,7 +155,7 @@ fn test_managed_process_target() {
 fn test_event_streaming() {
     futures::executor::block_on(async {
         let executor = Executor::local("test-events");
-        let target = LocalTarget::Command(LocalCommand::new());
+        let target = Target::Command;
         
         let cmd = Command::builder("sh")
             .arg("-c")

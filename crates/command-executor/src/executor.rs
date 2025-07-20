@@ -4,7 +4,7 @@ use crate::command::Command;
 use crate::launcher::Launcher;
 use crate::error::Result;
 use crate::event::LogFilter;
-use crate::process::ExitStatus;
+use crate::process::ExitResult;
 
 /// An executor that can run commands via a specific launcher
 pub struct Executor<L: Launcher> {
@@ -43,7 +43,7 @@ impl<L: Launcher> Executor<L> {
     }
     
     /// Execute a command and wait for it to complete
-    pub async fn execute(&self, target: &L::Target, command: Command) -> Result<ExitStatus> {
+    pub async fn execute(&self, target: &L::Target, command: Command) -> Result<ExitResult> {
         self.launcher.execute(target, command).await
     }
     

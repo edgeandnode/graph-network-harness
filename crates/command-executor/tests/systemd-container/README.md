@@ -1,88 +1,125 @@
 # Systemd Container for Testing
 
-This directory contains a Docker container setup for testing systemd-portable functionality without requiring sudo privileges on the host system.
+This directory contains Docker infrastructure for testing systemd-portable functionality and SSH remote execution.
+
+## Quick Start
+
+```bash
+# Generate SSH keys if needed
+./generate-ssh-keys.sh
+
+# Run tests (container will be started automatically)
+cd ../..
+cargo test -p command-executor --features ssh-tests,docker-tests
+```
 
 ## Overview
 
-The container runs Ubuntu 24.04 with systemd as PID 1, allowing us to test real `portablectl` commands and systemd service management.
+The container runs Ubuntu with systemd as PID 1, allowing us to test:
+- Real `portablectl` commands and systemd service management
+- SSH remote execution with key-based authentication
+- Nested launcher functionality (SSH + systemd)
 
-## Structure
+## Infrastructure
 
-- `Dockerfile` - Ubuntu 24.04 with systemd and systemd-container packages
-- `docker-compose.yaml` - Container configuration with required privileges
-- `create-test-services.sh` - Creates test portable service images
-- `run-systemd-tests.sh` - Automated test runner
-- `test-services/` - Test portable service definitions
+### Core Files
+- `Dockerfile` - Systemd container with SSH support
+- `docker-compose.yaml` - Container configuration
+- `generate-ssh-keys.sh` - Generates test SSH keys
 
-## Usage
+### Test Resources
+- `test-services/` - Test portable service fixtures (checked in)
+  - `echo-service` - Prints timestamps every 5 seconds
+  - `counter-service` - Maintains and increments a counter
+- `ssh-keys/` - Generated SSH keys (gitignored)
 
-### Quick Test Run
+## Container Management
+
+The test infrastructure uses the command-executor library itself to manage containers, demonstrating dogfooding. A shared container is automatically started when tests run and cleaned up when tests complete.
+
+### Manual Container Management
 
 ```bash
-# Run all systemd integration tests
-./run-systemd-tests.sh
-```
-
-### Manual Testing
-
-```bash
-# Start the container
+# Start container manually
 docker-compose up -d
 
-# Enter the container
-docker-compose exec systemd-test bash
+# Check status
+docker ps -f name=command-executor-systemd-ssh-test
 
-# Inside container - create portable images
-cd /opt/portable-services
-tar -czf echo-service.tar.gz -C echo-service .
-tar -czf counter-service.tar.gz -C counter-service .
+# View logs
+docker-compose logs
 
-# Test portablectl commands
-portablectl list
-portablectl attach --copy=copy /opt/portable-services/echo-service.tar.gz
-systemctl start echo-service.service
-journalctl -u echo-service.service -f
+# Stop container
+docker-compose down
 
-# Run tests
-cd /workspace/command-executor
-cargo test --test systemd_integration
-
-# Clean up
-docker-compose down -v
+# Connect via SSH
+ssh -i ssh-keys/test_ed25519 -p 2223 testuser@localhost
 ```
 
-## Test Services
+## SSH Key Management
 
-### echo-service
-A simple service that prints timestamps every 5 seconds.
+SSH keys are automatically generated and managed:
+- Keys are stored in `ssh-keys/` (gitignored)
+- ED25519 and RSA keys are generated for compatibility
+- Keys are automatically mounted into the container
+- No passwords required for testing
 
-### counter-service
-A service that maintains a counter, incrementing every 2 seconds and persisting the value.
+## Test Development
+
+When writing tests that need SSH:
+
+```rust
+use command_executor::{Executor, Target, Command};
+use command_executor::backends::ssh::SshLauncher;
+
+// Import shared container management
+mod common;
+use common::shared_container::{ensure_container_running, get_ssh_config};
+
+// Ensure container is running
+ensure_container_running().await?;
+
+// Create SSH launcher
+let local = LocalLauncher;
+let ssh_launcher = SshLauncher::new(local, get_ssh_config());
+let executor = Executor::new("my-test".to_string(), ssh_launcher);
+
+// Execute commands
+let cmd = Command::builder("systemctl").arg("status").build();
+let result = executor.execute(&Target::Command, cmd).await?;
+```
 
 ## Requirements
 
 - Docker with support for privileged containers
 - Docker Compose
-- Linux host (systemd containers don't work well on macOS/Windows)
-
-## How It Works
-
-1. The container runs with `--privileged` flag to allow systemd to manage cgroups
-2. `/sbin/init` is the entrypoint, starting systemd as PID 1
-3. Test portable services are created as tar.gz archives
-4. Integration tests use real `portablectl` and `systemctl` commands
-5. No sudo required on the host system
+- Linux host (systemd containers work best on Linux)
+- Port 2223 available for SSH
 
 ## Troubleshooting
 
-### Container won't start
-- Ensure Docker daemon supports privileged containers
-- Check that cgroup v2 is available on your system
+### SSH Connection Fails
+- Check if container is running: `docker ps`
+- Verify SSH keys exist: `ls ssh-keys/`
+- View logs: `docker-compose logs`
 
-### Systemd not running
-- Wait a few seconds after container start for systemd to initialize
-- Check logs: `docker-compose logs systemd-test`
+### Systemd Issues
+- Systemd may show as "degraded" in containers (normal)
+- Wait a few seconds after container start
+- Check systemd status via SSH:
+  ```bash
+  ssh -i ssh-keys/test_ed25519 -p 2223 testuser@localhost systemctl status
+  ```
 
-### Tests fail
-- Ensure portable service images are created in `/opt/portable-services/`
-- Check systemd status: `docker-compose exec systemd-test systemctl status`
+### Test Failures
+- Ensure container is running: `docker ps -f name=command-executor-systemd-ssh-test`
+- Check if test-services are mounted properly
+- Verify SSH connectivity with manual SSH command
+- Generate SSH keys if missing: `./generate-ssh-keys.sh`
+
+## Security Note
+
+The SSH keys and container configuration are for testing only:
+- Keys are gitignored and should never be committed
+- Container has permissive sudo rules
+- SSH is configured for ease of testing, not security

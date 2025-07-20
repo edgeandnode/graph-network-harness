@@ -5,7 +5,7 @@ use futures::stream::Stream;
 use crate::command::Command;
 use crate::error::Result;
 use crate::event::ProcessEvent;
-use crate::process::{ProcessHandle, ExitStatus};
+use crate::process::{ProcessHandle, ExitResult};
 
 /// A launcher that can execute commands in a specific context
 #[async_trait]
@@ -22,9 +22,22 @@ pub trait Launcher: Send + Sync + 'static {
     /// Launch a command for the given target, returning event stream and control handle
     async fn launch(&self, target: &Self::Target, command: Command) -> Result<(Self::EventStream, Self::Handle)>;
     
-    /// Execute a command and wait for it to complete
-    async fn execute(&self, target: &Self::Target, command: Command) -> Result<ExitStatus> {
-        let (_events, mut handle) = self.launch(target, command).await?;
-        handle.wait().await
+    /// Execute a command and wait for it to complete, capturing output
+    async fn execute(&self, target: &Self::Target, command: Command) -> Result<ExitResult> {
+        use futures::StreamExt;
+        
+        let (mut events, mut handle) = self.launch(target, command).await?;
+        let mut output = String::new();
+        
+        // Collect all output from the event stream
+        while let Some(event) = events.next().await {
+            if let Some(data) = &event.data {
+                output.push_str(data);
+                output.push('\n');
+            }
+        }
+        
+        let status = handle.wait().await?;
+        Ok(ExitResult { status, output })
     }
 }

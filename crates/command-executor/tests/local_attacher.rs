@@ -1,7 +1,8 @@
 //! Tests for local service attachment
 
 use command_executor::attacher::{Attacher, AttachConfig, AttachedHandle, ServiceStatus};
-use command_executor::backends::local::{LocalAttacher, ManagedService};
+use command_executor::backends::local::LocalAttacher;
+use command_executor::ManagedService;
 use command_executor::{ProcessEventType, Command};
 use futures::StreamExt;
 use std::time::Duration;

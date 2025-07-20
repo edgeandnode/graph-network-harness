@@ -21,5 +21,5 @@ pub use command::Command;
 pub use error::{Error, Result};
 pub use event::{ProcessEvent, ProcessEventType, LogFilter, LogSource, NoOpFilter};
 pub use executor::Executor;
-pub use process::{ProcessHandle, ExitStatus};
-pub use target::{ExecutionTarget, DockerContainer, ComposeService};
+pub use process::{ProcessHandle, ExitStatus, ExitResult};
+pub use target::{Target, ManagedProcess, ManagedProcessBuilder, SystemdService, SystemdPortable, ManagedService, ManagedServiceBuilder, DockerContainer, ComposeService};

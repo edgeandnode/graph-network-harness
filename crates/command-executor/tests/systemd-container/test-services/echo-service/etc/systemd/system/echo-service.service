@@ -1,0 +1,13 @@
+[Unit]
+Description=Test Echo Service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/echo-service.sh
+Restart=always
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

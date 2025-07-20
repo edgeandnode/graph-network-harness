@@ -3,10 +3,10 @@
 //! These tests require the systemd container to be running.
 //! Run them with: ./tests/systemd-container/run-systemd-tests.sh
 
-#![cfg(all(test, unix))]
+#![cfg(all(test, unix, feature = "integration-tests"))]
 
 use command_executor::{Executor, ProcessEventType, ProcessHandle, Command};
-use command_executor::backends::local::{SystemdPortable, LocalTarget};
+use command_executor::{Target, SystemdPortable};
 use futures::StreamExt;
 use std::time::Duration;
 
@@ -21,7 +21,6 @@ fn is_in_systemd_container() -> bool {
 }
 
 #[test]
-#[ignore = "Requires SSH access to systemd-enabled Docker container"]
 fn test_real_portablectl_attach_detach() {
     if !is_in_systemd_container() {
         eprintln!("Skipping test - not in systemd container");
@@ -30,7 +29,7 @@ fn test_real_portablectl_attach_detach() {
     
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-integration");
-        let target = LocalTarget::SystemdPortable(SystemdPortable::new(
+        let target = Target::SystemdPortable(SystemdPortable::new(
             "/opt/portable-services/echo-service.tar.gz",
             "echo-service.service"
         ));
@@ -39,8 +38,7 @@ fn test_real_portablectl_attach_detach() {
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         let _ = executor.launch(&target, detach_cmd).await; // Ignore errors if not attached
         
         // Attach the portable service
@@ -48,8 +46,7 @@ fn test_real_portablectl_attach_detach() {
             .arg("attach")
             .arg("--copy=copy")  // Use copy mode for testing
             .arg("/opt/portable-services/echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         
         let result = executor.launch(&target, attach_cmd).await;
         assert!(result.is_ok(), "Failed to attach portable service");
@@ -61,8 +58,7 @@ fn test_real_portablectl_attach_detach() {
         // Verify the service is attached
         let list_cmd = Command::builder("portablectl")
             .arg("list")
-            .build()
-            .prepare();
+            .build();
         
         let (mut events, mut handle) = executor.launch(&target, list_cmd).await.unwrap();
         
@@ -83,8 +79,7 @@ fn test_real_portablectl_attach_detach() {
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
         let exit_status = handle.wait().await.unwrap();
@@ -93,7 +88,6 @@ fn test_real_portablectl_attach_detach() {
 }
 
 #[test]
-#[ignore = "Requires SSH access to systemd-enabled Docker container"]
 fn test_portable_service_lifecycle() {
     if !is_in_systemd_container() {
         eprintln!("Skipping test - not in systemd container");
@@ -102,7 +96,7 @@ fn test_portable_service_lifecycle() {
     
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-lifecycle");
-        let target = LocalTarget::SystemdPortable(SystemdPortable::new(
+        let target = Target::SystemdPortable(SystemdPortable::new(
             "/opt/portable-services/counter-service.tar.gz",
             "counter-service.service"
         ));
@@ -111,8 +105,7 @@ fn test_portable_service_lifecycle() {
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("counter-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         let _ = executor.launch(&target, detach_cmd).await;
         
         // Attach the service
@@ -120,8 +113,7 @@ fn test_portable_service_lifecycle() {
             .arg("attach")
             .arg("--copy=copy")
             .arg("/opt/portable-services/counter-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, attach_cmd).await.unwrap();
         handle.wait().await.unwrap();
@@ -130,8 +122,7 @@ fn test_portable_service_lifecycle() {
         let start_cmd = Command::builder("systemctl")
             .arg("start")
             .arg("counter-service.service")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, start_cmd).await.unwrap();
         handle.wait().await.unwrap();
@@ -143,8 +134,7 @@ fn test_portable_service_lifecycle() {
         let status_cmd = Command::builder("systemctl")
             .arg("is-active")
             .arg("counter-service.service")
-            .build()
-            .prepare();
+            .build();
         
         let (mut events, mut handle) = executor.launch(&target, status_cmd).await.unwrap();
         
@@ -165,8 +155,7 @@ fn test_portable_service_lifecycle() {
         let stop_cmd = Command::builder("systemctl")
             .arg("stop")
             .arg("counter-service.service")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, stop_cmd).await.unwrap();
         handle.wait().await.unwrap();
@@ -175,8 +164,7 @@ fn test_portable_service_lifecycle() {
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("counter-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
         handle.wait().await.unwrap();
@@ -184,7 +172,6 @@ fn test_portable_service_lifecycle() {
 }
 
 #[test]
-#[ignore = "Requires SSH access to systemd-enabled Docker container"]
 fn test_portable_service_logs() {
     if !is_in_systemd_container() {
         eprintln!("Skipping test - not in systemd container");
@@ -193,7 +180,7 @@ fn test_portable_service_logs() {
     
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-logs");
-        let target = LocalTarget::SystemdPortable(SystemdPortable::new(
+        let target = Target::SystemdPortable(SystemdPortable::new(
             "/opt/portable-services/echo-service.tar.gz",
             "echo-service.service"
         ));
@@ -202,8 +189,7 @@ fn test_portable_service_logs() {
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         let _ = executor.launch(&target, detach_cmd).await;
         
         // Attach and start the service
@@ -212,8 +198,7 @@ fn test_portable_service_logs() {
             .arg("--copy=copy")
             .arg("--now")  // Start immediately
             .arg("/opt/portable-services/echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, attach_cmd).await.unwrap();
         handle.wait().await.unwrap();
@@ -228,8 +213,7 @@ fn test_portable_service_logs() {
             .arg("--no-pager")
             .arg("-n")
             .arg("10")
-            .build()
-            .prepare();
+            .build();
         
         let (mut events, mut handle) = executor.launch(&target, logs_cmd).await.unwrap();
         
@@ -252,16 +236,14 @@ fn test_portable_service_logs() {
         let stop_cmd = Command::builder("systemctl")
             .arg("stop")
             .arg("echo-service.service")
-            .build()
-            .prepare();
+            .build();
         let (_events, mut handle) = executor.launch(&target, stop_cmd).await.unwrap();
         handle.wait().await.unwrap();
         
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
             .arg("echo-service.tar.gz")
-            .build()
-            .prepare();
+            .build();
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
         handle.wait().await.unwrap();
     });

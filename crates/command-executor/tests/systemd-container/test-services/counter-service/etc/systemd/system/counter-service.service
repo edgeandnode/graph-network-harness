@@ -1,0 +1,15 @@
+[Unit]
+Description=Test Counter Service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/counter-service.sh
+Restart=always
+StandardOutput=journal
+StandardError=journal
+# Allow writing to /var/lib
+ReadWritePaths=/var/lib/counter-service
+
+[Install]
+WantedBy=multi-user.target

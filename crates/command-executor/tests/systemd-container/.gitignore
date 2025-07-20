@@ -1,2 +1,11 @@
-# Ignore generated test services
-test-services/
+# Test services are now checked in as fixtures
+# test-services/
+
+# SSH keys for testing - never commit these!
+ssh-keys/
+*.key
+*.pub
+authorized_keys
+
+# Container runtime files
+.env

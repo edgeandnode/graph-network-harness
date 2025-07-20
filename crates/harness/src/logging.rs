@@ -1,7 +1,4 @@
 use anyhow::{Context, Result};
-use bollard::container::LogsOptions;
-use bollard::models::ContainerSummary;
-use bollard::Docker;
 use chrono::{DateTime, Utc};
 use futures_util::stream::StreamExt;
 use regex::Regex;

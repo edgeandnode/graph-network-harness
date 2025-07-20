@@ -374,5 +374,3 @@ services:
 ## References
 
 - [WireGuard](https://www.wireguard.com/) - Fast, modern VPN protocol
-- [openssh-rust](https://docs.rs/openssh/) - SSH client library
-- [bollard](https://docs.rs/bollard/) - Docker API client

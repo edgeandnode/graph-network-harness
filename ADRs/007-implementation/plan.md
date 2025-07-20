@@ -7,20 +7,24 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
 
 ### Phase 0: Command Executor (In Progress)
 - [x] Create command-executor crate structure
-- [x] Implement core types (Executor<T>, Backend trait, ProcessHandle trait)
-- [x] Implement LocalBackend with basic Command/ManagedProcess support
+- [x] Implement core types (Executor<T>, ProcessHandle trait)
+- [x] Implement LocalLauncher with basic Command/ManagedProcess support
 - [x] Add tests for local command execution (8 passing tests)
 - [x] Implement event streaming with line buffering (9 passing tests)
 - [x] Refactor API to split event streams and process handles
-- [ ] **Architecture Change**: Split Backend into Launcher/Attacher paradigms
-  - [ ] Refactor Backend trait to Launcher trait (for things we spawn)
-  - [ ] Create Attacher trait (for things we connect to)
-  - [ ] Split LocalTarget into LaunchedTarget and AttachedTarget
-  - [ ] Update Executor to support both paradigms
-- [ ] Implement ManagedService for generic service attachment
-- [ ] Add SystemdPortable support to LocalLauncher
-- [ ] Implement SSH launcher
-- [ ] Implement Docker launcher (pending runtime-agnostic solution)
+- [x] **Architecture Change**: Split into Launcher/Attacher paradigms
+  - [x] Create Launcher trait (for things we spawn)
+  - [x] Create Attacher trait (for things we connect to)
+  - [x] Implement LocalLauncher and LocalAttacher
+  - [x] Split traits into separate modules
+- [x] Implement ManagedService for generic service attachment
+- [x] Add SystemdPortable support to LocalLauncher
+- [ ] **New Architecture**: Implement nested launchers
+  - [ ] Update launchers to support nesting (SshLauncher<L>)
+  - [ ] Move Docker types to target module
+  - [ ] LocalLauncher handles all target types
+  - [ ] Implement SSH launcher with CLI wrapper
+- [ ] Create comprehensive tests for nested scenarios
 
 ### Phase 1: Core Infrastructure
 - [ ] Create service registry module
@@ -30,9 +34,9 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [ ] Registry persistence
 
 - [ ] Integrate command-executor with service registry
-  - [x] Process runtime trait (Backend trait in command-executor)
-  - [ ] Docker runtime (container execution)
-  - [ ] Remote runtime (SSH execution)
+  - [x] Local execution via LocalLauncher
+  - [x] Docker support via target types
+  - [x] Remote execution via nested launchers
 
 - [ ] Build package management
   - [ ] Package creation from manifest

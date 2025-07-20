@@ -13,8 +13,7 @@ fn test_basic_echo() {
         
         let cmd = Command::builder("echo")
             .arg("hello world")
-            .build()
-            .prepare();
+            .build();
         
         let exit_status = executor.execute(&target, cmd).await.unwrap();
         
@@ -34,8 +33,7 @@ fn test_command_with_env_vars() {
             .arg("-c")
             .arg("echo $TEST_VAR")
             .env("TEST_VAR", "test_value")
-            .build()
-            .prepare();
+            .build();
         
         let exit_status = executor.execute(&target, cmd).await.unwrap();
         
@@ -51,8 +49,7 @@ fn test_working_directory() {
         
         let cmd = Command::builder("pwd")
             .current_dir("/tmp")
-            .build()
-            .prepare();
+            .build();
         
         let exit_status = executor.execute(&target, cmd).await.unwrap();
         
@@ -66,7 +63,7 @@ fn test_command_not_found() {
         let executor = Executor::local("test-not-found");
         let target = LocalTarget::Command(LocalCommand::new());
         
-        let cmd = Command::new("this_command_does_not_exist_12345").prepare();
+        let mut cmd = Command::new("this_command_does_not_exist_12345");
         
         let result = executor.execute(&target, cmd).await;
         assert!(result.is_err());
@@ -82,8 +79,7 @@ fn test_exit_code_propagation() {
         let cmd = Command::builder("sh")
             .arg("-c")
             .arg("exit 42")
-            .build()
-            .prepare();
+            .build();
         
         let exit_status = executor.execute(&target, cmd).await.unwrap();
         
@@ -99,8 +95,7 @@ fn test_spawn_and_wait() {
         
         let cmd = Command::builder("sleep")
             .arg("0.1")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         
@@ -122,8 +117,7 @@ fn test_signal_handling() {
         
         let cmd = Command::builder("sleep")
             .arg("10")
-            .build()
-            .prepare();
+            .build();
         
         let (_events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         
@@ -149,8 +143,7 @@ fn test_managed_process_target() {
         
         let cmd = Command::builder("echo")
             .arg("managed process")
-            .build()
-            .prepare();
+            .build();
         
         let exit_status = executor.execute(&target, cmd).await.unwrap();
         
@@ -168,8 +161,7 @@ fn test_event_streaming() {
         let cmd = Command::builder("sh")
             .arg("-c")
             .arg("echo stdout; echo stderr >&2")
-            .build()
-            .prepare();
+            .build();
         
         let (mut events, mut handle) = executor.launch(&target, cmd).await.unwrap();
         

@@ -42,9 +42,5 @@ pub use local::{LocalLauncher, LocalAttacher};
 #[cfg(feature = "ssh")]
 pub mod ssh;
 #[cfg(feature = "ssh")]
-pub use ssh::SshLauncher;
+pub use ssh::{SshLauncher, SshAttacher, SshConfig};
 
-#[cfg(feature = "docker")]
-pub mod docker;
-#[cfg(feature = "docker")]
-pub use docker::DockerLauncher;

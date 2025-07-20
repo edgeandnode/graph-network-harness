@@ -1,6 +1,6 @@
 //! Local process execution backend
 
-use async_process::{Child, Command as AsyncCommand, Stdio};
+use async_process::{Child, Stdio};
 use async_trait::async_trait;
 use futures::stream::Stream;
 use futures_lite::io::{AsyncBufReadExt, BufReader, Lines};
@@ -10,8 +10,10 @@ use std::task::{Context, Poll};
 use crate::command::Command as ServiceCommand;
 use crate::error::{Error, Result};
 use crate::event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
-use crate::launcher::{AttachConfig, AttachedHandle, Attacher, Launcher, ServiceStatus};
+use crate::launcher::Launcher;
+use crate::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 use crate::process::{ExitStatus, ProcessHandle};
+use crate::target::{DockerContainer as TargetDockerContainer, ComposeService as TargetComposeService};
 
 // Local target types
 
@@ -268,6 +270,10 @@ pub enum LocalTarget {
     SystemdService(SystemdService),
     /// Systemd-portable service
     SystemdPortable(SystemdPortable),
+    /// Docker container
+    DockerContainer(TargetDockerContainer),
+    /// Docker compose service
+    ComposeService(TargetComposeService),
 }
 
 /// Launcher for executing processes locally
@@ -301,15 +307,18 @@ impl Launcher for LocalLauncher {
     async fn launch(
         &self,
         target: &Self::Target,
-        mut command: AsyncCommand,
+        command: ServiceCommand,
     ) -> Result<(Self::EventStream, Self::Handle)> {
         match target {
             LocalTarget::Command(_) | LocalTarget::ManagedProcess(_) => {
+                // Prepare the command for execution
+                let mut async_cmd = command.prepare();
+                
                 // Configure stdio for streaming
-                command.stdout(Stdio::piped());
-                command.stderr(Stdio::piped());
+                async_cmd.stdout(Stdio::piped());
+                async_cmd.stderr(Stdio::piped());
 
-                let mut child = command
+                let mut child = async_cmd
                     .spawn()
                     .map_err(|e| Error::spawn_failed(format!("Failed to spawn process: {}", e)))?;
 
@@ -347,14 +356,14 @@ impl Launcher for LocalLauncher {
                 // For systemd-portable, the incoming command is expected to be a portablectl command
                 // We simply execute it as-is, since the user knows what they want to do
 
-                // The command passed should already be configured appropriately
-                // e.g., AsyncCommand::new("portablectl").arg("attach").arg("--enable").arg("--now").arg("myapp.raw")
+                // Prepare the command for execution
+                let mut async_cmd = command.prepare();
 
                 // Configure stdio for streaming
-                command.stdout(Stdio::piped());
-                command.stderr(Stdio::piped());
+                async_cmd.stdout(Stdio::piped());
+                async_cmd.stderr(Stdio::piped());
 
-                let mut child = command.spawn().map_err(|e| {
+                let mut child = async_cmd.spawn().map_err(|e| {
                     Error::spawn_failed(format!("Failed to spawn portablectl command: {}", e))
                 })?;
 
@@ -377,6 +386,203 @@ impl Launcher for LocalLauncher {
                 let handle = LocalProcessHandle {
                     child,
                     kill_on_drop: true,
+                };
+
+                Ok((events, handle))
+            }
+
+            LocalTarget::DockerContainer(container) => {
+                // Build docker run command
+                let mut docker_cmd = ServiceCommand::new("docker");
+                docker_cmd.arg("run").arg("-d"); // Detached mode
+
+                // Add container name if specified
+                if let Some(name) = container.name() {
+                    docker_cmd.arg("--name").arg(name);
+                }
+
+                // Add environment variables
+                for (key, value) in container.env() {
+                    docker_cmd.arg("-e").arg(format!("{}={}", key, value));
+                }
+
+                // Add volume mounts
+                for (host, container_path) in container.volumes() {
+                    docker_cmd.arg("-v").arg(format!("{}:{}", host, container_path));
+                }
+
+                // Add working directory
+                if let Some(dir) = container.working_dir() {
+                    docker_cmd.arg("-w").arg(dir);
+                }
+
+                // Add the image
+                docker_cmd.arg(container.image());
+
+                // Add command arguments from the incoming command
+                let cmd_program = command.get_program();
+                if !cmd_program.is_empty() && cmd_program != "sh" {
+                    docker_cmd.arg(cmd_program);
+                    for arg in command.get_args() {
+                        docker_cmd.arg(arg);
+                    }
+                }
+
+                // Run docker command and get container ID
+                let mut create_cmd = docker_cmd.prepare();
+                create_cmd.stdout(Stdio::piped());
+                create_cmd.stderr(Stdio::piped());
+
+                let output = create_cmd
+                    .output()
+                    .await
+                    .map_err(|e| Error::spawn_failed(format!("Failed to run docker: {}", e)))?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(Error::spawn_failed(format!(
+                        "Failed to create container: {}",
+                        stderr
+                    )));
+                }
+
+                // Extract container ID from output
+                let container_id = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_string();
+
+                if container_id.is_empty() {
+                    return Err(Error::spawn_failed("Failed to get container ID"));
+                }
+
+                // Start streaming logs
+                let mut log_cmd = ServiceCommand::new("docker")
+                    .arg("logs")
+                    .arg("-f")
+                    .arg("--tail")
+                    .arg("0")
+                    .arg(&container_id)
+                    .prepare();
+
+                log_cmd.stdout(Stdio::piped());
+                log_cmd.stderr(Stdio::piped());
+
+                let mut log_child = log_cmd
+                    .spawn()
+                    .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {}", e)))?;
+
+                let child_id = log_child.id();
+                let stdout = log_child.stdout.take().map(|s| BufReader::new(s).lines());
+                let stderr = log_child.stderr.take().map(|s| BufReader::new(s).lines());
+
+                let service_name = container
+                    .name()
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| format!("docker_{}", &container_id[..12]));
+
+                let events = ProcessEventStream {
+                    _service_name: service_name,
+                    stdout,
+                    stderr,
+                    filter: Box::new(NoOpFilter),
+                    started_sent: false,
+                    child_id,
+                };
+
+                // Create a handle that manages the Docker container
+                // For now, we'll track the log process
+                let handle = LocalProcessHandle {
+                    child: log_child,
+                    kill_on_drop: container.remove_on_exit(),
+                };
+
+                Ok((events, handle))
+            }
+
+            LocalTarget::ComposeService(compose) => {
+                // Build docker-compose command
+                let mut compose_cmd = ServiceCommand::new("docker-compose");
+                
+                // Add compose file
+                compose_cmd.arg("-f").arg(compose.compose_file());
+
+                // Add project name if specified
+                if let Some(project) = compose.project_name() {
+                    compose_cmd.arg("-p").arg(project);
+                }
+
+                // Run the service
+                compose_cmd.arg("run").arg("-d");
+                compose_cmd.arg(compose.service_name());
+
+                // Add command arguments from the incoming command
+                let cmd_program = command.get_program();
+                if !cmd_program.is_empty() && cmd_program != "sh" {
+                    compose_cmd.arg(cmd_program);
+                    for arg in command.get_args() {
+                        compose_cmd.arg(arg);
+                    }
+                }
+
+                // Run the command and capture output
+                let mut create_cmd = compose_cmd.prepare();
+                create_cmd.stdout(Stdio::piped());
+                create_cmd.stderr(Stdio::piped());
+
+                let output = create_cmd
+                    .output()
+                    .await
+                    .map_err(|e| Error::spawn_failed(format!("Failed to run docker-compose: {}", e)))?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(Error::spawn_failed(format!(
+                        "Failed to start compose service: {}",
+                        stderr
+                    )));
+                }
+
+                // Extract container ID from output
+                let container_id = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .to_string();
+
+                if container_id.is_empty() {
+                    return Err(Error::spawn_failed("Failed to get container ID"));
+                }
+
+                // Start streaming logs
+                let mut log_cmd = ServiceCommand::new("docker")
+                    .arg("logs")
+                    .arg("-f")
+                    .arg("--tail")
+                    .arg("0")
+                    .arg(&container_id)
+                    .prepare();
+
+                log_cmd.stdout(Stdio::piped());
+                log_cmd.stderr(Stdio::piped());
+
+                let mut log_child = log_cmd
+                    .spawn()
+                    .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {}", e)))?;
+
+                let child_id = log_child.id();
+                let stdout = log_child.stdout.take().map(|s| BufReader::new(s).lines());
+                let stderr = log_child.stderr.take().map(|s| BufReader::new(s).lines());
+
+                let events = ProcessEventStream {
+                    _service_name: compose.service_name().to_string(),
+                    stdout,
+                    stderr,
+                    filter: Box::new(NoOpFilter),
+                    started_sent: false,
+                    child_id,
+                };
+
+                let handle = LocalProcessHandle {
+                    child: log_child,
+                    kill_on_drop: false, // Don't remove compose services by default
                 };
 
                 Ok((events, handle))

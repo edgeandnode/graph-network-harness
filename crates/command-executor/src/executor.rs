@@ -1,6 +1,6 @@
 //! Main executor type that wraps different launchers
 
-use async_process::Command;
+use crate::command::Command;
 use crate::launcher::Launcher;
 use crate::error::Result;
 use crate::event::LogFilter;

@@ -1,7 +1,7 @@
 # Phase 1: Command Executor - Definition of Done
 
 ## Objective
-Create a standalone `command-executor` crate that provides type-safe, unified command execution across Local, Docker, and SSH contexts with proper event streaming integration.
+Create a standalone `command-executor` crate that provides type-safe, unified command execution using a composable nested launcher architecture that works across any execution context (Local, SSH, Docker, etc.) with proper event streaming integration.
 
 ## Deliverables
 
@@ -64,21 +64,23 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] Log streaming via configurable commands
 - [x] Support for systemd, rc.d, and custom services
 
-### 7. Docker Launcher Implementation ✓ When:
-- [ ] `DockerLauncher` implements Launcher trait
-- [ ] Can launch containers
-- [ ] Can launch compose services
-- [ ] Handles container stdout/stderr streaming
-- [ ] Converts Docker events to ProcessEvents
-- [ ] Supports exec with environment variables
+### 7. Nested Launcher Architecture ✓ When:
+- [ ] Launchers can wrap other launchers (e.g., `SshLauncher<LocalLauncher>`)
+- [ ] Docker is a target type, not a launcher
+- [ ] LocalLauncher handles Docker targets:
+  - [ ] DockerContainer: `docker run` commands
+  - [ ] ComposeService: `docker-compose` commands
+  - [ ] Container lifecycle management
+- [ ] Static dispatch with zero runtime overhead
+- [ ] Type-safe composition of execution contexts
 
 ### 8. SSH Launcher Implementation ✓ When:
-- [ ] `SshLauncher` implements Launcher trait
-- [ ] Connection management with key-based auth
-- [ ] Remote command execution
-- [ ] Remote process management
-- [ ] File upload/download capabilities
-- [ ] Handles connection failures gracefully
+- [ ] `SshLauncher<L>` wraps any other launcher
+- [ ] Uses SSH CLI via async-process (runtime-agnostic)
+- [ ] Transforms commands for SSH execution
+- [ ] Supports nested SSH (jump hosts)
+- [ ] Key-based authentication support
+- [ ] Handles all target types via delegation
 
 ### 9. Process Management ✓ When:
 - [x] `ProcessHandle` trait with event streaming for launched processes
@@ -86,8 +88,8 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] Signal methods work appropriately for each handle type:
   - [x] Local launched: Unix signals via nix
   - [x] Local attached: Service control commands
-  - [ ] Docker launched: docker kill with signal support
-  - [ ] SSH launched: remote kill command
+  - [x] Docker via LocalLauncher: docker stop/kill commands
+  - [ ] SSH wrapped: signals sent via SSH
 - [x] `wait()` for process completion
 - [x] `terminate()` and `kill()` convenience methods
 - [x] Event streams and handles are separate from spawn/attach
@@ -123,44 +125,44 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 - [x] Cleanup container after tests
 **Note:** Tests are implemented but marked with `#[ignore]` until SSH/Docker infrastructure is ready for remote execution.
 
-#### `tests/docker_launcher.rs`
-- [ ] Create test container via launcher
-- [ ] Execute commands in container
+#### `tests/nested_launchers.rs`
+- [ ] Test LocalLauncher with Docker targets
+- [ ] Test SshLauncher wrapping LocalLauncher
+- [ ] Test Docker on remote (SSH<Local> + DockerContainer)
+- [ ] Test SSH jump hosts (SSH<SSH<Local>>)
+- [ ] Test command transformation through layers
+- [ ] Verify proper cleanup through nesting
+
+#### `tests/docker_targets.rs`
+- [ ] LocalLauncher + DockerContainer target
+- [ ] LocalLauncher + ComposeService target
 - [ ] Environment variable injection
 - [ ] Volume mounts
-- [ ] Container cleanup
-
-#### `tests/compose_launcher.rs`
-- [ ] Create test docker-compose.yml
-- [ ] Start compose stack via launcher
-- [ ] Execute in specific service
-- [ ] Access service by name
-- [ ] Stack cleanup
+- [ ] Container lifecycle management
 
 #### `tests/ssh_launcher.rs`
-- [ ] Create Docker container with sshd
-- [ ] Generate test SSH keys
-- [ ] Connect and execute commands via launcher
-- [ ] File upload/download
-- [ ] Long-running commands over SSH
+- [ ] Basic SSH command execution
+- [ ] SSH with key authentication
+- [ ] Nested SSH (jump host scenarios)
+- [ ] All target types via SSH
 - [ ] Connection error handling
 
 ### 11. Examples ✓ When:
-- [ ] `examples/basic_launch.rs` - Simple command execution (all launchers)
+- [ ] `examples/basic_launch.rs` - Simple command execution
+- [ ] `examples/nested_launchers.rs` - Composition examples (SSH<Local>, etc.)
+- [ ] `examples/docker_targets.rs` - Docker containers via any launcher
 - [ ] `examples/service_attach.rs` - Service attachment and control
-- [ ] `examples/streaming_logs.rs` - Event streaming from processes and services
-- [ ] `examples/process_control.rs` - Launch, signal, kill
-- [ ] `examples/docker_launch.rs` - Docker-specific features
-- [ ] `examples/ssh_launch.rs` - SSH with file transfer
+- [ ] `examples/streaming_logs.rs` - Event streaming
+- [ ] `examples/jump_host.rs` - SSH jump host scenarios
 - [ ] Examples have comments explaining usage
 - [ ] Examples actually run and produce expected output
 
 ### 12. Documentation ✓ When:
 - [ ] All public types have doc comments
-- [ ] Module-level documentation explains Launcher/Attacher design
-- [ ] Examples in doc comments
-- [ ] README.md in crate root
-- [ ] Launcher/Attacher-specific features documented
+- [ ] Module-level documentation explains nested launcher architecture
+- [ ] Examples showing composition patterns
+- [ ] README.md explains the design philosophy
+- [ ] Target types vs Launcher types clearly documented
 - [ ] No missing_docs warnings
 
 ### 13. API Quality ✓ When:
@@ -176,7 +178,7 @@ Create a standalone `command-executor` crate that provides type-safe, unified co
 
 Phase 1 is complete when:
 1. All checkboxes above are checked
-2. All launchers (Local, Docker, SSH) and attachers (Local) are fully functional
+2. Nested launcher architecture is fully functional (Local, SSH<L>, composition)
 3. Test coverage demonstrates real-world usage:
    - Local process launching works
    - Local service attachment works
@@ -187,14 +189,19 @@ Phase 1 is complete when:
 
    **Launching processes:**
    ```rust
-   // All launchers use same API
-   let (events, handle) = launcher.launch(&target, command).await?;
+   // Local execution
+   let local = LocalLauncher;
+   let (events, handle) = local.launch(&target, command).await?;
    
-   // Process events and control lifecycle
-   while let Some(event) = events.next().await {
-       println!("{:?}", event);
-   }
-   let status = handle.wait().await?;
+   // Remote execution (nested)
+   let remote = SshLauncher::new(LocalLauncher, "host");
+   let (events, handle) = remote.launch(&target, command).await?;
+   
+   // Docker on remote (composition)
+   let docker_target = ExecutionTarget::DockerContainer(
+       DockerContainer::new("nginx")
+   );
+   let (events, handle) = remote.launch(&docker_target, command).await?;
    ```
 
    **Attaching to services:**

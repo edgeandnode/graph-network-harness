@@ -34,7 +34,7 @@ openssh = { workspace = true, optional = true }
 [features]
 default = []
 ssh = ["openssh"]
-docker = []  # Feature flag exists but no implementation yet
+docker = []  # Docker support via CLI wrapper
 full = ["ssh", "docker"]
 
 [dev-dependencies]

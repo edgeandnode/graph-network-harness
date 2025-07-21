@@ -6,21 +6,45 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# Core
+# Core - runtime agnostic
 anyhow = { workspace = true }
-tokio = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 chrono = { workspace = true }
 
-# File watching
-notify = { workspace = true }
+# Async runtime-agnostic
+async-trait = { workspace = true }
+futures = { workspace = true }
+futures-util = { workspace = true }
+
+# WebSocket - no runtime features!
+async-tungstenite = { workspace = true, default-features = false }
+tungstenite = { workspace = true }
+
+# Runtime-agnostic networking and file I/O
+async-net = { workspace = true }
+async-fs = { workspace = true }
 
 # Utilities
-dirs = { workspace = true }
-async-trait = { workspace = true }
+uuid = { workspace = true }
+tempfile = { workspace = true }
+
+# Command execution
+command-executor = { path = "../command-executor" }
 
 [dev-dependencies]
-tokio-test = "0.4"
+# Use smol for tests - runtime agnostic
+smol = "2.0"
 tempfile = { workspace = true }
+anyhow = { workspace = true }
+async-fs = { workspace = true }
+
+[features]
+default = []
+# Integration testing features
+integration-tests = []
+docker-tests = []
+ssh-tests = []

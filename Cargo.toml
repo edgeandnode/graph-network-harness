@@ -28,6 +28,7 @@ duct = "0.13"
 # Utilities
 uuid = { version = "1.11", features = ["v4"] }
 tempfile = "3.13"
+futures = "0.3"
 futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 notify = "6.1"
@@ -42,6 +43,12 @@ tokio-stream = "0.1"
 wireguard-control = "1.5"
 openssh = "0.10"
 dirs = "5.0"
+
+# Service registry dependencies
+async-tungstenite = "0.25"
+tungstenite = "0.21"
+async-net = "2.0"
+async-fs = "2.1"
 
 # Internal crates
 graph-network-harness = { path = "crates/harness" }

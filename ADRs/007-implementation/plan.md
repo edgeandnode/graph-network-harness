@@ -41,23 +41,47 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [x] Consistent error handling throughout
 - [x] Created comprehensive README.md with examples
 
-### Phase 2: Core Infrastructure
-- [ ] Create service registry module
-  - [ ] Service registration/deregistration
-  - [ ] IP address tracking (host, LAN, WireGuard)
-  - [ ] Service dependency tracking
-  - [ ] Registry persistence
+### Phase 2: Core Infrastructure (In Progress)
 
-- [ ] Integrate command-executor with service registry
-  - [x] Local execution via LocalLauncher
-  - [x] Docker support via target types
-  - [x] Remote execution via nested launchers
+Started: 2025-01-21
 
-- [ ] Build package management
-  - [ ] Package creation from manifest
-  - [ ] Tarball generation
-  - [ ] Script validation
-  - [ ] Package extraction
+**Week 1: Registry Core**
+- [ ] Data models (ServiceEntry, Endpoint, Location)
+- [ ] In-memory store with thread-safe access
+- [ ] Service CRUD operations
+- [ ] State tracking and transitions
+- [ ] File persistence with async-fs
+- [ ] Event generation system
+
+**Week 2: WebSocket Server** 
+- [ ] async-tungstenite integration (no runtime features)
+- [ ] Connection handling with async-net
+- [ ] Message protocol (request/response/event)
+- [ ] Event subscription management
+- [ ] Connection lifecycle and error handling
+- [ ] Broadcast system for events
+
+**Week 3: Package Management**
+- [ ] Package format specification
+- [ ] Manifest validation
+- [ ] Path sanitization (`/opt/{name}-{version}/`)
+- [ ] Package builder and tarball creation
+- [ ] Deployment via command-executor
+- [ ] Progress reporting through WebSocket
+
+**Integration & Testing**
+- [ ] Unit tests for each component
+- [ ] Integration tests with mock services
+- [ ] Runtime-agnostic validation
+- [ ] Example binary with different runtimes
+- [ ] Documentation and API examples
+
+**Key Design Decisions:**
+- WebSocket-only API (no HTTP endpoints)
+- Runtime-agnostic using async-tungstenite
+- Local registry (not distributed)
+- Sanitized package installation paths
+- Integration with existing command-executor
 
 ### Phase 3: Networking
 - [ ] WireGuard integration

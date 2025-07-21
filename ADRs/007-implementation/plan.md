@@ -5,12 +5,12 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
 
 ## Implementation Phases
 
-### Phase 0: Command Executor (In Progress)
+### Phase 1: Command Executor ✅ COMPLETE
 - [x] Create command-executor crate structure
 - [x] Implement core types (Executor<T>, ProcessHandle trait)
 - [x] Implement LocalLauncher with basic Command/ManagedProcess support
-- [x] Add tests for local command execution (8 passing tests)
-- [x] Implement event streaming with line buffering (9 passing tests)
+- [x] Add tests for local command execution
+- [x] Implement event streaming with line buffering
 - [x] Refactor API to split event streams and process handles
 - [x] **Architecture Change**: Split into Launcher/Attacher paradigms
   - [x] Create Launcher trait (for things we spawn)
@@ -19,14 +19,29 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [x] Split traits into separate modules
 - [x] Implement ManagedService for generic service attachment
 - [x] Add SystemdPortable support to LocalLauncher
-- [ ] **New Architecture**: Implement nested launchers
-  - [ ] Update launchers to support nesting (SshLauncher<L>)
-  - [ ] Move Docker types to target module
-  - [ ] LocalLauncher handles all target types
-  - [ ] Implement SSH launcher with CLI wrapper
-- [ ] Create comprehensive tests for nested scenarios
+- [x] **Nested Architecture**: Implement nested launchers
+  - [x] Launchers support nesting (SshLauncher<L>)
+  - [x] Docker types moved to target module
+  - [x] LocalLauncher handles all target types (Command, ManagedProcess, Docker, Compose)
+  - [x] SSH launcher with CLI wrapper implemented
+  - [x] SudoLauncher for elevated execution
+- [x] Self-hosted tests running with Docker
+- [x] Comprehensive test infrastructure created
 
-### Phase 1: Core Infrastructure
+**Phase 1 Completed on 2025-01-21:**
+- [x] API polish and documentation
+  - [x] All public APIs have doc comments
+  - [x] All modules properly documented
+  - [x] Nested launcher pattern documented
+- [x] Test stability improvements
+  - [x] All integration tests pass reliably
+  - [x] Flaky tests properly feature-gated
+- [x] Minor cleanup
+  - [x] No unused code warnings
+  - [x] Consistent error handling throughout
+- [x] Created comprehensive README.md with examples
+
+### Phase 2: Core Infrastructure
 - [ ] Create service registry module
   - [ ] Service registration/deregistration
   - [ ] IP address tracking (host, LAN, WireGuard)
@@ -44,23 +59,23 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [ ] Script validation
   - [ ] Package extraction
 
-### Phase 2: Networking
+### Phase 3: Networking
 - [ ] WireGuard integration
 - [ ] Network topology detection
 
-### Phase 3: Service Lifecycle
+### Phase 4: Service Lifecycle
 - [ ] Local service management
 - [ ] Remote service deployment
 
-### Phase 4: Configuration & CLI
+### Phase 5: Configuration & CLI
 - [ ] Services.yaml parsing
 - [ ] CLI commands
 
-### Phase 5: Testing & Documentation
-- [ ] Integration tests
+### Phase 6: Testing & Documentation
+- [x] Integration tests
 - [ ] Example services
-- [ ] **Self-hosted test orchestration**
-  - [ ] Use command-executor to orchestrate its own integration tests
-  - [ ] Replace shell scripts with Rust test harness
-  - [ ] Implement test container lifecycle management using library's own features
-  - [ ] Benefits: dogfooding, real-world usage validation, self-contained tests
+- [x] **Self-hosted test orchestration**
+  - [x] Use command-executor to orchestrate its own integration tests
+  - [x] Replace shell scripts with Rust test harness
+  - [x] Implement test container lifecycle management using library's own features
+  - [x] Benefits: dogfooding, real-world usage validation, self-contained tests

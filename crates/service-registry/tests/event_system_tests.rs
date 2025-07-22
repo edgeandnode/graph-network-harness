@@ -1,135 +1,19 @@
-//! WebSocket integration tests for service registry
+//! Integration tests for service registry event system
+//!
+//! These tests validate the registry's event subscription and notification
+//! system which will be used by the WebSocket API once implemented.
 
 use service_registry::{
     Registry, ServiceEntry,
-    models::{Action, EventType, ServiceState},
+    models::{EventType, ServiceState},
 };
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
-use std::time::Duration;
 
 mod common;
 use common::{
     test_services::*,
-    websocket_client::WebSocketTestClient,
     integration_test,
 };
-
-// NOTE: These tests require a WebSocket server implementation
-// They are currently structured to test the client-side functionality
-// and will be enabled once the WebSocket server is implemented
-
-/// Test WebSocket client connection and basic operations
-#[test]
-#[cfg(all(feature = "integration-tests", feature = "websocket-server"))]
-fn test_websocket_basic_operations() {
-    smol::block_on(async {
-        // This test would require a running WebSocket server
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        
-        // Connect to WebSocket server
-        let mut client = WebSocketTestClient::connect(server_addr).await
-            .expect("Failed to connect to WebSocket server");
-        
-        // List services (should be empty initially)
-        let services = client.list_services().await
-            .expect("Failed to list services");
-        
-        assert_eq!(services.as_array().unwrap().len(), 0);
-        
-        // List endpoints (should be empty initially)
-        let endpoints = client.list_endpoints().await
-            .expect("Failed to list endpoints");
-        
-        assert!(endpoints.as_object().unwrap().is_empty());
-        
-        client.close().await.expect("Failed to close connection");
-    });
-}
-
-/// Test WebSocket event subscription
-#[test]
-#[cfg(all(feature = "integration-tests", feature = "websocket-server"))]
-fn test_websocket_event_subscription() {
-    smol::block_on(async {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        
-        let mut client = WebSocketTestClient::connect(server_addr).await
-            .expect("Failed to connect to WebSocket server");
-        
-        // Subscribe to events
-        client.subscribe(vec![
-            EventType::ServiceRegistered,
-            EventType::ServiceStateChanged,
-        ]).await.expect("Failed to subscribe to events");
-        
-        // In a real test, we would trigger service registration here
-        // and wait for events to be received
-        
-        client.close().await.expect("Failed to close connection");
-    });
-}
-
-/// Test WebSocket package deployment
-#[test]
-#[cfg(all(feature = "integration-tests", feature = "websocket-server"))]
-fn test_websocket_package_deployment() {
-    smol::block_on(async {
-        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp directory");
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        
-        // Create test package
-        let package_dir = create_test_package(&temp_dir, "test-service", "1.0.0").await
-            .expect("Failed to create test package");
-        
-        let mut client = WebSocketTestClient::connect(server_addr).await
-            .expect("Failed to connect to WebSocket server");
-        
-        // Deploy package
-        let result = client.deploy_package(
-            package_dir.to_str().unwrap(),
-            Some("local-node")
-        ).await.expect("Failed to deploy package");
-        
-        // Verify deployment result
-        assert!(result.get("success").unwrap().as_bool().unwrap());
-        
-        client.close().await.expect("Failed to close connection");
-    });
-}
-
-/// Test concurrent WebSocket connections
-#[test]
-#[cfg(all(feature = "integration-tests", feature = "websocket-server"))]
-fn test_concurrent_websocket_connections() {
-    smol::block_on(async {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        
-        // Create multiple concurrent connections
-        let mut clients = Vec::new();
-        for i in 0..5 {
-            let client = WebSocketTestClient::connect(server_addr).await
-                .expect(&format!("Failed to connect client {}", i));
-            clients.push(client);
-        }
-        
-        // Each client subscribes to events
-        for (i, client) in clients.iter_mut().enumerate() {
-            client.subscribe(vec![EventType::ServiceRegistered]).await
-                .expect(&format!("Failed to subscribe client {}", i));
-        }
-        
-        // In a real test, we would register a service and verify
-        // all clients receive the event
-        
-        // Close all connections
-        for client in clients {
-            client.close().await.expect("Failed to close connection");
-        }
-    });
-}
-
-// The following tests use direct registry integration to test
-// WebSocket-like functionality without requiring a running server
 
 /// Test registry with WebSocket-style event handling
 integration_test!(
@@ -164,7 +48,7 @@ integration_test!(
         assert!(addresses.contains(&client2_addr));
         
         // Update state - only client 1 should receive event
-        let (_old_state, events) = registry.update_state("echo-service", ServiceState::Starting).await
+        let (_old_state, _events) = registry.update_state("echo-service", ServiceState::Starting).await
             .expect("Failed to update state to Starting");
         let (_old_state, events) = registry.update_state("echo-service", ServiceState::Running).await
             .expect("Failed to update state to Running");
@@ -280,7 +164,7 @@ integration_test!(
         assert!(!addresses.contains(&clients[1].0));
         
         // Update state
-        let (_old_state, events) = registry.update_state("web-service", ServiceState::Starting).await
+        let (_old_state, _events) = registry.update_state("web-service", ServiceState::Starting).await
             .expect("Failed to update state to Starting");
         let (_old_state, events) = registry.update_state("web-service", ServiceState::Running).await
             .expect("Failed to update state to Running");

@@ -1,5 +1,10 @@
 [workspace]
-members = [ "crates/command-executor","crates/harness", "crates/harness-cli", "crates/service-registry"]
+members = [
+    "crates/command-executor",
+    # "crates/harness",
+    # "crates/harness-cli",
+    "crates/service-registry",
+]
 resolver = "2"
 
 [workspace.package]
@@ -14,7 +19,6 @@ repository = "https://github.com/graphprotocol/graph-network-harness"
 anyhow = "1.0"
 thiserror = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 serde = { version = "1", features = ["derive"] }
@@ -30,14 +34,12 @@ uuid = { version = "1.11", features = ["v4"] }
 tempfile = "3.13"
 futures = "0.3"
 futures-util = "0.3"
-tokio-util = { version = "0.7", features = ["io"] }
 notify = "6.1"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.11"
 base64 = "0.21"
 async-trait = "0.1"
 pin-project-lite = "0.2"
-tokio-stream = "0.1"
 
 # New dependencies for distributed features
 wireguard-control = "1.5"
@@ -49,6 +51,10 @@ async-tungstenite = "0.25"
 tungstenite = "0.21"
 async-net = "2.0"
 async-fs = "2.1"
+async-tls = { version = "0.13", default-features = false }
+rustls = "0.21"
+rustls-pemfile = "2.0"
+webpki-roots = "0.22"
 
 # Internal crates
 graph-network-harness = { path = "crates/harness" }

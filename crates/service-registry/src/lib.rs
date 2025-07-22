@@ -43,12 +43,18 @@ pub mod models;
 pub mod registry;
 pub mod websocket;
 pub mod package;
+pub mod client;
+pub mod tls;
+pub mod config;
 
 pub use error::{Error, Result};
 pub use models::*;
 pub use registry::Registry;
 pub use websocket::{WsServer, ConnectionHandler};
 pub use package::{Package, PackageBuilder};
+pub use client::{WsClient, WsClientHandle};
+pub use tls::{TlsServerConfig, TlsClientConfig};
+pub use config::{RegistryConfig, ServerConfig, ClientConfig, TlsConfig, ClientTlsConfig};
 
 /// Re-export key types for convenience
 pub mod prelude {

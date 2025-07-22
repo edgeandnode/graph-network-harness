@@ -1,70 +1,85 @@
-//! WebSocket test client for integration testing
-//! NOTE: WebSocket client implementation is disabled pending server implementation
+//! WebSocket test client wrapper
 
-use service_registry::models::{Action, EventType};
+use service_registry::{WsClient, WsClientHandle, EventType, ServiceAction};
 use std::net::SocketAddr;
 use serde_json::Value;
+use anyhow::Result;
 
-/// WebSocket test client for integration testing
+/// WebSocket test client wrapper
 pub struct WebSocketTestClient {
-    #[allow(dead_code)]
-    addr: SocketAddr,
+    handle: WsClientHandle,
+    _handler_task: smol::Task<Result<()>>,
 }
 
 impl WebSocketTestClient {
-    /// Connect to WebSocket server (placeholder implementation)
-    pub async fn connect(addr: SocketAddr) -> anyhow::Result<Self> {
-        // TODO: Implement actual WebSocket client when server is ready
-        Ok(Self { addr })
+    /// Connect to WebSocket server
+    pub async fn connect(addr: SocketAddr) -> Result<Self> {
+        let client = WsClient::connect(addr).await?;
+        let (handle, handler) = client.start_handler().await;
+        
+        // Run handler in background
+        let handler_task = smol::spawn(async move {
+            handler.await?;
+            Ok(())
+        });
+        
+        Ok(Self {
+            handle,
+            _handler_task: handler_task,
+        })
     }
     
-    /// Send a request message (placeholder)
-    pub async fn send_request(&mut self, _action: Action, _params: Value) -> anyhow::Result<String> {
-        anyhow::bail!("WebSocket client send_request not yet implemented")
+    /// Subscribe to events
+    pub async fn subscribe(&self, events: Vec<EventType>) -> Result<()> {
+        self.handle.subscribe(events).await?;
+        Ok(())
     }
     
-    /// Wait for a response with specific ID (placeholder)
-    pub async fn wait_for_response(&mut self, _request_id: &str) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client wait_for_response not yet implemented")
+    /// Unsubscribe from events
+    pub async fn unsubscribe(&self, events: Vec<EventType>) -> Result<()> {
+        self.handle.unsubscribe(events).await?;
+        Ok(())
     }
     
-    /// Wait for an event of specific type (placeholder)
-    pub async fn wait_for_event(&mut self, _event_type: EventType) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client wait_for_event not yet implemented")
+    /// List services
+    pub async fn list_services(&self) -> Result<Value> {
+        let services = self.handle.list_services().await?;
+        Ok(serde_json::to_value(services)?)
     }
     
-    /// Subscribe to events (placeholder)
-    pub async fn subscribe(&mut self, _events: Vec<EventType>) -> anyhow::Result<()> {
-        anyhow::bail!("WebSocket client subscribe not yet implemented")
+    /// Get a service
+    pub async fn get_service(&self, name: &str) -> Result<Value> {
+        let service = self.handle.get_service(name).await?;
+        Ok(serde_json::to_value(service)?)
     }
     
-    /// Unsubscribe from events (placeholder)
-    pub async fn unsubscribe(&mut self, _events: Vec<EventType>) -> anyhow::Result<()> {
-        anyhow::bail!("WebSocket client unsubscribe not yet implemented")
+    /// List endpoints
+    pub async fn list_endpoints(&self) -> Result<Value> {
+        let endpoints = self.handle.list_endpoints().await?;
+        Ok(serde_json::to_value(endpoints)?)
     }
     
-    /// List all services (placeholder)
-    pub async fn list_services(&mut self) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client list_services not yet implemented")
+    /// Deploy a package
+    pub async fn deploy_package(&self, package_path: &str, target_node: Option<&str>) -> Result<Value> {
+        self.handle.deploy_package(package_path, target_node).await
+            .map_err(|e| anyhow::anyhow!("Deploy failed: {}", e))
     }
     
-    /// Get specific service (placeholder)
-    pub async fn get_service(&mut self, _name: &str) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client get_service not yet implemented")
+    /// Start a service
+    pub async fn start_service(&self, name: &str) -> Result<()> {
+        self.handle.service_action(name, ServiceAction::Start).await?;
+        Ok(())
     }
     
-    /// List all endpoints (placeholder)
-    pub async fn list_endpoints(&mut self) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client list_endpoints not yet implemented")
+    /// Stop a service
+    pub async fn stop_service(&self, name: &str) -> Result<()> {
+        self.handle.service_action(name, ServiceAction::Stop).await?;
+        Ok(())
     }
     
-    /// Deploy a package (placeholder)
-    pub async fn deploy_package(&mut self, _package_path: &str, _target_node: Option<&str>) -> anyhow::Result<Value> {
-        anyhow::bail!("WebSocket client deploy_package not yet implemented")
-    }
-    
-    /// Close the WebSocket connection (placeholder)
-    pub async fn close(self) -> anyhow::Result<()> {
+    /// Close the connection
+    pub async fn close(self) -> Result<()> {
+        self.handle.close().await?;
         Ok(())
     }
 }

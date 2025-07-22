@@ -30,9 +30,13 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     
-    /// Serialization error
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    /// JSON serialization error
+    #[error("JSON serialization error: {0}")]
+    Json(#[from] serde_json::Error),
+    
+    /// YAML serialization error
+    #[error("YAML serialization error: {0}")]
+    Yaml(#[from] serde_yaml::Error),
     
     /// Package error
     #[error("Package error: {0}")]

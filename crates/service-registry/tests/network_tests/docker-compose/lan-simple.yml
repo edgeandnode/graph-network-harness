@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Simulate harness host
+  harness:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-harness-lan
+    networks:
+      lan:
+        ipv4_address: 192.168.100.10
+        
+  # LAN node 1
+  lan-node-1:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-lan-node-1
+    networks:
+      lan:
+        ipv4_address: 192.168.100.20
+        
+  # LAN node 2  
+  lan-node-2:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-lan-node-2
+    networks:
+      lan:
+        ipv4_address: 192.168.100.30
+
+networks:
+  lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Simulate registry running on host (using network_mode: host would require special handling)
+  registry:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-registry-local
+    networks:
+      harness-bridge:
+        ipv4_address: 172.100.0.10
+    
+  # Local Docker service
+  graph-node:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-graph-node-local
+    networks:
+      harness-bridge:
+        ipv4_address: 172.100.0.20
+    
+  # Another local Docker service
+  indexer:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-indexer-local
+    networks:
+      harness-bridge:
+        ipv4_address: 172.100.0.30
+
+networks:
+  harness-bridge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.100.0.0/24

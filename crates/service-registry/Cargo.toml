@@ -38,6 +38,9 @@ webpki-roots = { workspace = true, optional = true }
 uuid = { workspace = true }
 tempfile = { workspace = true }
 
+# Networking
+ipnet = { workspace = true }
+
 # Command execution
 command-executor = { path = "../command-executor" }
 

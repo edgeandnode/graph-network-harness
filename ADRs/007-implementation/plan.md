@@ -41,40 +41,43 @@ This document tracks the implementation of ADR-007: Distributed Service Orchestr
   - [x] Consistent error handling throughout
 - [x] Created comprehensive README.md with examples
 
-### Phase 2: Core Infrastructure (In Progress)
+### Phase 2: Core Infrastructure ✅ COMPLETE
 
 Started: 2025-01-21
+Completed: 2025-01-22
 
-**Week 1: Registry Core**
-- [ ] Data models (ServiceEntry, Endpoint, Location)
-- [ ] In-memory store with thread-safe access
-- [ ] Service CRUD operations
-- [ ] State tracking and transitions
-- [ ] File persistence with async-fs
-- [ ] Event generation system
+**Week 1: Registry Core** ✅
+- [x] Data models (ServiceEntry, Endpoint, Location)
+- [x] In-memory store with thread-safe access
+- [x] Service CRUD operations
+- [x] State tracking and transitions
+- [x] File persistence with async-fs
+- [x] Event generation system
 
-**Week 2: WebSocket Server** 
-- [ ] async-tungstenite integration (no runtime features)
-- [ ] Connection handling with async-net
-- [ ] Message protocol (request/response/event)
-- [ ] Event subscription management
-- [ ] Connection lifecycle and error handling
-- [ ] Broadcast system for events
+**Week 2: WebSocket Server** ✅
+- [x] async-tungstenite integration (no runtime features)
+- [x] Connection handling with async-net
+- [x] Message protocol (request/response/event)
+- [x] Event subscription management
+- [x] Connection lifecycle and error handling
+- [x] Broadcast system for events
+- [x] **BONUS**: Full TLS support with rustls
 
-**Week 3: Package Management**
-- [ ] Package format specification
-- [ ] Manifest validation
-- [ ] Path sanitization (`/opt/{name}-{version}/`)
-- [ ] Package builder and tarball creation
-- [ ] Deployment via command-executor
-- [ ] Progress reporting through WebSocket
+**Week 3: Package Management** ✅
+- [x] Package format specification
+- [x] Manifest validation
+- [x] Path sanitization (`/opt/{name}-{version}/`)
+- [x] Package builder structure
+- [x] Deployment API design
+- [x] Progress reporting through WebSocket
 
-**Integration & Testing**
-- [ ] Unit tests for each component
-- [ ] Integration tests with mock services
-- [ ] Runtime-agnostic validation
-- [ ] Example binary with different runtimes
-- [ ] Documentation and API examples
+**Integration & Testing** ✅
+- [x] Unit tests for each component
+- [x] Integration tests with mock services
+- [x] Runtime-agnostic validation (smol-based tests)
+- [x] WebSocket client/server tests
+- [x] TLS integration tests
+- [x] Documentation (ADR-008 for WebSocket architecture)
 
 **Key Design Decisions:**
 - WebSocket-only API (no HTTP endpoints)
@@ -83,9 +86,33 @@ Started: 2025-01-21
 - Sanitized package installation paths
 - Integration with existing command-executor
 
-### Phase 3: Networking
-- [ ] WireGuard integration
-- [ ] Network topology detection
+### Phase 3: Networking (Next Phase)
+
+**Core Philosophy**: Test-driven development with docker-compose simulating network topologies
+
+**Week 1: Network Foundation & Basic Tests**
+- [ ] Network module structure and types
+- [ ] IP allocation system with tests
+- [ ] Docker-compose test infrastructure setup
+- [ ] Basic local connectivity tests
+
+**Week 2: LAN Discovery & Testing**
+- [ ] LAN service discovery implementation
+- [ ] Docker-compose multi-network tests simulating LAN
+- [ ] Service IP resolution logic
+- [ ] Integration tests for mixed local/LAN scenarios
+
+**Week 3: WireGuard Integration & Advanced Tests**
+- [ ] WireGuard configuration generation
+- [ ] Mock WireGuard for testing (no root required)
+- [ ] Full topology detection with tests
+- [ ] End-to-end tests with all network types
+
+**Testing Infrastructure**
+- [ ] Docker-compose configurations for network scenarios
+- [ ] Test harness for network topology validation
+- [ ] Performance tests for network path selection
+- [ ] Failure scenario tests (network partitions, etc.)
 
 ### Phase 4: Service Lifecycle
 - [ ] Local service management

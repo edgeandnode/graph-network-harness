@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Local harness with registry
+  harness:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-harness-mixed
+    networks:
+      lan:
+        ipv4_address: 192.168.100.10
+      harness-local:
+        ipv4_address: 172.110.0.10
+        
+  # Local Docker container
+  local-service:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-local-service
+    networks:
+      harness-local:
+        ipv4_address: 172.110.0.20
+        
+  # LAN service
+  lan-service:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-lan-service
+    networks:
+      lan:
+        ipv4_address: 192.168.100.20
+        
+  # Simulated remote service (isolated network)
+  remote-service:
+    image: alpine:latest
+    command: sleep infinity
+    container_name: test-remote-service
+    networks:
+      remote-net:
+        ipv4_address: 10.0.0.20
+
+networks:
+  harness-local:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.110.0.0/24
+  lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+  remote-net:
+    driver: bridge
+    internal: true  # Isolated network - can't reach other networks
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24

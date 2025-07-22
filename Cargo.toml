@@ -55,6 +55,7 @@ async-tls = { version = "0.13", default-features = false }
 rustls = "0.21"
 rustls-pemfile = "2.0"
 webpki-roots = "0.22"
+ipnet = { version = "2.9", features = ["serde"] }
 
 # Internal crates
 graph-network-harness = { path = "crates/harness" }
@@ -66,3 +67,4 @@ missing_docs = "warn"
 
 [workspace.lints.clippy]
 all = "warn"
+

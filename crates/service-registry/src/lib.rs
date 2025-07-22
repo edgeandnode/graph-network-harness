@@ -46,6 +46,7 @@ pub mod package;
 pub mod client;
 pub mod tls;
 pub mod config;
+pub mod network;
 
 pub use error::{Error, Result};
 pub use models::*;

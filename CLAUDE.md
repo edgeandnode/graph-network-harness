@@ -31,6 +31,10 @@ cargo test --test '*' --workspace
 
 # Run tests with output
 cargo test --workspace -- --nocapture
+
+# Run tests with feature flags
+cargo test -p service-registry --features docker-tests
+cargo test -p service-registry --features integration-tests
 ```
 
 ### Running the Harness
@@ -161,8 +165,32 @@ error_set! {
 
 ## Testing Considerations
 
+### Core Testing Philosophy
+**TEST EARLY AND OFTEN**: Phase completion is defined by passing tests, not just code implementation.
+
+- Write tests BEFORE or ALONGSIDE implementation, not after
+- Each feature should have unit tests AND integration tests
+- Use TDD (Test-Driven Development) when practical
+- A phase is NOT complete until all tests pass reliably
+
+### Testing Practices
 - Always use smol for async tests to maintain runtime agnosticism
 - Integration tests require Docker to be running
+- Use docker-compose to simulate complex network topologies
+- Test various scenarios: local, LAN, WireGuard, mixed networks
 - Use `--keep-running` flag for interactive debugging
 - Check `test-activity/logs/current/` for real-time log output
 - Session logs persist after test completion for post-mortem analysis
+
+### Test Execution Verification
+**CRITICAL**: Always check the actual test count in cargo test output to verify tests are running:
+- Look for "running X tests" in the output - if it's "running 0 tests", tests are being filtered out
+- Common causes: missing feature flags, incorrect test names, cfg conditions
+- Example: `cargo test network_discovery_tests` shows "running 0 tests" → need `--features docker-tests`
+- Always verify the expected number of tests actually run, don't just check for "test result: ok"
+
+### Integration Testing Strategy
+- **Local Tests**: Single machine scenarios (processes, Docker containers)
+- **LAN Tests**: Use docker-compose networks to simulate LAN topologies
+- **WireGuard Tests**: Mock WireGuard behavior without requiring root
+- **End-to-End Tests**: Full system tests with real services

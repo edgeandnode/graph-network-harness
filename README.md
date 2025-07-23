@@ -1,375 +1,237 @@
-# Graph Protocol Local Network Test Harness
+# Graph Network Harness
 
-A comprehensive integration testing framework for applications that interact with The Graph Protocol's local-network stack. Provides Docker-in-Docker (DinD) isolation for testing against graph-node, indexer services, contracts, and the full Graph Protocol infrastructure.
+A heterogeneous service orchestration framework implementing distributed service management across local processes, Docker containers, and remote machines. Built on a runtime-agnostic architecture supporting any async runtime (Tokio, async-std, smol).
 
-## Overview
+## 🚀 Current Status
 
-The test harness provides:
-- **Binary CLI**: Ready-to-use command-line interface for testing
-- **Library API**: Reusable harness for programmatic integration
-- **Docker-in-Docker**: Complete container isolation preventing conflicts
-- **Local Network Stack**: Full Graph Protocol infrastructure (graph-node, indexer services, contracts)
-- **Persistent Logging**: All logs stored in organized session directories
-- **Image Synchronization**: Efficient Docker image management between host and containers
+**Phase 4 of 6 Complete** - Service lifecycle management foundation implemented with comprehensive test coverage.
 
-## Quick Start
+### ✅ Completed Phases
 
-### Using the Binary
+1. **Phase 1: Command Execution** - Runtime-agnostic command execution framework
+2. **Phase 2: Service Registry** - Service discovery with network topology detection  
+3. **Phase 3: Network Configuration** - IP allocation and cross-network service resolution
+4. **Phase 4: Service Lifecycle** - Orchestrator with health monitoring and package deployment
 
-```bash
-# Run all integration tests
-target/debug/stack-runner all --local-network ../local-network
+### 🔄 In Progress
 
-# Start the harness for manual testing
-target/debug/stack-runner harness --keep-running --local-network ../local-network
+**Phase 5: Configuration & CLI** - Services.yaml parsing and command-line interface
 
-# Run tests in Docker container (recommended for isolation)
-target/debug/stack-runner container --sync-images --local-network ../local-network
+### 📋 Upcoming
 
-# Use custom local-network path
-target/debug/stack-runner container --sync-images --local-network /path/to/your/local-network
+**Phase 6: Production Features** - Monitoring, scaling, and advanced orchestration
 
-# Execute commands in the test environment
-target/debug/stack-runner exec --local-network ../local-network -- docker ps
+## Architecture Overview
 
-# View logs from test sessions
-target/debug/stack-runner logs --summary
+The harness implements [ADR-007](ADRs/007-distributed-service-orchestration.md) for heterogeneous service orchestration:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Orchestrator                          │
+│  ┌─────────────┐ ┌──────────────┐ ┌─────────────────┐   │
+│  │   Service   │ │   Service    │ │     Package     │   │
+│  │   Manager   │ │   Registry   │ │    Deployer     │   │
+│  └─────────────┘ └──────────────┘ └─────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+                           │
+      ┌────────────────────┼────────────────────┐
+      │                    │                    │
+┌─────▼──────┐      ┌──────▼──────┐     ┌──────▼──────┐
+│  Process   │      │   Docker    │     │   Remote    │
+│  Executor  │      │  Executor   │     │  Executor   │
+└────────────┘      └─────────────┘     └─────────────┘
+      │                    │                    │
+┌─────▼──────┐      ┌──────▼──────┐     ┌──────▼──────┐
+│   Local    │      │  Container  │     │    SSH      │
+│  Process   │      │   (Docker)  │     │  (LAN/WG)   │
+└────────────┘      └─────────────┘     └─────────────┘
 ```
 
-### As a Library
+## Key Features
+
+### 🎯 Heterogeneous Service Execution
+- **Local Processes**: Direct process execution with PID tracking
+- **Docker Containers**: Container lifecycle management
+- **Remote SSH**: Deploy and manage services on LAN nodes
+- **WireGuard Networks**: Package-based deployment over WireGuard
+
+### 🌐 Unified Networking
+- **Service Discovery**: Automatic service registration and discovery
+- **Network Topology**: Detect and route between Local, LAN, and WireGuard networks
+- **IP Management**: Automatic IP allocation within configured subnets
+- **Cross-Network Resolution**: Services communicate regardless of location
+
+### 🏥 Health Monitoring
+- **Configurable Health Checks**: HTTP endpoints, commands, or custom checks
+- **Retry Logic**: Configure retries before marking services unhealthy
+- **Continuous Monitoring**: Background health monitoring with configurable intervals
+
+### 📦 Package Deployment
+- **Remote Deployment**: Deploy service packages to remote hosts
+- **Dependency Resolution**: Automatic IP injection for service dependencies
+- **Version Management**: Track deployed package versions
+
+### ⚡ Runtime Agnostic
+- **Any Async Runtime**: Works with Tokio, async-std, smol, or custom runtimes
+- **No Runtime Lock-in**: Libraries use async-process, async-fs, async-net
+- **Flexible Integration**: Embed in any async application
+
+## Getting Started
+
+### Current Capabilities
+
+While the CLI is still in development (Phase 5), you can use the orchestrator library directly:
 
 ```rust
-use local_network_harness::{LocalNetworkHarness, HarnessConfig};
-use std::path::PathBuf;
+use orchestrator::{
+    ServiceManager, ServiceConfig, ServiceTarget, HealthCheck
+};
+use std::collections::HashMap;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let mut config = HarnessConfig::default();
-    config.local_network_path = PathBuf::from("../local-network");
-    let mut harness = LocalNetworkHarness::new(config)?;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create service manager
+    let manager = ServiceManager::new().await?;
     
-    // Start the test environment
-    harness.start().await?;
+    // Define a local process service
+    let service = ServiceConfig {
+        name: "my-api".to_string(),
+        target: ServiceTarget::Process {
+            binary: "./target/release/api-server".to_string(),
+            args: vec!["--port".to_string(), "8080".to_string()],
+            env: HashMap::from([
+                ("LOG_LEVEL".to_string(), "info".to_string()),
+            ]),
+            working_dir: None,
+        },
+        dependencies: vec!["database".to_string()],
+        health_check: Some(HealthCheck {
+            command: "curl".to_string(),
+            args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
+            interval: 30,
+            retries: 3,
+            timeout: 10,
+        }),
+    };
     
-    // Start the local network
-    harness.start_local_network().await?;
+    // Start the service
+    manager.start_service("my-api", service).await?;
     
-    // Run your tests
-    let mut ctx = local_network_harness::TestContext::new(&mut harness);
-    ctx.deploy_subgraph("/path/to/subgraph", "test-subgraph").await?;
+    // Check service status
+    let status = manager.get_service_status("my-api").await?;
+    println!("Service status: {:?}", status);
     
-    // Cleanup happens automatically on drop
     Ok(())
 }
 ```
 
-### Using Docker Test Environment
-
-For complete isolation and parallel test execution:
-
-```bash
-cd docker-test-env
-
-# Run with image syncing (recommended for first run)
-cargo run --bin stack-runner -- container --sync-images --local-network ../local-network harness
-
-# Run without sync (faster if images already synced)
-cargo run --bin stack-runner -- container --local-network ../local-network all
-
-# Interactive shell for development
-docker-compose exec integration-tests-dind sh
-```
-
-## Architecture
-
-### Docker-in-Docker (DinD) Setup
-
-The framework uses Docker-in-Docker to provide complete isolation:
-
-```
-Host Machine
-└── Docker
-    └── DinD Container (integration-tests-dind)
-        ├── Docker Daemon (dockerd)
-        ├── Rust/Cargo environment
-        ├── Integration test binary
-        └── Docker Containers (managed by harness)
-            ├── chain (Anvil)
-            ├── postgres
-            ├── ipfs
-            ├── graph-node
-            └── indexer-agent
-```
-
-#### Why Docker-in-Docker?
-
-The local-network docker-compose uses hardcoded container names (e.g., `container_name: postgres`), which prevents multiple test instances from running simultaneously. DinD solves this by:
-
-1. **Complete Isolation**: Each test run gets its own Docker daemon
-2. **No Conflicts**: Multiple test runs can execute in parallel
-3. **Clean State**: Each run starts with a fresh Docker environment
-4. **Portability**: Tests run identically on any machine with Docker
-
-### Test Activity Directory
-
-All test runs create artifacts in a dedicated test-activity directory:
-
-```
-test-activity/
-├── logs/                                   # Test session logs
-│   ├── 2025-01-14_17-42-33_a1b2c3d4/     # Timestamp + Session ID
-│   │   ├── session.json                   # Session metadata
-│   │   ├── docker-compose.log             # Compose startup logs
-│   │   ├── chain.log                      # Service logs
-│   │   ├── graph-node.log
-│   │   ├── indexer-agent.log
-│   │   └── ...
-│   └── current -> 2025-01-14_17-42-33_a1b2c3d4/
-├── volumes/                                # Docker volumes (future)
-└── artifacts/                              # Test artifacts (future)
-```
-
-This directory is excluded from git and provides a persistent location for:
-- Session logs that survive test completion
-- Docker volumes for data persistence
-- Test artifacts and outputs
-- Debugging information
-
-### Library API
-
-The crate exposes a high-level API for test automation:
+### Docker Service Example
 
 ```rust
-pub use local_network_harness::{
-    LocalNetworkHarness,  // Main test harness
-    HarnessConfig,        // Configuration options
-    TestContext,          // Test utilities
-    ContainerConfig,      // Container settings
-    DindManager,          // Low-level container management
+let docker_service = ServiceConfig {
+    name: "postgres".to_string(),
+    target: ServiceTarget::Docker {
+        image: "postgres:15".to_string(),
+        env: HashMap::from([
+            ("POSTGRES_PASSWORD".to_string(), "secret".to_string()),
+        ]),
+        ports: vec![5432],
+        volumes: vec!["/data/postgres:/var/lib/postgresql/data".to_string()],
+    },
+    dependencies: vec![],
+    health_check: Some(HealthCheck {
+        command: "pg_isready".to_string(),
+        args: vec![],
+        interval: 10,
+        retries: 5,
+        timeout: 5,
+    }),
 };
 ```
 
-## Configuration
+## Project Structure
 
-### HarnessConfig Options
-
-```rust
-HarnessConfig {
-    // Path to docker-test-env (auto-detected by default)
-    docker_test_env_path: Option<PathBuf>,
-    
-    // Project root directory
-    project_root: PathBuf,
-    
-    // Custom log directory (temp by default)
-    log_dir: Option<PathBuf>,
-    
-    // Container startup timeout
-    startup_timeout: Duration,
-    
-    // Auto-sync Docker images from host
-    auto_sync_images: bool,
-    
-    // Build local-network images before running
-    build_images: bool,
-    
-    // Custom session name for organization
-    session_name: Option<String>,
-}
 ```
-
-## Test Development
-
-### Writing Integration Tests
-
-```rust
-use local_network_harness::{LocalNetworkHarness, HarnessConfig, TestContext};
-use std::path::PathBuf;
-
-#[tokio::test]
-async fn test_subgraph_deployment() -> anyhow::Result<()> {
-    // Set up the test environment
-    let mut config = HarnessConfig::default();
-    config.local_network_path = PathBuf::from("../local-network");
-    let mut harness = LocalNetworkHarness::new(config)?;
-    harness.start().await?;
-    harness.start_local_network().await?;
-    
-    // Create test context
-    let mut ctx = TestContext::new(&mut harness);
-    
-    // Deploy a test subgraph
-    ctx.deploy_subgraph("./test-subgraph", "my-test").await?;
-    
-    // Verify deployment
-    assert!(ctx.container_running("graph-node").await?);
-    
-    // Check logs if needed
-    ctx.container_logs("indexer-agent", Some(50)).await?;
-    
-    Ok(())
-}
-```
-
-### Using TestContext
-
-The `TestContext` provides utilities for common test operations:
-
-- `exec()` - Execute commands in the test environment
-- `exec_in()` - Execute with specific working directory
-- `deploy_subgraph()` - Deploy subgraphs to the local network
-- `container_running()` - Check container status
-- `container_logs()` - Retrieve container logs
-
-## Session Management
-
-### Viewing Test Sessions
-
-```bash
-# List all sessions
-cargo run --bin stack-runner -- logs --summary
-
-# View specific session logs
-cargo run --bin stack-runner -- logs --session 2025-01-14_17-42-33_a1b2c3d4
-```
-
-### Session Metadata
-
-Each session creates a `session.json` with:
-- Start/end times
-- Test command executed
-- Service statuses and exit codes
-- Failure analysis (if applicable)
-- Log file locations
-
-## Image Management
-
-### Building Images
-
-The harness can build local-network images:
-
-```bash
-# Build before running tests
-cargo run --bin stack-runner -- harness --build --local-network ../local-network
-
-# Or in container
-cargo run --bin stack-runner -- container --sync-images --build-host --local-network ../local-network harness
-```
-
-### Syncing Images
-
-When using DinD, sync images from host for faster startup:
-
-```bash
-# Automatic sync
-cargo run --bin stack-runner -- container --sync-images --local-network ../local-network all
-
-# Manual sync is handled automatically by the harness
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Container name conflicts**: Use the DinD environment
-2. **Slow startup**: Enable image syncing with `--sync-images`
-3. **Permission errors**: Check log directory permissions
-4. **Build failures**: Ensure Docker daemon is running
-
-### Debug Commands
-
-```bash
-# Check container status
-docker-compose -f docker-test-env/docker-compose.yaml ps
-
-# View DinD logs
-docker-compose -f docker-test-env/docker-compose.yaml logs
-
-# Access container shell
-docker-compose -f docker-test-env/docker-compose.yaml exec integration-tests-dind sh
-```
-
-## Performance Tips
-
-1. **First Run**: Use `--sync-images` to transfer existing images
-2. **Development**: Keep container running with `--keep-running`
-3. **CI/CD**: Run multiple isolated instances in parallel
-4. **Caching**: Cargo and Docker caches persist in named volumes
-
-## Advanced Features
-
-### Custom Test Harness
-
-```rust
-// Create custom configuration
-let mut config = HarnessConfig::default();
-config.startup_timeout = Duration::from_secs(120);
-config.session_name = Some("my-test-run".to_string());
-
-// Use custom harness
-let mut harness = LocalNetworkHarness::new(config)?;
-```
-
-### Log Analysis
-
-All logs are stored as files for analysis:
-
-```bash
-# Search logs
-grep ERROR test-activity/logs/*/indexer-agent.log
-
-# Follow logs in real-time
-tail -f test-activity/logs/current/*.log
-
-# Analyze with standard tools
-less test-activity/logs/*/session.json
+graph-network-harness/
+├── crates/
+│   ├── command-executor/     # Runtime-agnostic command execution
+│   ├── service-registry/     # Service discovery & network topology
+│   └── orchestrator/         # Service lifecycle orchestration
+├── ADRs/                     # Architecture Decision Records
+│   ├── 007-distributed-service-orchestration.md
+│   └── 007-implementation/
+│       └── plan.md          # Implementation phases
+├── docker-test-env/         # Docker-in-Docker test environment
+└── test-activity/           # Test logs and artifacts
 ```
 
 ## Development
 
 ### Prerequisites
 
-For development, you'll need the following tools:
-- Rust toolchain
-- Docker
-- cargo-deny (for dependency constraint checking)
+- Rust toolchain (1.70+)
+- Docker (for container execution)
+- SSH access (for remote execution)
 
-Install cargo-deny:
+### Building
+
 ```bash
-cargo install cargo-deny
+# Build all crates
+cargo build --workspace
+
+# Run tests
+cargo test --workspace
+
+# Run with specific features
+cargo test -p service-registry --features docker-tests
 ```
 
-## Development Workflow
+### Testing Philosophy
 
-1. **Local Development**:
-   ```bash
-   cargo build --bin stack-runner
-   cargo run --bin stack-runner -- harness --keep-running --local-network ../local-network
-   ```
+**TEST EARLY AND OFTEN**: Each phase is validated by comprehensive tests before moving forward.
 
-2. **Test Development**:
-   ```bash
-   # Run in container for isolation
-   cargo run --bin stack-runner -- container --local-network ../local-network harness
-   
-   # Make changes and re-run
-   cargo build && cargo run --bin stack-runner -- container --local-network ../local-network all
-   ```
+- Unit tests for all components
+- Integration tests with real Docker containers
+- Runtime-agnostic tests using smol
+- 30+ tests in orchestrator alone
 
-3. **CI Integration**:
-   ```bash
-   # Build and run all tests
-   cargo run --bin stack-runner -- container --sync-images --local-network ../local-network all
-   ```
+## Roadmap
+
+### Phase 5: Configuration & CLI (Next)
+- [ ] Parse services.yaml configuration files
+- [ ] CLI commands: start, stop, status, deploy, logs
+- [ ] Service dependency resolution
+- [ ] Network topology detection
+
+### Phase 6: Production Features
+- [ ] Distributed tracing integration
+- [ ] Prometheus metrics export
+- [ ] Service scaling and load balancing
+- [ ] Advanced health check strategies
+- [ ] Rolling updates and rollbacks
+
+## Design Principles
+
+1. **Runtime Agnostic**: No hard dependency on any specific async runtime
+2. **Composable**: Each crate can be used independently
+3. **Testable**: Comprehensive test coverage with real infrastructure
+4. **Extensible**: Easy to add new executor types or features
+5. **Production Ready**: Built for reliability and observability
 
 ## Contributing
 
-When adding new tests:
-1. Use the `LocalNetworkHarness` API for consistency
-2. Ensure proper cleanup in test teardown
-3. Add appropriate logging for debugging
-4. Document any special requirements
+See [CLAUDE.md](CLAUDE.md) for AI assistant guidelines and [CODE-POLICY.md](CODE-POLICY.md) for coding standards.
+
+Key points:
+- Use runtime-agnostic async libraries
+- Follow error composition patterns with thiserror
+- Write tests alongside implementation
+- Document all public APIs
 
 ## License
 
-See the main project LICENSE file.
+[License details here]
+
+## Acknowledgments
+
+Built as a modern replacement for Docker-only orchestration, enabling true heterogeneous service deployment across any infrastructure.

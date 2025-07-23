@@ -37,19 +37,16 @@ cargo test -p service-registry --features docker-tests
 cargo test -p service-registry --features integration-tests
 ```
 
-### Running the Harness
+### Running Tests
 ```bash
-# Run locally (requires local-network repo)
-cargo run --bin harness -- harness --keep-running --local-network ../local-network
+# Run service-registry network discovery tests
+cargo test -p service-registry --features docker-tests
 
-# Run in Docker container (recommended for isolation)
-cargo run --bin harness -- container --sync-images --local-network ../local-network harness
+# Run command-executor tests 
+cargo test -p command-executor --features ssh-tests,docker-tests
 
-# Run all tests in container
-cargo run --bin harness -- container --sync-images --local-network ../local-network all
-
-# View test logs
-cargo run --bin harness -- logs --summary
+# Run all workspace tests
+cargo test --workspace
 ```
 
 ### Linting and Validation
@@ -70,12 +67,11 @@ cargo doc --workspace --no-deps
 ## High-Level Architecture
 
 ### Project Structure
-The project is a Rust workspace with multiple crates designed for runtime-agnostic async execution:
+The project is a Rust workspace implementing a heterogeneous service orchestration system:
 
-- **command-executor**: Core library for executing commands across different backends (local, SSH, Docker)
-- **harness**: Main library that orchestrates the test environment
-- **harness-cli**: Binary that provides the `harness` command-line interface
-- **service-registry**: Service discovery and management for distributed testing
+- **command-executor**: Runtime-agnostic command execution across backends (local, SSH, Docker)
+- **service-registry**: Service discovery, network topology detection, and WebSocket-based management
+- **Future: orchestrator**: New harness implementing ADR-007 heterogeneous service orchestration
 
 ### Key Architectural Principles
 

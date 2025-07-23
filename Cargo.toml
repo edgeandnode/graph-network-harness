@@ -1,9 +1,8 @@
 [workspace]
 members = [
     "crates/command-executor",
-    # "crates/harness",
-    # "crates/harness-cli",
     "crates/service-registry",
+    "crates/orchestrator",
 ]
 resolver = "2"
 
@@ -30,7 +29,7 @@ reqwest = { version = "0.12.15", features = ["json"] }
 duct = "0.13"
 
 # Utilities
-uuid = { version = "1.11", features = ["v4"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
 tempfile = "3.13"
 futures = "0.3"
 futures-util = "0.3"
@@ -58,8 +57,9 @@ webpki-roots = "0.22"
 ipnet = { version = "2.9", features = ["serde"] }
 
 # Internal crates
-graph-network-harness = { path = "crates/harness" }
+command-executor = { path = "crates/command-executor" }
 service-registry = { path = "crates/service-registry" }
+orchestrator = { path = "crates/orchestrator" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

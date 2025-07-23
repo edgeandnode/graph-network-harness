@@ -6,20 +6,23 @@ A heterogeneous service orchestration framework implementing distributed service
 
 **Phase 4 of 6 Complete** - Service lifecycle management foundation implemented with comprehensive test coverage.
 
-### ✅ Completed Phases
+### ✅ What's Working Today
 
-1. **Phase 1: Command Execution** - Runtime-agnostic command execution framework
-2. **Phase 2: Service Registry** - Service discovery with network topology detection  
-3. **Phase 3: Network Configuration** - IP allocation and cross-network service resolution
-4. **Phase 4: Service Lifecycle** - Orchestrator with health monitoring and package deployment
+- **Command Execution**: Run commands locally, via SSH, or in Docker containers
+- **Service Registry**: Automatic service discovery with WebSocket-based updates
+- **Network Detection**: Identify Local, LAN, and WireGuard network topologies
+- **Service Orchestration**: Start/stop services with dependency management
+- **Health Monitoring**: Configurable health checks with retry logic
+- **Package Deployment**: Deploy service packages to remote hosts
+- **IP Management**: Automatic IP allocation within configured subnets
 
-### 🔄 In Progress
+### 🚧 What's Coming Soon
 
-**Phase 5: Configuration & CLI** - Services.yaml parsing and command-line interface
-
-### 📋 Upcoming
-
-**Phase 6: Production Features** - Monitoring, scaling, and advanced orchestration
+- **YAML Configuration**: Define entire service topologies in YAML (Phase 5)
+- **CLI Interface**: `harness start`, `harness deploy`, etc. (Phase 5)
+- **Service Scaling**: Auto-scaling based on load (Phase 6)
+- **Monitoring Integration**: Prometheus/Grafana dashboards (Phase 6)
+- **Rolling Updates**: Zero-downtime deployments (Phase 6)
 
 ## Architecture Overview
 
@@ -76,11 +79,154 @@ The harness implements [ADR-007](ADRs/007-distributed-service-orchestration.md) 
 - **No Runtime Lock-in**: Libraries use async-process, async-fs, async-net
 - **Flexible Integration**: Embed in any async application
 
+## Network Testing Use Cases
+
+### Testing Distributed Systems Across Networks
+
+The harness excels at testing distributed systems that span multiple network boundaries. Here's how you would test a Graph Protocol indexer setup across different networks:
+
+```yaml
+# services.yaml (coming in Phase 5)
+version: "1.0"
+
+networks:
+  local:
+    type: local
+    subnet: "127.0.0.0/8"
+  
+  lan:
+    type: lan
+    subnet: "192.168.1.0/24"
+    nodes:
+      - host: "192.168.1.100"
+        ssh_user: "ubuntu"
+        ssh_key: "~/.ssh/id_rsa"
+  
+  wireguard:
+    type: wireguard
+    subnet: "10.0.0.0/24"
+    nodes:
+      - host: "10.0.0.10"
+        ssh_user: "admin"
+        package_deploy: true
+
+services:
+  postgres:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    ports:
+      - 5432
+    health_check:
+      command: "pg_isready"
+      interval: 10
+      retries: 5
+
+  graph-node:
+    type: process
+    network: lan
+    binary: "/opt/graph-node/bin/graph-node"
+    env:
+      GRAPH_NODE_CONFIG: "/etc/graph-node/config.toml"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@${postgres.ip}:5432/graph"
+    dependencies:
+      - postgres
+    health_check:
+      http: "http://localhost:8000/health"
+      interval: 30
+      retries: 3
+
+  indexer-agent:
+    type: package
+    network: wireguard
+    package: "./packages/indexer-agent.tar.gz"
+    env:
+      GRAPH_NODE_QUERY_URL: "http://${graph-node.ip}:8000"
+      INDEXER_AGENT_PORT: "8080"
+    dependencies:
+      - graph-node
+    health_check:
+      http: "http://localhost:8080/health"
+      timeout: 60
+```
+
+### Current Network Testing (Using Library)
+
+Today, you can programmatically set up network tests:
+
+```rust
+use orchestrator::{ServiceManager, ServiceConfig, ServiceTarget};
+use service_registry::{NetworkType, ServiceInfo};
+
+#[tokio::test]
+async fn test_cross_network_communication() {
+    let manager = ServiceManager::new().await.unwrap();
+    
+    // Start a local database
+    let db_config = ServiceConfig {
+        name: "test-db".to_string(),
+        target: ServiceTarget::Docker {
+            image: "postgres:15".to_string(),
+            env: [("POSTGRES_PASSWORD".to_string(), "test".to_string())].into(),
+            ports: vec![5432],
+            volumes: vec![],
+        },
+        dependencies: vec![],
+        health_check: Some(HealthCheck {
+            command: "pg_isready".to_string(),
+            args: vec![],
+            interval: 5,
+            retries: 3,
+            timeout: 5,
+        }),
+    };
+    
+    // Start service and wait for health
+    manager.start_service("test-db", db_config).await.unwrap();
+    
+    // Get assigned IP for dependency injection
+    let db_ip = manager.get_service_ip("test-db").await.unwrap();
+    
+    // Start a remote service that connects to the database
+    let app_config = ServiceConfig {
+        name: "test-app".to_string(),
+        target: ServiceTarget::Remote {
+            host: "192.168.1.100".to_string(),
+            ssh_user: "ubuntu".to_string(),
+            ssh_key: Some("/home/user/.ssh/id_rsa".to_string()),
+            binary: "/opt/app/bin/server".to_string(),
+            args: vec![],
+            env: [
+                ("DATABASE_URL".to_string(), 
+                 format!("postgresql://postgres:test@{}:5432/app", db_ip))
+            ].into(),
+            working_dir: None,
+        },
+        dependencies: vec!["test-db".to_string()],
+        health_check: Some(HealthCheck {
+            command: "curl".to_string(),
+            args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
+            interval: 10,
+            retries: 3,
+            timeout: 10,
+        }),
+    };
+    
+    manager.start_service("test-app", app_config).await.unwrap();
+    
+    // Verify cross-network connectivity
+    let app_status = manager.get_service_status("test-app").await.unwrap();
+    assert!(app_status.healthy);
+}
+```
+
 ## Getting Started
 
 ### Current Capabilities
 
-While the CLI is still in development (Phase 5), you can use the orchestrator library directly:
+While the YAML configuration and CLI are still in development (Phase 5), you can use the orchestrator library directly:
 
 ```rust
 use orchestrator::{
@@ -195,20 +341,81 @@ cargo test -p service-registry --features docker-tests
 - Runtime-agnostic tests using smol
 - 30+ tests in orchestrator alone
 
+## Implementation Status
+
+### ✅ Fully Implemented
+
+#### Command Execution Layer
+- Local process execution with PID tracking
+- SSH command execution with key/password auth
+- Docker container lifecycle management
+- Runtime-agnostic design (works with any async runtime)
+
+#### Service Registry
+- WebSocket-based service discovery
+- Network topology detection (Local/LAN/WireGuard)
+- Automatic IP allocation within subnets
+- Real-time service status updates
+
+#### Orchestrator Core
+- Service lifecycle management (start/stop/restart)
+- Dependency resolution and ordering
+- Health check monitoring with configurable retries
+- Package deployment to remote hosts
+- Cross-network service communication
+
+### 🚧 Partially Implemented
+
+#### Network Configuration
+- ✅ Basic network detection and routing
+- ✅ IP allocation for services
+- ❌ Advanced routing rules
+- ❌ Network isolation policies
+
+#### Package Deployment
+- ✅ Basic tar.gz package deployment
+- ✅ Environment variable injection
+- ❌ Package versioning and rollback
+- ❌ Binary dependency resolution
+
+### ❌ Not Yet Implemented
+
+#### Configuration System (Phase 5)
+- YAML service definition parsing
+- Environment variable substitution
+- Secret management integration
+- Configuration validation
+
+#### CLI Interface (Phase 5)
+- `harness init` - Initialize project
+- `harness start <service>` - Start services
+- `harness stop <service>` - Stop services
+- `harness status` - Show service status
+- `harness logs <service>` - Stream logs
+- `harness deploy` - Deploy packages
+
+#### Production Features (Phase 6)
+- Prometheus metrics export
+- Distributed tracing (OpenTelemetry)
+- Service auto-scaling
+- Rolling updates with health checks
+- Circuit breakers and retries
+- Multi-region deployment
+
 ## Roadmap
 
-### Phase 5: Configuration & CLI (Next)
-- [ ] Parse services.yaml configuration files
-- [ ] CLI commands: start, stop, status, deploy, logs
-- [ ] Service dependency resolution
-- [ ] Network topology detection
+### Phase 5: Configuration & CLI (In Progress)
+- [ ] YAML parser for services.yaml
+- [ ] CLI command structure
+- [ ] Service dependency graph resolution
+- [ ] Interactive service selection
+- [ ] Log streaming and aggregation
 
-### Phase 6: Production Features
-- [ ] Distributed tracing integration
-- [ ] Prometheus metrics export
-- [ ] Service scaling and load balancing
-- [ ] Advanced health check strategies
-- [ ] Rolling updates and rollbacks
+### Phase 6: Production Features (Q1 2025)
+- [ ] Observability stack integration
+- [ ] Advanced deployment strategies
+- [ ] Service mesh capabilities
+- [ ] Multi-cloud support
 
 ## Design Principles
 

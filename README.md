@@ -4,10 +4,11 @@ A heterogeneous service orchestration framework implementing distributed service
 
 ## 🚀 Current Status
 
-**Phase 4 of 7 Complete** - Core orchestration engine implemented with comprehensive test coverage.
+**Phase 5 of 7 Complete** - Daemon architecture implemented with secure TLS WebSocket communication.
 
 ### ✅ What's Working Today
 
+- **Daemon Architecture**: `harness-executor-daemon` with secure TLS WebSocket communication
 - **Command Execution**: Run commands locally, via SSH, or in Docker containers
 - **Service Registry**: Automatic service discovery with WebSocket-based updates
 - **Network Detection**: Identify Local, LAN, and WireGuard network topologies
@@ -15,22 +16,23 @@ A heterogeneous service orchestration framework implementing distributed service
 - **Health Monitoring**: Configurable health checks with retry logic
 - **Package Deployment**: Deploy service packages to remote hosts
 - **IP Management**: Automatic IP allocation within configured subnets
+- **TLS Security**: Self-signed certificate management with 1-year expiry
 
-### 🚧 What's Next: Phase 5 - Configuration System (2 weeks)
+### 🚧 What's Next: Phase 6 - Configuration System
 
 - **YAML Configuration**: Define services in simple YAML files
 - **Environment Variables**: Support for ${VAR} substitution
 - **Service References**: Use ${service.ip} to reference other services
-- **Basic CLI**: Commands for validate, start, stop, status
+- **Enhanced CLI**: Full service management commands
 
-### 📋 Coming Soon: Phase 6 - Full CLI (2 weeks)
+### 📋 Coming Soon: Phase 7 - Full CLI
 
 - **Complete CLI**: All commands (logs, exec, deploy, etc.)
 - **Great UX**: Progress bars, interactive prompts, helpful errors
 - **Shell Completions**: Bash, Zsh, Fish support
 - **Production Ready**: <100ms startup, comprehensive docs
 
-### 🔮 Future: Phase 7 - Production Features
+### 🔮 Future: Phase 8 - Production Features
 
 - **Auto-scaling**: Scale services based on load
 - **Monitoring**: Prometheus/Grafana integration
@@ -43,7 +45,14 @@ The harness implements [ADR-007](ADRs/007-distributed-service-orchestration.md) 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Orchestrator                          │
+│                        CLI                              │
+│            harness daemon status                        │
+│            harness service list                         │
+└─────────────────┬───────────────────────────────────────┘
+                  │ TLS WebSocket (port 9443)
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│              harness-executor-daemon                    │
 │  ┌─────────────┐ ┌──────────────┐ ┌─────────────────┐   │
 │  │   Service   │ │   Service    │ │     Package     │   │
 │  │   Manager   │ │   Registry   │ │    Deployer     │   │
@@ -232,12 +241,22 @@ Today, the orchestrator is available as a Rust library:
 
 ```toml
 [dependencies]
-orchestrator = { path = "crates/orchestrator" }
+service-orchestration = { path = "crates/service-orchestration" }
 ```
 
-See the test files in `crates/orchestrator/tests/` for usage examples.
+See the test files in `crates/service-orchestration/tests/` for usage examples.
 
-### Coming Soon (Phase 5 - 2 weeks)
+### Available Now
+
+```bash
+# Start the daemon
+harness-executor-daemon
+
+# Check daemon status
+harness daemon status
+```
+
+### Coming Soon (Phase 6)
 
 ```bash
 # Install harness
@@ -422,15 +441,18 @@ services:
 ```
 graph-network-harness/
 ├── crates/
-│   ├── command-executor/     # Runtime-agnostic command execution
-│   ├── service-registry/     # Service discovery & network topology
-│   └── orchestrator/         # Service lifecycle orchestration
-├── ADRs/                     # Architecture Decision Records
+│   ├── command-executor/        # Runtime-agnostic command execution
+│   ├── service-registry/        # Service discovery & network topology
+│   ├── service-orchestration/   # Service lifecycle orchestration
+│   ├── harness-config/          # YAML configuration parsing
+│   └── harness/                 # CLI and daemon binaries
+├── ADRs/                        # Architecture Decision Records
 │   ├── 007-distributed-service-orchestration.md
 │   └── 007-implementation/
-│       └── plan.md          # Implementation phases
-├── docker-test-env/         # Docker-in-Docker test environment
-└── test-activity/           # Test logs and artifacts
+│       └── plan.md             # Implementation phases
+├── DAEMON.md                    # Daemon documentation
+├── docker-test-env/            # Docker-in-Docker test environment
+└── test-activity/              # Test logs and artifacts
 ```
 
 ## Development
@@ -451,9 +473,10 @@ cargo build --workspace
 cargo test --workspace
 
 # Run specific test suites
-cargo test -p command-executor        # Command execution tests
+cargo test -p command-executor           # Command execution tests
 cargo test -p service-registry --features docker-tests  # Network discovery
-cargo test -p orchestrator            # Service lifecycle tests
+cargo test -p service-orchestration     # Service lifecycle tests
+cargo test -p harness                   # CLI and daemon tests
 
 # Run integration tests only
 cargo test --test '*' --workspace
@@ -562,15 +585,28 @@ services:
 - ❌ Package versioning and rollback
 - ❌ Binary dependency resolution
 
+### ✅ Recently Implemented (Phase 5)
+
+#### Daemon Architecture
+- `harness-executor-daemon` binary with TLS WebSocket server
+- Secure certificate management with 1-year expiry
+- CLI connects to daemon on port 9443
+- Persistent state in `~/.local/share/harness/`
+- Structured logging to file
+
+#### Basic CLI Interface
+- `harness daemon status` - Check daemon connectivity
+- Foundation for service management commands
+
 ### ❌ Not Yet Implemented
 
-#### Configuration System (Phase 5)
+#### Configuration System (Phase 6)
 - YAML service definition parsing
 - Environment variable substitution
 - Secret management integration
 - Configuration validation
 
-#### CLI Interface (Phase 5)
+#### Enhanced CLI Interface (Phase 6)
 - `harness init` - Initialize project
 - `harness start <service>` - Start services
 - `harness stop <service>` - Stop services
@@ -588,14 +624,14 @@ services:
 
 ## Roadmap
 
-### Phase 5: Configuration & CLI (In Progress)
+### Phase 6: Configuration & CLI (In Progress)
 - [ ] YAML parser for services.yaml
-- [ ] CLI command structure
+- [ ] Enhanced CLI command structure
 - [ ] Service dependency graph resolution
 - [ ] Interactive service selection
 - [ ] Log streaming and aggregation
 
-### Phase 6: Production Features (Q1 2025)
+### Phase 7: Production Features
 - [ ] Observability stack integration
 - [ ] Advanced deployment strategies
 - [ ] Service mesh capabilities

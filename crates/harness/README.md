@@ -14,22 +14,29 @@ cargo install --path crates/harness
 
 ```bash
 # Validate configuration
-harness validate
+harness validate                  # Basic validation
+harness validate --strict         # Fail on missing environment variables
 
 # Start all services
-harness start
+harness start                     # Shows progress indicators for each service
 
 # Start specific services
-harness start api worker
+harness start api worker          # Starts only specified services with dependencies
 
 # Stop all services
-harness stop
+harness stop                      # Stops in reverse dependency order
+harness stop --force              # Continue despite errors
+harness stop --timeout 30         # Wait up to 30 seconds for graceful shutdown
 
 # Stop specific services
-harness stop api
+harness stop api                  # Warns about dependent services
+harness stop api --force          # Force stop despite dependents
 
 # Check service status
-harness status
+harness status                    # Basic table view
+harness status --detailed         # Detailed view with network info
+harness status --watch            # Real-time updates every 2 seconds
+harness status --format json      # JSON output for automation
 ```
 
 ### Configuration File
@@ -78,9 +85,13 @@ services:
 
 ### Environment Variable Substitution
 
-- `${VAR}` - Use environment variable VAR
+- `${VAR}` - Use environment variable VAR (must be UPPERCASE)
 - `${VAR:-default}` - Use VAR or "default" if not set
 - `${service.ip}` - Reference another service's IP address
+- `${service.port}` - Reference another service's port
+- `${service.host}` - Reference another service's hostname
+
+See [VARIABLE-SUBSTITUTION.md](../../VARIABLE-SUBSTITUTION.md) for complete documentation.
 
 ### Service Types
 

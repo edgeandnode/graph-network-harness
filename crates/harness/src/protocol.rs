@@ -20,6 +20,9 @@ pub enum Request {
     /// List all services and their status
     ListServices,
 
+    /// List all services with detailed information
+    ListServicesDetailed,
+
     /// Run health checks
     RunHealthChecks,
 
@@ -38,6 +41,27 @@ pub struct ServiceNetworkInfo {
     pub hostname: String,
     /// All exposed ports
     pub ports: Vec<u16>,
+}
+
+/// Detailed service information for status display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedServiceInfo {
+    /// Service name
+    pub name: String,
+    /// Service status
+    pub status: ServiceStatus,
+    /// Network information (if running)
+    pub network_info: Option<ServiceNetworkInfo>,
+    /// Service endpoints
+    pub endpoints: HashMap<String, String>,
+    /// Process ID (if applicable)
+    pub pid: Option<u32>,
+    /// Container ID (if applicable)
+    pub container_id: Option<String>,
+    /// Start time (if running)
+    pub start_time: Option<String>,
+    /// Service dependencies
+    pub dependencies: Vec<String>,
 }
 
 /// Response messages from daemon to client
@@ -62,6 +86,11 @@ pub enum Response {
     /// List of services and their status
     ServiceList {
         services: HashMap<String, ServiceStatus>,
+    },
+
+    /// List of services with detailed information
+    ServiceListDetailed {
+        services: Vec<DetailedServiceInfo>,
     },
 
     /// Health check results

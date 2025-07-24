@@ -7,10 +7,11 @@ This document defines how the harness handles service startup timeouts.
 ## Timeout Configuration
 
 ### Precedence (highest to lowest)
-1. CLI flag: `harness start api --timeout 600`
-2. Service-specific: `startup_timeout: 300` in services.yaml
-3. Global default: `settings.startup_timeout: 300`
-4. System default: 300 seconds (5 minutes)
+1. Service-specific: `startup_timeout: 300` in services.yaml
+2. Global default: `settings.startup_timeout: 300`
+3. System default: 300 seconds (5 minutes)
+
+Note: CLI timeout flag is not implemented. Use service-specific or global settings.
 
 ## What Happens When Timeout is Exceeded
 
@@ -34,46 +35,39 @@ Error: Service 'api' failed to become healthy within 300 seconds
 
 The service is still running but not healthy. You can:
   • Check logs: harness logs api --tail 100
-  • Increase timeout: harness start api --timeout 600
-  • Force start: harness start api --force
+  • Increase timeout: Set startup_timeout in services.yaml
+  • Force stop and retry: harness stop api --force && harness start api
   • Stop service: harness stop api
 
 $ echo $?
 3  # Exit code indicates service error
 ```
 
-### With --force Flag
+### Force Stop and Retry
 
-The `--force` flag changes the behavior:
+If a service fails to start, you can force stop and retry:
 
 ```bash
-$ harness start api --force
-Starting services...
-  ✓ postgres    [============================] 100% (healthy in 3.2s)
-  ⚠ api         [============================] 100% (started, health check failed)
-  
-Warning: Service 'api' started but is not healthy
-  • Check status: harness status api
-  • View logs: harness logs api
+$ harness stop api --force
+Stopping services...
+  ✓ api stopped
 
-$ echo $?
-0  # Success despite unhealthy service
+$ harness start api
+Starting services...
+  ✓ postgres    [============================] 100% (already running)
+  ✓ api         [============================] 100% (healthy in 45s)
 ```
 
-### With --no-wait Flag
+### Health Check Configuration
 
-The `--no-wait` flag skips health checking entirely:
+You can disable health checks in the service configuration:
 
-```bash
-$ harness start api --no-wait
-Starting services...
-  → postgres    (started)
-  → api         (started)
-  
-Services started. Check status with: harness status
-
-$ echo $?
-0  # Success, health not checked
+```yaml
+services:
+  api:
+    type: process
+    binary: "./api-server"
+    # No health_check defined - service considered healthy once started
 ```
 
 ## Status After Timeout

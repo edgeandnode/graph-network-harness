@@ -47,7 +47,19 @@ enum Commands {
     },
 
     /// Show service status
-    Status,
+    Status {
+        /// Output format (table or json)
+        #[arg(short, long, default_value = "table")]
+        format: String,
+        
+        /// Watch mode - continuously update status
+        #[arg(short, long)]
+        watch: bool,
+        
+        /// Show detailed information
+        #[arg(short, long)]
+        detailed: bool,
+    },
 
     /// Daemon management commands
     Daemon {
@@ -70,7 +82,9 @@ fn main() -> Result<()> {
             Commands::Validate { strict } => commands::validate::run(&cli.config, strict).await,
             Commands::Start { services } => commands::start::run(&cli.config, services).await,
             Commands::Stop { services, force, timeout } => commands::stop::run(&cli.config, services, force, timeout).await,
-            Commands::Status => commands::status::run(&cli.config).await,
+            Commands::Status { format, watch, detailed } => {
+                commands::status::run(&cli.config, format, watch, detailed).await
+            },
             Commands::Daemon { command } => commands::daemon::run(command).await,
         }
     })

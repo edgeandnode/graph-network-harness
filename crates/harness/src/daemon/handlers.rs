@@ -1,7 +1,7 @@
 //! WebSocket request handlers for the daemon
 
 use crate::daemon::server::DaemonState;
-use crate::protocol::{Request, Response, ServiceNetworkInfo};
+use crate::protocol::{Request, Response, ServiceNetworkInfo, DetailedServiceInfo};
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::{debug, error, info};
@@ -93,6 +93,85 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
 
             Ok(Response::ServiceList {
                 services: service_status,
+            })
+        }
+
+        Request::ListServicesDetailed => {
+            // Get all services and their detailed information
+            let services = match state.service_manager.list_services().await {
+                Ok(services) => services,
+                Err(e) => {
+                    return Ok(Response::Error {
+                        message: format!("Failed to list services: {}", e),
+                    })
+                }
+            };
+
+            let mut detailed_services = Vec::new();
+            for service_name in services {
+                // Get basic status
+                let status = match state
+                    .service_manager
+                    .get_service_status(&service_name)
+                    .await
+                {
+                    Ok(status) => status,
+                    Err(e) => {
+                        error!("Failed to get status for service {}: {}", service_name, e);
+                        continue;
+                    }
+                };
+
+                // Get detailed info if available
+                let running_service = match state
+                    .service_manager
+                    .get_service_info(&service_name)
+                    .await
+                {
+                    Ok(info) => info,
+                    Err(e) => {
+                        error!("Failed to get detailed info for service {}: {}", service_name, e);
+                        None
+                    }
+                };
+
+                let detailed_info = if let Some(running) = running_service {
+                    DetailedServiceInfo {
+                        name: service_name.clone(),
+                        status,
+                        network_info: running.network_info.as_ref().map(|net_info| {
+                            ServiceNetworkInfo {
+                                ip: net_info.ip.clone(),
+                                port: net_info.port,
+                                hostname: net_info.hostname.clone(),
+                                ports: net_info.ports.clone(),
+                            }
+                        }),
+                        endpoints: running.endpoints,
+                        pid: running.pid,
+                        container_id: running.container_id,
+                        start_time: running.metadata.get("start_time").cloned(),
+                        dependencies: running.config.dependencies,
+                    }
+                } else {
+                    // Service exists but not running, provide basic info
+                    DetailedServiceInfo {
+                        name: service_name.clone(),
+                        status,
+                        network_info: None,
+                        endpoints: std::collections::HashMap::new(),
+                        pid: None,
+                        container_id: None,
+                        start_time: None,
+                        dependencies: Vec::new(),
+                    }
+                };
+
+                detailed_services.push(detailed_info);
+            }
+
+            Ok(Response::ServiceListDetailed {
+                services: detailed_services,
             })
         }
 

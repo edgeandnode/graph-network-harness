@@ -231,31 +231,27 @@ services:
       PORT: "8082"
 ```
 
-### Built-in Variables
+### Variable Substitution
 
 The following variables are available for substitution:
 
 ```yaml
-${service.name}        # Current service name
-${service.ip}          # Assigned IP address
-${service.host}        # Host where service runs
-${service.network}     # Network name
+# Environment variables (must be UPPERCASE)
+${DB_PASSWORD}         # Environment variable
+${API_KEY:-default}    # Environment variable with default
 
-${<name>.ip}          # Another service's IP
-${<name>.port}        # Another service's first port
-${<name>.host}        # Another service's host
+# Service references
+${<name>.ip}          # Another service's IP address
+${<name>.port}        # Another service's first exposed port
+${<name>.host}        # Another service's hostname
 
-${network.name}       # Current network name
-${network.subnet}     # Network subnet
-${network.gateway}    # Network gateway IP
-
-${host.name}          # Current host name
-${host.ip}            # Current host IP
-
-${timestamp}          # Current Unix timestamp
-${date}              # Current date (YYYY-MM-DD)
-${random}            # Random string for uniqueness
+# Examples:
+${postgres.ip}        # PostgreSQL service IP
+${redis.port}         # Redis service port
+${api.host}           # API service hostname
 ```
+
+Note: Additional built-in variables like ${service.name}, ${network.name}, etc. are planned for future phases.
 
 ### Health Check Types
 
@@ -316,12 +312,23 @@ services:
 
 ## Environment Variable Resolution
 
+The harness supports two types of variable substitution:
+
+### Environment Variables
+- `${VAR}` - Must be UPPERCASE only, fails if not set
+- `${VAR:-default}` - Uses default value if VAR is not set
+
+### Service References  
+- `${service.ip}` - Service's IP address
+- `${service.port}` - Service's first exposed port
+- `${service.host}` - Service's hostname
+
 Variables are resolved in this order:
-1. Built-in variables (${service.ip}, etc.)
-2. Service-specific env fields
-3. env_file contents
-4. Shell environment variables
-5. Default values (${VAR:-default})
+1. Service references (${service.ip}, ${service.port}, ${service.host})
+2. Shell environment variables
+3. Default values (${VAR:-default})
+
+See [VARIABLE-SUBSTITUTION.md](../../VARIABLE-SUBSTITUTION.md) for detailed documentation.
 
 ## Validation Rules
 

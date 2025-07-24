@@ -4,10 +4,14 @@ A heterogeneous service orchestration framework implementing distributed service
 
 ## 🚀 Current Status
 
-**Phase 5 of 7 Complete** - Daemon architecture implemented with secure TLS WebSocket communication.
+**Phase 6 of 7 Complete** - Full CLI with enhanced commands, environment variable resolution, and comprehensive service management.
 
 ### ✅ What's Working Today
 
+- **Enhanced CLI**: Complete service management with rich status display, dependency handling, and validation
+- **Environment Variables**: Full ${VAR} and ${VAR:-default} substitution with strict validation
+- **Service References**: Use ${service.ip}, ${service.port}, ${service.host} to reference other services
+- **YAML Configuration**: Define services in simple YAML files with full validation
 - **Daemon Architecture**: `harness-executor-daemon` with secure TLS WebSocket communication
 - **Command Execution**: Run commands locally, via SSH, or in Docker containers
 - **Service Registry**: Automatic service discovery with WebSocket-based updates
@@ -18,12 +22,12 @@ A heterogeneous service orchestration framework implementing distributed service
 - **IP Management**: Automatic IP allocation within configured subnets
 - **TLS Security**: Self-signed certificate management with 1-year expiry
 
-### 🚧 What's Next: Phase 6 - Configuration System
+### 🚧 What's Next: Phase 7 - Advanced CLI Features
 
-- **YAML Configuration**: Define services in simple YAML files
-- **Environment Variables**: Support for ${VAR} substitution
-- **Service References**: Use ${service.ip} to reference other services
-- **Enhanced CLI**: Full service management commands
+- **Additional Commands**: logs, restart, health, info commands
+- **Shell Completions**: Bash, Zsh, Fish support
+- **Performance**: <100ms startup time
+- **Production Polish**: Progress bars, interactive prompts
 
 ### 📋 Coming Soon: Phase 7 - Full CLI
 
@@ -256,11 +260,11 @@ harness-executor-daemon
 harness daemon status
 ```
 
-### Coming Soon (Phase 6)
+### Available Now (Phase 6)
 
 ```bash
 # Install harness
-cargo install graph-network-harness
+cargo install --path crates/harness
 
 # Create services.yaml
 cat > services.yaml << 'EOF'
@@ -271,14 +275,24 @@ services:
     network: local
     image: "postgres:15"
     env:
-      POSTGRES_PASSWORD: "secret"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-secret}"
+    health_check:
+      command: "pg_isready"
+      interval: 10
+      retries: 3
 EOF
 
-# Start services
+# Validate configuration
+harness validate --strict
+
+# Start services with progress indicators
 harness start
 
-# Check status  
-harness status
+# Check status with various views
+harness status                    # Basic table view
+harness status --detailed         # Detailed view with network info
+harness status --format json      # JSON output for automation
+harness status --watch            # Real-time updates
 ```
 
 ### Example Configuration
@@ -323,26 +337,54 @@ services:
 ### Service Management Commands
 
 ```bash
-# Start all services with dependencies
+# Validate configuration (with strict environment variable checking)
+harness validate
+harness validate --strict  # Fail on missing environment variables
+
+# Start all services with dependencies (shows progress indicators)
 harness start
+✓ Starting postgres...
+✓ Waiting for postgres health check...
+✓ Starting api...
+✓ All services started successfully!
 
 # Start specific services
 harness start api worker
 
-# Check service status
+# Check service status (basic view)
 harness status
-┌─────────────┬─────────┬────────────┬─────────┬───────────────┬──────────────┐
-│ Service     │ Status  │ Health     │ Network │ Host          │ Uptime       │
-├─────────────┼─────────┼────────────┼─────────┼───────────────┼──────────────┤
-│ database    │ running │ ✓ healthy  │ local   │ localhost     │ 2h 15m       │
-│ my-api      │ running │ ✓ healthy  │ local   │ localhost     │ 2h 15m       │
-└─────────────┴─────────┴────────────┴─────────┴───────────────┴──────────────┘
+┌─────────────┬─────────┬────────────┐
+│ SERVICE     │ STATUS  │ HEALTH     │
+├─────────────┼─────────┼────────────┤
+│ postgres    │ running │ healthy    │
+│ api         │ running │ healthy    │
+│ worker      │ running │ healthy    │
+└─────────────┴─────────┴────────────┘
 
-# View logs
-harness logs my-api --follow
+# Check detailed status with network info and dependencies
+harness status --detailed
+┌──────────┬─────────┬──────────────┬──────────────┬──────────────┬────────────┐
+│ SERVICE  │ STATUS  │ NETWORK      │ PID/CONTAINER│ DEPENDENCIES │ ENDPOINTS  │
+├──────────┼─────────┼──────────────┼──────────────┼──────────────┼────────────┤
+│ postgres │ running │ 172.17.0.2:  │ Container    │ -            │ db:5432    │
+│          │         │ 5432         │ a1b2c3d4e5f6 │              │            │
+│ api      │ running │ 172.17.0.3:  │ PID 12345    │ postgres     │ http:8080  │
+│          │         │ 8080         │              │              │            │
+│ worker   │ running │ 172.17.0.4   │ PID 12346    │ postgres,api │ -          │
+└──────────┴─────────┴──────────────┴──────────────┴──────────────┴────────────┘
 
-# Stop services
-harness stop --all
+# Watch status updates in real-time
+harness status --watch
+harness status --detailed --watch
+
+# Get status in JSON format for automation
+harness status --format json
+
+# Stop services with dependency handling
+harness stop  # Stops all services in reverse dependency order
+harness stop api  # Warns about dependent services
+harness stop api --force  # Force stop despite dependents
+harness stop --timeout 30  # Wait up to 30 seconds for graceful shutdown
 ```
 
 ### Advanced Example: Multi-Network Deployment
@@ -585,7 +627,24 @@ services:
 - ❌ Package versioning and rollback
 - ❌ Binary dependency resolution
 
-### ✅ Recently Implemented (Phase 5)
+### ✅ Recently Implemented (Phase 6)
+
+#### Configuration System
+- **YAML service definition parsing** with full validation
+- **Environment variable substitution** with ${VAR} and ${VAR:-default} syntax
+- **Service reference resolution** with ${service.ip}, ${service.port}, ${service.host}
+- **Strict validation mode** for production environments
+- **Nom-based parser** for robust template parsing with detailed error messages
+
+#### Enhanced CLI Interface
+- **`harness validate`** - Validate configuration with optional --strict mode
+- **`harness start <service>`** - Start services with dependency ordering and progress indicators
+- **`harness stop <service>`** - Stop services with reverse dependency handling
+- **`harness status`** - Rich status display with --detailed, --watch, --format json options
+- **Dependency management** - Automatic topological sorting with cycle detection
+- **Force flags** - --force for stop command, --timeout for graceful shutdown
+
+### ✅ Previously Implemented (Phase 5)
 
 #### Daemon Architecture
 - `harness-executor-daemon` binary with TLS WebSocket server
@@ -594,24 +653,13 @@ services:
 - Persistent state in `~/.local/share/harness/`
 - Structured logging to file
 
-#### Basic CLI Interface
-- `harness daemon status` - Check daemon connectivity
-- Foundation for service management commands
-
 ### ❌ Not Yet Implemented
 
-#### Configuration System (Phase 6)
-- YAML service definition parsing
-- Environment variable substitution
-- Secret management integration
-- Configuration validation
-
-#### Enhanced CLI Interface (Phase 6)
-- `harness init` - Initialize project
-- `harness start <service>` - Start services
-- `harness stop <service>` - Stop services
-- `harness status` - Show service status
+#### Advanced CLI Commands (Phase 7)
 - `harness logs <service>` - Stream logs
+- `harness restart <service>` - Graceful restart
+- `harness health <service>` - On-demand health checks
+- `harness info <service>` - Detailed service information
 - `harness deploy` - Deploy packages
 
 #### Production Features (Phase 6)
@@ -624,14 +672,22 @@ services:
 
 ## Roadmap
 
-### Phase 6: Configuration & CLI (In Progress)
-- [ ] YAML parser for services.yaml
-- [ ] Enhanced CLI command structure
-- [ ] Service dependency graph resolution
+### Phase 6: Configuration & CLI ✅ COMPLETED
+- [x] YAML parser for services.yaml with full validation
+- [x] Enhanced CLI command structure with rich options
+- [x] Service dependency graph resolution with topological sorting
+- [x] Environment variable and service reference resolution
+- [x] Comprehensive error messages and recovery suggestions
+
+### Phase 7: Advanced CLI & Production Features (Next)
+- [ ] Additional commands (logs, restart, health, info)
 - [ ] Interactive service selection
 - [ ] Log streaming and aggregation
+- [ ] Shell completions (bash, zsh, fish)
+- [ ] Progress bars and interactive prompts
+- [ ] Performance optimization (<100ms startup)
 
-### Phase 7: Production Features
+### Phase 8: Enterprise Features (Future)
 - [ ] Observability stack integration
 - [ ] Advanced deployment strategies
 - [ ] Service mesh capabilities
@@ -662,6 +718,13 @@ services:
    - Structured logging with session tracking
    - Graceful error handling and recovery
    - Resource cleanup on failure
+
+## Documentation
+
+- [VARIABLE-SUBSTITUTION.md](VARIABLE-SUBSTITUTION.md) - Complete guide to environment variables and service references
+- [DAEMON.md](DAEMON.md) - Harness executor daemon architecture and usage
+- [CLI-ENHANCEMENT-PLAN.md](CLI-ENHANCEMENT-PLAN.md) - Phase 6 CLI implementation details
+- [ADRs/](ADRs/) - Architecture Decision Records
 
 ## Contributing
 

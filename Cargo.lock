@@ -969,6 +969,7 @@ name = "harness-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nom",
  "regex",
  "serde",
  "serde_json",

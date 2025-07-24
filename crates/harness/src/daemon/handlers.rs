@@ -1,7 +1,7 @@
 //! WebSocket request handlers for the daemon
 
 use crate::daemon::server::DaemonState;
-use crate::protocol::{Request, Response};
+use crate::protocol::{Request, Response, ServiceNetworkInfo};
 use anyhow::Result;
 use std::sync::Arc;
 use tracing::{debug, error, info};
@@ -13,8 +13,32 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
     match request {
         Request::StartService { name, config } => {
             info!("Starting service: {}", name);
+            
             match state.service_manager.start_service(&name, config).await {
-                Ok(_) => Ok(Response::Success),
+                Ok(running_service) => {
+                    // Get network information from the running service
+                    let network_info = if let Some(net_info) = &running_service.network_info {
+                        ServiceNetworkInfo {
+                            ip: net_info.ip.clone(),
+                            port: net_info.port,
+                            hostname: net_info.hostname.clone(),
+                            ports: net_info.ports.clone(),
+                        }
+                    } else {
+                        // Fallback if no network info available
+                        ServiceNetworkInfo {
+                            ip: "127.0.0.1".to_string(),
+                            port: None,
+                            hostname: format!("{}.local", name),
+                            ports: Vec::new(),
+                        }
+                    };
+                    
+                    Ok(Response::ServiceStarted {
+                        name: name.clone(),
+                        network_info,
+                    })
+                }
                 Err(e) => Ok(Response::Error {
                     message: format!("Failed to start service: {}", e),
                 }),

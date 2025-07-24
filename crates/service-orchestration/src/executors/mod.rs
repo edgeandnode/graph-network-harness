@@ -34,6 +34,21 @@ pub struct RunningService {
     pub endpoints: HashMap<String, String>,
     /// Additional metadata
     pub metadata: HashMap<String, String>,
+    /// Network information
+    pub network_info: Option<NetworkInfo>,
+}
+
+/// Network information for a running service
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkInfo {
+    /// IP address
+    pub ip: String,
+    /// Primary port
+    pub port: Option<u16>,
+    /// All exposed ports
+    pub ports: Vec<u16>,
+    /// Hostname
+    pub hostname: String,
 }
 
 impl RunningService {
@@ -47,6 +62,7 @@ impl RunningService {
             container_id: None,
             endpoints: HashMap::new(),
             metadata: HashMap::new(),
+            network_info: None,
         }
     }
 
@@ -71,6 +87,12 @@ impl RunningService {
     /// Add metadata
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
+        self
+    }
+    
+    /// Set network information
+    pub fn with_network_info(mut self, network_info: NetworkInfo) -> Self {
+        self.network_info = Some(network_info);
         self
     }
 }

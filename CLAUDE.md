@@ -219,3 +219,7 @@ error_set! {
 ### Mutability Guidelines
 - Whenever we use Mutex, Arc, or RefCell in the codebase, we should ALWAYS note in the struct doc comments what we're intending with internal or external mutability
 - When making notes about internal mutability, refer to that not what primitive we are using for it.
+
+## Development Practices
+
+- ALWAYS use cargo to build, don't revert to using rustc directly for testing.

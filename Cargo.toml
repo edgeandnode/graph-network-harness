@@ -41,6 +41,7 @@ regex = "1.11"
 base64 = "0.21"
 async-trait = "0.1"
 pin-project-lite = "0.2"
+nom = "7.1"
 
 # New dependencies for distributed features
 wireguard-control = "1.5"

@@ -27,6 +27,19 @@ pub enum Request {
     Shutdown,
 }
 
+/// Service network information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceNetworkInfo {
+    /// IP address of the service
+    pub ip: String,
+    /// Primary port exposed by the service (if any)
+    pub port: Option<u16>,
+    /// Hostname of the service
+    pub hostname: String,
+    /// All exposed ports
+    pub ports: Vec<u16>,
+}
+
 /// Response messages from daemon to client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -36,6 +49,12 @@ pub enum Response {
 
     /// Operation failed
     Error { message: String },
+
+    /// Service started successfully with network info
+    ServiceStarted { 
+        name: String,
+        network_info: ServiceNetworkInfo,
+    },
 
     /// Service status response
     ServiceStatus { status: ServiceStatus },

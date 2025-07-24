@@ -141,7 +141,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
 
     // Check environment variables and service references
     println!("\n🔍 Checking variable references...");
-    let (env_vars, service_refs) = resolver::find_all_references(&config);
+    let (env_vars, service_refs) = resolver::find_all_references(&config)?;
     
     // Check service references
     let mut invalid_refs = Vec::new();

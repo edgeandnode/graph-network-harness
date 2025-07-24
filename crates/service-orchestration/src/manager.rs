@@ -90,7 +90,7 @@ impl ServiceManager {
     }
 
     /// Start a service with the given configuration
-    pub async fn start_service(&self, name: &str, config: ServiceConfig) -> Result<()> {
+    pub async fn start_service(&self, name: &str, config: ServiceConfig) -> Result<RunningService> {
         info!("Starting service: {}", name);
 
         // Check if service is already running
@@ -164,7 +164,7 @@ impl ServiceManager {
         }
 
         info!("Successfully started service: {}", name);
-        Ok(())
+        Ok(running_service)
     }
 
     /// Stop a running service

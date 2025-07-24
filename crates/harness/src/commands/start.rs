@@ -52,9 +52,79 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
         };
 
         match daemon.send_request(request).await {
-            Ok(Response::Success) => {
+            Ok(Response::ServiceStarted { name: _, network_info }) => {
                 println!(" ✓");
                 started_services.push(service_name.clone());
+                
+                // Update resolution context with actual service network info from daemon
+                resolution_context.add_service(
+                    service_name.clone(),
+                    network_info.ip,
+                    network_info.port,
+                    network_info.hostname,
+                );
+                
+                // Wait for service to be running if it has a health check
+                if service_def.health_check.is_some() {
+                    print!("  Waiting for health check...");
+                    io::stdout().flush()?;
+                    
+                    let start = std::time::Instant::now();
+                    let timeout = std::time::Duration::from_secs(
+                        service_def.startup_timeout.unwrap_or(60)
+                    );
+                    
+                    loop {
+                        if start.elapsed() > timeout {
+                            println!(" ⚠️  Timeout");
+                            break;
+                        }
+                        
+                        // Check service status
+                        match daemon
+                            .send_request(Request::GetServiceStatus {
+                                name: service_name.clone(),
+                            })
+                            .await
+                        {
+                            Ok(Response::ServiceStatus { status }) => {
+                                match status {
+                                    service_orchestration::ServiceStatus::Running => {
+                                        println!(" ✓");
+                                        break;
+                                    }
+                                    service_orchestration::ServiceStatus::Failed(msg) => {
+                                        println!(" ✗");
+                                        eprintln!("    Service failed: {}", msg);
+                                        break;
+                                    }
+                                    service_orchestration::ServiceStatus::Unhealthy => {
+                                        // Keep waiting, might recover
+                                    }
+                                    _ => {
+                                        // Still starting
+                                    }
+                                }
+                            }
+                            _ => break,
+                        }
+                        
+                        smol::Timer::after(std::time::Duration::from_millis(500)).await;
+                    }
+                }
+            }
+            Ok(Response::Success) => {
+                // Fallback for old daemon behavior
+                println!(" ✓");
+                started_services.push(service_name.clone());
+                
+                // Use default localhost values if daemon doesn't provide network info
+                resolution_context.add_service(
+                    service_name.clone(),
+                    "127.0.0.1".to_string(),
+                    None,
+                    format!("{}.local", service_name),
+                );
                 
                 // Wait for service to be running if it has a health check
                 if service_def.health_check.is_some() {

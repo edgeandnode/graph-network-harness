@@ -1,6 +1,6 @@
 //! Docker executor for containerized service execution.
 
-use super::{LogStream, RunningService, ServiceExecutor};
+use super::{LogStream, NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
@@ -24,6 +24,55 @@ impl DockerExecutor {
             executor: Executor::new("docker-executor".to_string(), LocalLauncher),
             health_checker: HealthChecker::new(),
         }
+    }
+    
+    /// Get network information for a container
+    async fn get_container_network_info(&self, container_id: &str) -> Result<NetworkInfo> {
+        // Get container IP address
+        let mut inspect_cmd = Command::new("docker");
+        inspect_cmd.args(&[
+            "inspect",
+            "--format",
+            "{{.NetworkSettings.IPAddress}}",
+            container_id,
+        ]);
+        
+        let result = self.executor.execute(&Target::Command, inspect_cmd).await?;
+        if !result.success() {
+            return Err(crate::Error::Config(format!(
+                "Failed to get container IP: {}",
+                result.output
+            )));
+        }
+        
+        let ip = result.output.trim().to_string();
+        
+        // Get exposed ports
+        let mut port_cmd = Command::new("docker");
+        port_cmd.args(&["port", container_id]);
+        
+        let port_result = self.executor.execute(&Target::Command, port_cmd).await?;
+        let mut ports = Vec::new();
+        
+        if port_result.success() {
+            // Parse port output (format: "80/tcp -> 0.0.0.0:8080")
+            for line in port_result.output.lines() {
+                if let Some((container_port, _)) = line.split_once(" -> ") {
+                    if let Some((port_str, _)) = container_port.split_once('/') {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            ports.push(port);
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(NetworkInfo {
+            ip,
+            port: ports.first().copied(),
+            ports,
+            hostname: container_id[..12].to_string(), // Use first 12 chars as hostname
+        })
     }
 }
 
@@ -93,9 +142,17 @@ impl ServiceExecutor for DockerExecutor {
             config.name, container_id
         );
 
+        // Get network information
+        let network_info = self.get_container_network_info(&container_id).await?;
+        info!(
+            "Container '{}' network info: IP={}, ports={:?}",
+            config.name, network_info.ip, network_info.ports
+        );
+
         // Create running service instance
         let running_service = RunningService::new(config.name.clone(), config)
             .with_container_id(container_id)
+            .with_network_info(network_info)
             .with_metadata("executor_type".to_string(), "docker".to_string());
 
         Ok(running_service)

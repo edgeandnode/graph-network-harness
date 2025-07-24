@@ -66,6 +66,12 @@ enum Commands {
         #[command(subcommand)]
         command: DaemonCommands,
     },
+    
+    /// Environment variable management
+    Env {
+        #[command(subcommand)]
+        command: EnvCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -74,8 +80,23 @@ enum DaemonCommands {
     Status,
 }
 
-fn main() -> Result<()> {
-    smol::block_on(async {
+#[derive(Subcommand)]
+enum EnvCommands {
+    /// Set environment variables in the daemon
+    Set {
+        /// Environment variables to set (KEY=VALUE format)
+        variables: Vec<String>,
+    },
+    
+    /// Get environment variables from the daemon
+    Get {
+        /// Variable names to get (empty for all)
+        names: Vec<String>,
+    },
+}
+
+fn main() {
+    let result = smol::block_on(async {
         let cli = Cli::parse();
 
         match cli.command {
@@ -86,6 +107,15 @@ fn main() -> Result<()> {
                 commands::status::run(&cli.config, format, watch, detailed).await
             },
             Commands::Daemon { command } => commands::daemon::run(command).await,
+            Commands::Env { command } => match command {
+                EnvCommands::Set { variables } => commands::env::set(variables).await,
+                EnvCommands::Get { names } => commands::env::get(names).await,
+            },
         }
-    })
+    });
+
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
 }

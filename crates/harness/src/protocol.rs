@@ -28,6 +28,17 @@ pub enum Request {
 
     /// Shutdown the daemon
     Shutdown,
+
+    /// Set environment variables in the daemon's process
+    SetEnvironmentVariables {
+        variables: HashMap<String, String>,
+    },
+
+    /// Get environment variables from the daemon's process
+    GetEnvironmentVariables {
+        /// Optional list of variable names to get. If empty, get all.
+        names: Vec<String>,
+    },
 }
 
 /// Service network information
@@ -95,4 +106,9 @@ pub enum Response {
 
     /// Health check results
     HealthCheckResults { results: HashMap<String, String> },
+
+    /// Environment variables
+    EnvironmentVariables { 
+        variables: HashMap<String, String>,
+    },
 }

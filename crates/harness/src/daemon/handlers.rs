@@ -3,6 +3,7 @@
 use crate::daemon::server::DaemonState;
 use crate::protocol::{Request, Response, ServiceNetworkInfo, DetailedServiceInfo};
 use anyhow::Result;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -195,6 +196,34 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
             // For now, just return success
             // In a real implementation, we'd trigger a graceful shutdown
             Ok(Response::Success)
+        }
+
+        Request::SetEnvironmentVariables { variables } => {
+            // Set environment variables in the daemon's process
+            for (key, value) in variables {
+                std::env::set_var(key, value);
+            }
+            Ok(Response::Success)
+        }
+
+        Request::GetEnvironmentVariables { names } => {
+            let mut variables = HashMap::new();
+            
+            if names.is_empty() {
+                // Get all environment variables
+                for (key, value) in std::env::vars() {
+                    variables.insert(key, value);
+                }
+            } else {
+                // Get specific variables
+                for name in names {
+                    if let Ok(value) = std::env::var(&name) {
+                        variables.insert(name, value);
+                    }
+                }
+            }
+            
+            Ok(Response::EnvironmentVariables { variables })
         }
     }
 }

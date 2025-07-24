@@ -84,9 +84,7 @@ impl DaemonClient {
 
         let tls_connector = TlsConnector::from(Arc::new(config));
 
-        let tcp_stream = TcpStream::connect(addr)
-            .await
-            .context("Failed to connect to daemon")?;
+        let tcp_stream = TcpStream::connect(addr).await?;
 
         let tls_stream = tls_connector
             .connect("localhost", tcp_stream)

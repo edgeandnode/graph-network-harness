@@ -37,7 +37,32 @@ impl ServiceManager {
     pub async fn new() -> Result<Self> {
         info!("Initializing ServiceManager");
         
-        let registry = Registry::default();
+        // Create harness directory if it doesn't exist
+        let state_dir = dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("harness");
+        std::fs::create_dir_all(&state_dir)
+            .map_err(|e| crate::Error::Io(e))?;
+        
+        // Create registry with persistence
+        let registry_path = state_dir.join("registry.json");
+        let registry = if registry_path.exists() {
+            // Try to load existing registry
+            match Registry::load(&registry_path).await {
+                Ok(registry) => {
+                    info!("Loaded existing registry state from {:?}", registry_path);
+                    registry
+                }
+                Err(e) => {
+                    warn!("Failed to load registry state: {}. Starting with empty registry.", e);
+                    Registry::with_persistence(registry_path.to_string_lossy())
+                }
+            }
+        } else {
+            info!("No existing registry found, creating new one at {:?}", registry_path);
+            Registry::with_persistence(registry_path.to_string_lossy())
+        };
+        
         let network_config = NetworkConfig::default();
         let network_manager = NetworkManager::new(network_config)?;
         
@@ -88,7 +113,42 @@ impl ServiceManager {
         self.active_services.write().unwrap().insert(name.to_string(), running_service.clone());
         
         // Register with service registry
-        // TODO: Convert RunningService to ServiceEntry format
+        let execution_info = match &config.target {
+            crate::config::ServiceTarget::Process { binary, args, .. } => {
+                service_registry::models::ExecutionInfo::ManagedProcess {
+                    pid: running_service.pid,
+                    command: binary.clone(),
+                    args: args.clone(),
+                }
+            }
+            crate::config::ServiceTarget::Docker { image, .. } => {
+                service_registry::models::ExecutionInfo::DockerContainer {
+                    container_id: running_service.container_id.clone(),
+                    image: image.clone(),
+                    name: Some(format!("orchestrator-{}", name)),
+                }
+            }
+            _ => {
+                // For remote services, we'll use ManagedProcess for now
+                service_registry::models::ExecutionInfo::ManagedProcess {
+                    pid: None,
+                    command: name.to_string(),
+                    args: vec![],
+                }
+            }
+        };
+        
+        let service_entry = service_registry::models::ServiceEntry::new(
+            name.to_string(),
+            "1.0.0".to_string(), // Version could come from config
+            execution_info,
+            service_registry::models::Location::Local,
+        )?;
+        
+        // Register the service
+        if let Err(e) = self.registry.register(service_entry).await {
+            warn!("Failed to register service with registry: {}", e);
+        }
         
         info!("Successfully started service: {}", name);
         Ok(())
@@ -114,8 +174,10 @@ impl ServiceManager {
         // Remove health monitor
         self.health_monitors.write().unwrap().remove(name);
         
-        // Unregister from service registry
-        // TODO: Implement service registry removal
+        // Update service state in registry to stopped
+        if let Err(e) = self.registry.update_state(name, service_registry::models::ServiceState::Stopped).await {
+            warn!("Failed to update service state in registry: {}", e);
+        }
         
         info!("Successfully stopped service: {}", name);
         Ok(())
@@ -133,6 +195,32 @@ impl ServiceManager {
 
     /// Get the status of a service
     pub async fn get_service_status(&self, name: &str) -> Result<ServiceStatus> {
+        // First check if service exists in registry
+        if let Ok(service_info) = self.registry.get(name).await {
+            // Check if we have it in active services
+            let active = self.active_services.read().unwrap();
+            if !active.contains_key(name) {
+                // Service is in registry but not in our active list
+                // This means it was started in a previous run
+                match service_info.state {
+                    service_registry::models::ServiceState::Running => {
+                        // Service claims to be running, verify it
+                        // For now, we'll trust the registry
+                        return Ok(ServiceStatus::Running);
+                    }
+                    service_registry::models::ServiceState::Stopped => {
+                        return Ok(ServiceStatus::Stopped);
+                    }
+                    service_registry::models::ServiceState::Failed => {
+                        return Ok(ServiceStatus::Failed("Service failed".to_string()));
+                    }
+                    _ => {
+                        return Ok(ServiceStatus::Stopped);
+                    }
+                }
+            }
+        }
+        
         let active = self.active_services.read().unwrap();
         let Some(service) = active.get(name) else {
             return Ok(ServiceStatus::Stopped);

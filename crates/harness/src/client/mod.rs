@@ -1,0 +1,144 @@
+//! WebSocket client for communicating with the daemon
+
+use anyhow::{Result, Context, anyhow};
+use async_net::TcpStream;
+use async_tungstenite::{client_async, WebSocketStream};
+use futures::{SinkExt, StreamExt};
+use async_tungstenite::tungstenite::Message;
+use std::net::SocketAddr;
+use tracing::{debug, error};
+use async_tls::{TlsConnector, client::TlsStream};
+use rustls::{ClientConfig, Certificate, RootCertStore};
+use std::sync::Arc;
+
+/// Daemon client for sending requests
+pub enum DaemonClient {
+    Plain(WebSocketStream<TcpStream>),
+    Tls(WebSocketStream<TlsStream<TcpStream>>),
+}
+
+impl DaemonClient {
+    /// Connect to the daemon (without TLS)
+    pub async fn connect(port: u16) -> Result<Self> {
+        let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
+        let url = format!("ws://{}/", addr);
+        
+        let stream = TcpStream::connect(addr).await
+            .context("Failed to connect to daemon")?;
+        
+        let (ws, _) = client_async(&url, stream).await
+            .context("Failed to establish WebSocket connection")?;
+        
+        debug!("Connected to daemon at {} (no TLS)", addr);
+        
+        Ok(Self::Plain(ws))
+    }
+    
+    /// Connect with TLS
+    pub async fn connect_tls(port: u16, verify_cert: bool) -> Result<Self> {
+        let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
+        let url = format!("wss://{}/", addr);
+        
+        // Load the daemon's certificate
+        let cert_path = dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("harness/certs/server.crt");
+            
+        if !cert_path.exists() {
+            return Err(anyhow!(
+                "Daemon certificate not found at {:?}. Has the daemon been started?",
+                cert_path
+            ));
+        }
+        
+        // Read and parse the certificate
+        let cert_pem = std::fs::read_to_string(&cert_path)
+            .context("Failed to read daemon certificate")?;
+            
+        let certs: Vec<Certificate> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow!("Failed to parse certificate: {:?}", e))?
+            .into_iter()
+            .map(|der| Certificate(der.to_vec()))
+            .collect();
+            
+        if certs.is_empty() {
+            return Err(anyhow!("No certificates found in {:?}", cert_path));
+        }
+        
+        // Create root certificate store with our daemon's certificate
+        let mut root_store = RootCertStore::empty();
+        for cert in certs {
+            root_store.add(&cert)
+                .map_err(|e| anyhow!("Failed to add certificate to root store: {:?}", e))?;
+        }
+        
+        // Create TLS config that trusts our specific certificate
+        let config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+            
+        let tls_connector = TlsConnector::from(Arc::new(config));
+        
+        let tcp_stream = TcpStream::connect(addr).await
+            .context("Failed to connect to daemon")?;
+            
+        let tls_stream = tls_connector.connect("localhost", tcp_stream).await
+            .context("TLS handshake failed")?;
+            
+        let (ws, _) = client_async(&url, tls_stream).await
+            .context("Failed to establish WebSocket connection")?;
+            
+        debug!("Connected to daemon at {} (TLS)", addr);
+        
+        Ok(Self::Tls(ws))
+    }
+    
+    /// Send a request to the daemon and get response
+    pub async fn send_request(&mut self, request: crate::protocol::Request) -> Result<crate::protocol::Response> {
+        // Serialize request
+        let request_json = serde_json::to_string(&request)?;
+        
+        // Send request
+        match self {
+            Self::Plain(ws) => ws.send(Message::Text(request_json)).await?,
+            Self::Tls(ws) => ws.send(Message::Text(request_json)).await?,
+        }
+            
+        // Wait for response
+        let msg = match self {
+            Self::Plain(ws) => ws.next().await,
+            Self::Tls(ws) => ws.next().await,
+        };
+        
+        match msg {
+            Some(Ok(Message::Text(text))) => {
+                let response: crate::protocol::Response = serde_json::from_str(&text)
+                    .context("Failed to parse daemon response")?;
+                Ok(response)
+            }
+            Some(Ok(Message::Close(_))) => {
+                Err(anyhow!("Connection closed by daemon"))
+            }
+            Some(Err(e)) => {
+                Err(anyhow!("WebSocket error: {}", e))
+            }
+            None => {
+                Err(anyhow!("Connection closed unexpectedly"))
+            }
+            _ => {
+                Err(anyhow!("Unexpected message type from daemon"))
+            }
+        }
+    }
+    
+    /// Close the connection
+    pub async fn close(&mut self) -> Result<()> {
+        match self {
+            Self::Plain(ws) => ws.close(None).await?,
+            Self::Tls(ws) => ws.close(None).await?,
+        }
+        Ok(())
+    }
+}

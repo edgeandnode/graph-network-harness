@@ -4,7 +4,7 @@ A heterogeneous service orchestration framework implementing distributed service
 
 ## 🚀 Current Status
 
-**Phase 4 of 6 Complete** - Service lifecycle management foundation implemented with comprehensive test coverage.
+**Phase 4 of 7 Complete** - Core orchestration engine implemented with comprehensive test coverage.
 
 ### ✅ What's Working Today
 
@@ -16,13 +16,26 @@ A heterogeneous service orchestration framework implementing distributed service
 - **Package Deployment**: Deploy service packages to remote hosts
 - **IP Management**: Automatic IP allocation within configured subnets
 
-### 🚧 What's Coming Soon
+### 🚧 What's Next: Phase 5 - Configuration System (2 weeks)
 
-- **YAML Configuration**: Define entire service topologies in YAML (Phase 5)
-- **CLI Interface**: `harness start`, `harness deploy`, etc. (Phase 5)
-- **Service Scaling**: Auto-scaling based on load (Phase 6)
-- **Monitoring Integration**: Prometheus/Grafana dashboards (Phase 6)
-- **Rolling Updates**: Zero-downtime deployments (Phase 6)
+- **YAML Configuration**: Define services in simple YAML files
+- **Environment Variables**: Support for ${VAR} substitution
+- **Service References**: Use ${service.ip} to reference other services
+- **Basic CLI**: Commands for validate, start, stop, status
+
+### 📋 Coming Soon: Phase 6 - Full CLI (2 weeks)
+
+- **Complete CLI**: All commands (logs, exec, deploy, etc.)
+- **Great UX**: Progress bars, interactive prompts, helpful errors
+- **Shell Completions**: Bash, Zsh, Fish support
+- **Production Ready**: <100ms startup, comprehensive docs
+
+### 🔮 Future: Phase 7 - Production Features
+
+- **Auto-scaling**: Scale services based on load
+- **Monitoring**: Prometheus/Grafana integration
+- **Advanced Deployment**: Rolling updates, blue-green
+- **Enterprise**: Multi-region, service mesh, web UI
 
 ## Architecture Overview
 
@@ -54,30 +67,30 @@ The harness implements [ADR-007](ADRs/007-distributed-service-orchestration.md) 
 
 ### 🎯 Heterogeneous Service Execution
 - **Local Processes**: Direct process execution with PID tracking
-- **Docker Containers**: Container lifecycle management
+- **Docker Containers**: Container lifecycle management with resource limits
 - **Remote SSH**: Deploy and manage services on LAN nodes
-- **WireGuard Networks**: Package-based deployment over WireGuard
+- **WireGuard Networks**: Package-based deployment over secure tunnels
 
-### 🌐 Unified Networking
-- **Service Discovery**: Automatic service registration and discovery
-- **Network Topology**: Detect and route between Local, LAN, and WireGuard networks
-- **IP Management**: Automatic IP allocation within configured subnets
-- **Cross-Network Resolution**: Services communicate regardless of location
+### 🌐 Network Testing Capabilities
+- **Multi-Network Topologies**: Test services across local, LAN, and WireGuard boundaries
+- **Automatic IP Resolution**: Services find each other regardless of network location
+- **Network Isolation**: Test network partitions and failures
+- **Cross-Network Dependencies**: Validate service communication across networks
 
 ### 🏥 Health Monitoring
-- **Configurable Health Checks**: HTTP endpoints, commands, or custom checks
-- **Retry Logic**: Configure retries before marking services unhealthy
-- **Continuous Monitoring**: Background health monitoring with configurable intervals
+- **Multiple Check Types**: HTTP endpoints, TCP ports, or custom commands
+- **Configurable Strategies**: Set intervals, timeouts, and retry counts
+- **Dependency Awareness**: Health cascades through service dependencies
 
 ### 📦 Package Deployment
-- **Remote Deployment**: Deploy service packages to remote hosts
-- **Dependency Resolution**: Automatic IP injection for service dependencies
-- **Version Management**: Track deployed package versions
+- **Remote Deployment**: Deploy pre-built packages to any SSH-accessible host
+- **Environment Injection**: Automatically inject dependency IPs and configs
+- **Zero-Downtime Updates**: Deploy new versions without service interruption
 
 ### ⚡ Runtime Agnostic
 - **Any Async Runtime**: Works with Tokio, async-std, smol, or custom runtimes
 - **No Runtime Lock-in**: Libraries use async-process, async-fs, async-net
-- **Flexible Integration**: Embed in any async application
+- **Test Framework Agnostic**: Use with any test runner or framework
 
 ## Network Testing Use Cases
 
@@ -152,147 +165,256 @@ services:
       timeout: 60
 ```
 
-### Current Network Testing (Using Library)
+### Example: Testing Cross-Network Communication
 
-Today, you can programmatically set up network tests:
+```yaml
+# test-services.yaml
+version: "1.0"
 
-```rust
-use orchestrator::{ServiceManager, ServiceConfig, ServiceTarget};
-use service_registry::{NetworkType, ServiceInfo};
+networks:
+  local:
+    type: local
+  
+  test-lan:
+    type: lan
+    subnet: "192.168.100.0/24"
+    nodes:
+      - host: "192.168.100.10"
+        name: "test-node-1"
+        ssh_user: "test"
+        ssh_key: "~/.ssh/test_key"
 
-#[tokio::test]
-async fn test_cross_network_communication() {
-    let manager = ServiceManager::new().await.unwrap();
-    
-    // Start a local database
-    let db_config = ServiceConfig {
-        name: "test-db".to_string(),
-        target: ServiceTarget::Docker {
-            image: "postgres:15".to_string(),
-            env: [("POSTGRES_PASSWORD".to_string(), "test".to_string())].into(),
-            ports: vec![5432],
-            volumes: vec![],
-        },
-        dependencies: vec![],
-        health_check: Some(HealthCheck {
-            command: "pg_isready".to_string(),
-            args: vec![],
-            interval: 5,
-            retries: 3,
-            timeout: 5,
-        }),
-    };
-    
-    // Start service and wait for health
-    manager.start_service("test-db", db_config).await.unwrap();
-    
-    // Get assigned IP for dependency injection
-    let db_ip = manager.get_service_ip("test-db").await.unwrap();
-    
-    // Start a remote service that connects to the database
-    let app_config = ServiceConfig {
-        name: "test-app".to_string(),
-        target: ServiceTarget::Remote {
-            host: "192.168.1.100".to_string(),
-            ssh_user: "ubuntu".to_string(),
-            ssh_key: Some("/home/user/.ssh/id_rsa".to_string()),
-            binary: "/opt/app/bin/server".to_string(),
-            args: vec![],
-            env: [
-                ("DATABASE_URL".to_string(), 
-                 format!("postgresql://postgres:test@{}:5432/app", db_ip))
-            ].into(),
-            working_dir: None,
-        },
-        dependencies: vec!["test-db".to_string()],
-        health_check: Some(HealthCheck {
-            command: "curl".to_string(),
-            args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
-            interval: 10,
-            retries: 3,
-            timeout: 10,
-        }),
-    };
-    
-    manager.start_service("test-app", app_config).await.unwrap();
-    
-    // Verify cross-network connectivity
-    let app_status = manager.get_service_status("test-app").await.unwrap();
-    assert!(app_status.healthy);
-}
+services:
+  test-db:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "test"
+    health_check:
+      command: "pg_isready"
+      interval: 5
+      retries: 3
+      timeout: 5
+
+  test-app:
+    type: remote
+    network: test-lan
+    host: "192.168.100.10"
+    binary: "/opt/app/bin/server"
+    env:
+      DATABASE_URL: "postgresql://postgres:test@${test-db.ip}:5432/app"
+    dependencies:
+      - test-db
+    health_check:
+      http: "http://localhost:8080/health"
+      interval: 10
+      retries: 3
+```
+
+Run tests with:
+```bash
+# Start test environment
+harness start -c test-services.yaml
+
+# Run your integration tests
+pytest tests/integration/
+
+# Clean up
+harness stop --all
 ```
 
 ## Getting Started
 
-### Current Capabilities
+### Current Usage (Phase 1-4)
 
-While the YAML configuration and CLI are still in development (Phase 5), you can use the orchestrator library directly:
+Today, the orchestrator is available as a Rust library:
 
-```rust
-use orchestrator::{
-    ServiceManager, ServiceConfig, ServiceTarget, HealthCheck
-};
-use std::collections::HashMap;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create service manager
-    let manager = ServiceManager::new().await?;
-    
-    // Define a local process service
-    let service = ServiceConfig {
-        name: "my-api".to_string(),
-        target: ServiceTarget::Process {
-            binary: "./target/release/api-server".to_string(),
-            args: vec!["--port".to_string(), "8080".to_string()],
-            env: HashMap::from([
-                ("LOG_LEVEL".to_string(), "info".to_string()),
-            ]),
-            working_dir: None,
-        },
-        dependencies: vec!["database".to_string()],
-        health_check: Some(HealthCheck {
-            command: "curl".to_string(),
-            args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
-            interval: 30,
-            retries: 3,
-            timeout: 10,
-        }),
-    };
-    
-    // Start the service
-    manager.start_service("my-api", service).await?;
-    
-    // Check service status
-    let status = manager.get_service_status("my-api").await?;
-    println!("Service status: {:?}", status);
-    
-    Ok(())
-}
+```toml
+[dependencies]
+orchestrator = { path = "crates/orchestrator" }
 ```
 
-### Docker Service Example
+See the test files in `crates/orchestrator/tests/` for usage examples.
 
-```rust
-let docker_service = ServiceConfig {
-    name: "postgres".to_string(),
-    target: ServiceTarget::Docker {
-        image: "postgres:15".to_string(),
-        env: HashMap::from([
-            ("POSTGRES_PASSWORD".to_string(), "secret".to_string()),
-        ]),
-        ports: vec![5432],
-        volumes: vec!["/data/postgres:/var/lib/postgresql/data".to_string()],
-    },
-    dependencies: vec![],
-    health_check: Some(HealthCheck {
-        command: "pg_isready".to_string(),
-        args: vec![],
-        interval: 10,
-        retries: 5,
-        timeout: 5,
-    }),
-};
+### Coming Soon (Phase 5 - 2 weeks)
+
+```bash
+# Install harness
+cargo install graph-network-harness
+
+# Create services.yaml
+cat > services.yaml << 'EOF'
+version: "1.0"
+services:
+  postgres:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "secret"
+EOF
+
+# Start services
+harness start
+
+# Check status  
+harness status
+```
+
+### Example Configuration
+
+```yaml
+# services.yaml
+version: "1.0"
+name: "my-application"
+
+services:
+  database:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: "myapp"
+    ports:
+      - 5432
+    health_check:
+      command: "pg_isready"
+      interval: 10
+      retries: 5
+
+  my-api:
+    type: process
+    network: local
+    binary: "./target/release/api-server"
+    args: ["--port", "8080"]  
+    env:
+      DATABASE_URL: "postgresql://postgres:${DB_PASSWORD}@${database.ip}:5432/myapp"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    dependencies:
+      - database
+    health_check:
+      http: "http://localhost:8080/health"
+      interval: 30
+      retries: 3
+      timeout: 10
+```
+
+### Service Management Commands
+
+```bash
+# Start all services with dependencies
+harness start
+
+# Start specific services
+harness start api worker
+
+# Check service status
+harness status
+┌─────────────┬─────────┬────────────┬─────────┬───────────────┬──────────────┐
+│ Service     │ Status  │ Health     │ Network │ Host          │ Uptime       │
+├─────────────┼─────────┼────────────┼─────────┼───────────────┼──────────────┤
+│ database    │ running │ ✓ healthy  │ local   │ localhost     │ 2h 15m       │
+│ my-api      │ running │ ✓ healthy  │ local   │ localhost     │ 2h 15m       │
+└─────────────┴─────────┴────────────┴─────────┴───────────────┴──────────────┘
+
+# View logs
+harness logs my-api --follow
+
+# Stop services
+harness stop --all
+```
+
+### Advanced Example: Multi-Network Deployment
+
+```yaml
+# services.yaml
+version: "1.0"
+
+networks:
+  local:
+    type: local
+  
+  production:
+    type: lan
+    subnet: "192.168.1.0/24"
+    nodes:
+      - host: "192.168.1.100"
+        name: "prod-api"
+        ssh_user: "deploy"
+        ssh_key: "~/.ssh/prod_key"
+      - host: "192.168.1.101"
+        name: "prod-worker"
+        ssh_user: "deploy"
+        ssh_key: "~/.ssh/prod_key"
+  
+  monitoring:
+    type: wireguard
+    subnet: "10.0.0.0/24"
+    config_path: "/etc/wireguard/monitoring.conf"
+    nodes:
+      - host: "10.0.0.10"
+        name: "metrics-collector"
+
+services:
+  # Local infrastructure
+  postgres:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - "${DATA_DIR}/postgres:/var/lib/postgresql/data"
+    health_check:
+      command: "pg_isready"
+      interval: 10
+      retries: 5
+
+  # Production API on LAN
+  api:
+    type: remote
+    network: production
+    host: "192.168.1.100"
+    binary: "/opt/api/bin/server"
+    args: ["--port", "8080"]
+    env:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@${postgres.ip}:5432/api"
+    dependencies:
+      - postgres
+    startup_timeout: 300  # 5 minutes for migrations
+    health_check:
+      http: "http://localhost:8080/health"
+      start_period: 60
+
+  # Worker on different LAN node  
+  worker:
+    type: remote
+    network: production
+    host: "192.168.1.101"
+    binary: "/opt/worker/bin/worker"
+    env:
+      API_URL: "http://${api.ip}:8080"
+      WORKER_THREADS: "${WORKER_THREADS:-4}"
+    dependencies:
+      - api
+    health_check:
+      command: "/opt/worker/bin/health-check"
+      interval: 60
+
+  # Metrics collector over WireGuard
+  metrics:
+    type: package
+    network: monitoring
+    host: "10.0.0.10"
+    package: "./packages/metrics-${VERSION}.tar.gz"
+    env:
+      SCRAPE_TARGETS: "${api.ip}:9090,${worker.ip}:9090"
+      RETENTION_DAYS: "30"
+    dependencies:
+      - api
+      - worker
 ```
 
 ## Project Structure
@@ -316,8 +438,8 @@ graph-network-harness/
 ### Prerequisites
 
 - Rust toolchain (1.70+)
-- Docker (for container execution)
-- SSH access (for remote execution)
+- Docker (for container execution and testing)
+- SSH access (for remote execution testing)
 
 ### Building
 
@@ -325,21 +447,83 @@ graph-network-harness/
 # Build all crates
 cargo build --workspace
 
-# Run tests
+# Run all tests (requires Docker)
 cargo test --workspace
 
-# Run with specific features
-cargo test -p service-registry --features docker-tests
+# Run specific test suites
+cargo test -p command-executor        # Command execution tests
+cargo test -p service-registry --features docker-tests  # Network discovery
+cargo test -p orchestrator            # Service lifecycle tests
+
+# Run integration tests only
+cargo test --test '*' --workspace
+```
+
+### Testing Infrastructure
+
+The harness uses Docker-in-Docker (DinD) for complete test isolation:
+
+```bash
+# Test output is saved in timestamped sessions
+test-activity/
+└── logs/
+    ├── current/           # Symlink to latest session
+    └── session-20240315-123456/
+        ├── harness.log    # Main test log
+        ├── services/      # Individual service logs
+        └── docker/        # Docker daemon logs
+```
+
+### Network Testing with Docker Compose
+
+We simulate complex network topologies using Docker Compose:
+
+```yaml
+# docker-compose.test.yml
+version: '3.8'
+
+networks:
+  lan_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+  
+  wan_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+
+services:
+  # Simulated LAN node
+  lan_node:
+    image: harness-test-node
+    networks:
+      lan_network:
+        ipv4_address: 192.168.100.10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  
+  # Simulated WireGuard node
+  wg_node:
+    image: harness-test-node
+    networks:
+      wan_network:
+        ipv4_address: 10.0.0.10
+    environment:
+      WIREGUARD_CONFIG: /etc/wireguard/wg0.conf
 ```
 
 ### Testing Philosophy
 
 **TEST EARLY AND OFTEN**: Each phase is validated by comprehensive tests before moving forward.
 
-- Unit tests for all components
-- Integration tests with real Docker containers
-- Runtime-agnostic tests using smol
-- 30+ tests in orchestrator alone
+- **Unit Tests**: Test individual components in isolation
+- **Integration Tests**: Test with real infrastructure (Docker, SSH)
+- **Network Tests**: Simulate multi-network topologies
+- **End-to-End Tests**: Full system tests with real services
+- **30+ tests** in orchestrator alone, **100+ tests** total
 
 ## Implementation Status
 
@@ -420,10 +604,28 @@ cargo test -p service-registry --features docker-tests
 ## Design Principles
 
 1. **Runtime Agnostic**: No hard dependency on any specific async runtime
+   - Use `async-process`, `async-fs`, `async-net` instead of runtime-specific versions
+   - Test with multiple runtimes to ensure compatibility
+
 2. **Composable**: Each crate can be used independently
-3. **Testable**: Comprehensive test coverage with real infrastructure
-4. **Extensible**: Easy to add new executor types or features
-5. **Production Ready**: Built for reliability and observability
+   - `command-executor`: Just run commands anywhere
+   - `service-registry`: Just track services and networks
+   - `orchestrator`: Combine both for full orchestration
+
+3. **Test-Driven**: Every feature has comprehensive test coverage
+   - Docker-in-Docker for isolated testing
+   - Network simulation with Docker Compose
+   - No mocking - test with real infrastructure
+
+4. **Extensible**: Easy to add new capabilities
+   - New executor types (Kubernetes, systemd, etc.)
+   - Custom health check strategies
+   - Plugin system for service types
+
+5. **Production Ready**: Built for real-world use
+   - Structured logging with session tracking
+   - Graceful error handling and recovery
+   - Resource cleanup on failure
 
 ## Contributing
 

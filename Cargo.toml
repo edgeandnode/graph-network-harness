@@ -2,7 +2,9 @@
 members = [
     "crates/command-executor",
     "crates/service-registry",
-    "crates/orchestrator",
+    "crates/service-orchestration",
+    "crates/harness-config",
+    "crates/harness",
 ]
 resolver = "2"
 
@@ -59,7 +61,7 @@ ipnet = { version = "2.9", features = ["serde"] }
 # Internal crates
 command-executor = { path = "crates/command-executor" }
 service-registry = { path = "crates/service-registry" }
-orchestrator = { path = "crates/orchestrator" }
+service-orchestration = { path = "crates/service-orchestration" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

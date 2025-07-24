@@ -114,13 +114,15 @@ impl TlsClientConfig {
     #[cfg(feature = "tls")]
     pub fn default() -> Result<Self> {
         let mut root_store = rustls::RootCertStore::empty();
-        for ta in webpki_roots::TLS_SERVER_ROOTS.0 {
-            root_store.add(&rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                ta.subject.as_ref(),
-                ta.spki.as_ref(),
-                ta.name_constraints.as_ref(),
-            ).into()).unwrap();
-        }
+        root_store.add_trust_anchors(
+            webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                    ta.subject,
+                    ta.spki,
+                    ta.name_constraints,
+                )
+            })
+        );
         
         let config = ClientConfig::builder()
             .with_safe_defaults()

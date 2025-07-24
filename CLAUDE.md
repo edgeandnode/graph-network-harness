@@ -190,3 +190,26 @@ error_set! {
 - **LAN Tests**: Use docker-compose networks to simulate LAN topologies
 - **WireGuard Tests**: Mock WireGuard behavior without requiring root
 - **End-to-End Tests**: Full system tests with real services
+```
+
+## Development Practices
+
+### Documentation and Planning
+- Don't add time estimates in docs or plans - this is not going to be accurate
+
+## Workflow and Communication
+
+### Task Execution and Communication
+- You will be given instructions to complete a task. If you find yourself reversing course completely on the task ALWAYS stop and explain yourself and ask first. If I say we are going to do X, and you say "no I'm getting too many compilation errors" let's not do X, then STOP AND ASK FIRST
+
+### Reversing Course Guidelines
+- When encountering difficulties (compilation errors, API issues, design challenges), you should:
+  1. First attempt to solve the problem
+  2. If stuck, explain the specific issue and ask for guidance
+  3. NEVER abandon the current approach for an easier one without explicit approval
+  4. NEVER rationalize changing course with phrases like "for now", "to simplify", "for MVP" without asking
+
+### Examples of Reversing Course Requiring Permission
+- Switching from TLS to plain connections because of compile errors
+- Changing from a daemon architecture to something simpler
+- Removing features that were explicitly requested

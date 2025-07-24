@@ -1,0 +1,53 @@
+version: "1.0"
+name: "example-deployment"
+description: "Example service configuration for harness"
+
+networks:
+  local:
+    type: local
+    subnet: "127.0.0.0/8"
+
+services:
+  postgres:
+    type: docker
+    network: local
+    image: "postgres:15"
+    env:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secretpassword}"
+      POSTGRES_DB: "myapp"
+    ports:
+      - 5432
+    volumes:
+      - "/tmp/postgres-data:/var/lib/postgresql/data"
+    health_check:
+      command: "pg_isready"
+      args: ["-U", "postgres"]
+      interval: 10
+      retries: 5
+      timeout: 5
+
+  redis:
+    type: docker
+    network: local
+    image: "redis:7-alpine"
+    ports:
+      - 6379
+    health_check:
+      tcp:
+        port: 6379
+        timeout: 5
+      interval: 10
+      retries: 3
+
+  api:
+    type: process
+    network: local
+    binary: "echo"
+    args: ["API server would run here"]
+    env:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-secretpassword}@localhost:5432/myapp"
+      REDIS_URL: "redis://localhost:6379"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    dependencies:
+      - postgres
+      - redis

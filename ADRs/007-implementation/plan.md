@@ -3,6 +3,20 @@
 ## Overview
 This document tracks the implementation of ADR-007: Distributed Service Orchestration.
 
+## Phase Summary
+
+| Phase | Name | Status | Duration | Goal |
+|-------|------|--------|----------|------|
+| 1 | Command Executor | ✅ Complete | 3 weeks | Runtime-agnostic command execution |
+| 2 | Service Registry | ✅ Complete | 1 week | Service discovery & WebSocket API |
+| 3 | Networking | ✅ Complete* | (merged) | Network topology & IP management |
+| 4 | Service Lifecycle | ✅ Complete* | (merged) | Orchestrator with health monitoring |
+| 5 | Configuration System | 🚧 Next | 2 weeks | YAML config & minimal CLI |
+| 6 | Full CLI Experience | 📋 Planned | 2 weeks | Complete CLI with great UX |
+| 7 | Production Features | 🔮 Future | TBD | Scaling, monitoring, enterprise |
+
+*Phases 3 & 4 were implemented together in the orchestrator crate
+
 ## Implementation Phases
 
 ### Phase 1: Command Executor ✅ COMPLETE
@@ -86,47 +100,117 @@ Completed: 2025-01-22
 - Sanitized package installation paths
 - Integration with existing command-executor
 
-### Phase 3: Networking (Next Phase)
+### Phase 3: Networking ✅ COMPLETE
 
-**Core Philosophy**: Test-driven development with docker-compose simulating network topologies
+**Completed as part of orchestrator implementation**
+- [x] Network module structure and types
+- [x] IP allocation system
+- [x] Service discovery across networks
+- [x] Network topology detection (Local, LAN, WireGuard)
+- [x] Cross-network service resolution
+- [x] Integration tests with Docker
 
-**Week 1: Network Foundation & Basic Tests**
-- [ ] Network module structure and types
-- [ ] IP allocation system with tests
-- [ ] Docker-compose test infrastructure setup
-- [ ] Basic local connectivity tests
+### Phase 4: Service Lifecycle ✅ COMPLETE
 
-**Week 2: LAN Discovery & Testing**
-- [ ] LAN service discovery implementation
-- [ ] Docker-compose multi-network tests simulating LAN
-- [ ] Service IP resolution logic
-- [ ] Integration tests for mixed local/LAN scenarios
+**Completed as part of orchestrator implementation**
+- [x] ServiceManager implementation
+- [x] Local process execution
+- [x] Docker container management
+- [x] Remote SSH execution
+- [x] Health monitoring system
+- [x] Package deployment
+- [x] Dependency management
+- [x] 30+ orchestrator tests
 
-**Week 3: WireGuard Integration & Advanced Tests**
-- [ ] WireGuard configuration generation
-- [ ] Mock WireGuard for testing (no root required)
-- [ ] Full topology detection with tests
-- [ ] End-to-end tests with all network types
+### Phase 5: Configuration System (Next - 2 weeks)
 
-**Testing Infrastructure**
-- [ ] Docker-compose configurations for network scenarios
-- [ ] Test harness for network topology validation
-- [ ] Performance tests for network path selection
-- [ ] Failure scenario tests (network partitions, etc.)
+**Goal**: Enable YAML-based service definition with minimal CLI
 
-### Phase 4: Service Lifecycle
-- [ ] Local service management
-- [ ] Remote service deployment
+**Week 1: Configuration Parser**
+- [ ] Create harness-config crate
+- [ ] Define Config, Network, Service types with serde
+- [ ] YAML parser with serde_yaml
+- [ ] Environment variable substitution (${VAR})
+- [ ] Service reference resolution (${service.ip})
+- [ ] Configuration validation
+- [ ] Unit tests for parser
 
-### Phase 5: Configuration & CLI
-- [ ] Services.yaml parsing
-- [ ] CLI commands
+**Week 2: Minimal CLI**
+- [ ] Create harness binary crate
+- [ ] Setup clap for basic commands
+- [ ] Implement commands:
+  - [ ] `validate` - Validate services.yaml
+  - [ ] `start` - Start service(s)
+  - [ ] `stop` - Stop service(s)
+  - [ ] `status` - Show service status
+- [ ] Config file discovery
+- [ ] Integration with orchestrator
+- [ ] End-to-end tests
+- [ ] Update README with YAML examples
 
-### Phase 6: Testing & Documentation
-- [x] Integration tests
-- [ ] Example services
-- [x] **Self-hosted test orchestration**
-  - [x] Use command-executor to orchestrate its own integration tests
-  - [x] Replace shell scripts with Rust test harness
-  - [x] Implement test container lifecycle management using library's own features
-  - [x] Benefits: dogfooding, real-world usage validation, self-contained tests
+**Deliverables**:
+- Working YAML configuration
+- Basic CLI that replaces Rust API usage
+- Users can define and run services without writing code
+
+### Phase 6: Full CLI Experience (2 weeks)
+
+**Goal**: Production-ready CLI with excellent user experience
+
+**Week 1: Core Commands**
+- [ ] Service management:
+  - [ ] `restart` - Restart services
+  - [ ] `logs` - View service logs
+  - [ ] `exec` - Execute commands in services
+  - [ ] `health` - Check service health
+- [ ] Configuration:
+  - [ ] `init` - Initialize new project
+  - [ ] `config show/env/resolve/deps/check`
+- [ ] `list` - List services with filtering
+- [ ] Progress indicators (indicatif)
+- [ ] Table formatting (comfy-table)
+
+**Week 2: Advanced Features & Polish**
+- [ ] Network commands:
+  - [ ] `network list/show/discover/test`
+- [ ] Deployment:
+  - [ ] `deploy` - Deploy packages
+  - [ ] `package` - Create packages
+- [ ] Interactive prompts for failures
+- [ ] Error handling with suggestions
+- [ ] Shell completions (bash/zsh/fish)
+- [ ] Man page generation
+- [ ] Performance optimization (<100ms startup)
+- [ ] User guide documentation
+
+**Deliverables**:
+- Feature-complete CLI
+- Excellent error messages and UX
+- Ready for v0.1.0 release
+
+### Phase 7: Production Features (Future)
+
+**Goal**: Enterprise-ready features based on user feedback
+
+**Planned Features**:
+- [ ] Service auto-scaling
+- [ ] Monitoring integration:
+  - [ ] Prometheus metrics export
+  - [ ] Grafana dashboards
+  - [ ] OpenTelemetry tracing
+- [ ] Advanced deployment:
+  - [ ] Rolling updates
+  - [ ] Blue-green deployments
+  - [ ] Canary releases
+- [ ] Network resilience:
+  - [ ] Automatic reconnection
+  - [ ] Network state recovery
+  - [ ] Connection pooling
+- [ ] Web UI dashboard
+- [ ] Multi-region support
+- [ ] Service mesh capabilities
+
+**Success Metrics**:
+- Scales to 100+ services
+- Production deployments
+- Enterprise adoption

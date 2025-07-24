@@ -1,0 +1,24 @@
+[package]
+name = "harness-config"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "YAML configuration parser for graph-network-harness"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+regex = { workspace = true }
+
+# Internal dependencies
+service-orchestration = { path = "../service-orchestration" }
+service-registry = { path = "../service-registry" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

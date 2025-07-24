@@ -1,0 +1,27 @@
+version: "1.0"
+name: "simple-example"
+description: "Simple example without Docker dependencies"
+
+networks:
+  local:
+    type: local
+
+services:
+  hello:
+    type: process
+    network: local
+    binary: "echo"
+    args: ["Hello from harness!"]
+    
+  sleeper:
+    type: process
+    network: local
+    binary: "sleep"
+    args: ["30"]
+    dependencies:
+      - hello
+    health_check:
+      command: "true"
+      interval: 5
+      retries: 1
+      timeout: 1

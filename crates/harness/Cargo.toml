@@ -1,0 +1,54 @@
+[package]
+name = "harness"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "CLI for graph-network-harness"
+
+[[bin]]
+name = "harness"
+path = "src/main.rs"
+
+[[bin]]
+name = "harness-executor-daemon"
+path = "src/bin/daemon.rs"
+
+[dependencies]
+# Workspace dependencies
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Runtime-agnostic async runtime
+smol = "2.0"
+async-net = { workspace = true }
+async-tungstenite = { workspace = true }
+futures = { workspace = true }
+async-tls = { version = "0.13", default-features = false, features = ["client", "server"] }
+async-io = "2.0"
+
+# Internal dependencies
+harness-config = { path = "../harness-config" }
+service-orchestration = { path = "../service-orchestration" }
+service-registry = { path = "../service-registry", features = ["tls"] }
+
+# For table output
+comfy-table = "7.1"
+
+# For daemon functionality
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-appender = "0.2"
+dirs = "5.0"
+
+# For TLS certificate generation
+rcgen = { version = "0.12", features = ["pem"] }
+time = "0.3"
+x509-parser = "0.15"
+pem = "3.0"
+chrono = { workspace = true }
+base64 = "0.22"
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }

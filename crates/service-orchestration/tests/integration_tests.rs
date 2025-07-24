@@ -2,7 +2,7 @@
 //!
 //! These tests verify that all components work together correctly.
 
-use orchestrator::{
+use service_orchestration::{
     ServiceConfig, ServiceTarget, ServiceStatus, HealthCheck,
     HealthChecker, HealthStatus,
     ProcessExecutor, DockerExecutor, RemoteExecutor, ServiceExecutor,

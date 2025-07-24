@@ -9,7 +9,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use orchestrator::{ServiceManager, ServiceConfig, ServiceTarget};
+//! use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget};
 //! 
 //! # async fn example() -> anyhow::Result<()> {
 //! let mut manager = ServiceManager::new().await?;

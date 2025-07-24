@@ -23,7 +23,7 @@ impl ProcessEvent {
             data: None,
         }
     }
-    
+
     /// Create a new process event with data
     pub fn new_with_data(event_type: ProcessEventType, data: String) -> Self {
         Self {
@@ -38,16 +38,16 @@ impl ProcessEvent {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProcessEventType {
     /// Process has started
-    Started { 
+    Started {
         /// The process ID of the started process
-        pid: u32 
+        pid: u32,
     },
     /// Process has exited
-    Exited { 
+    Exited {
         /// The exit code if the process exited normally
-        code: Option<i32>, 
+        code: Option<i32>,
         /// The signal number if the process was terminated by a signal
-        signal: Option<i32> 
+        signal: Option<i32>,
     },
     /// Log line from stdout
     Stdout,
@@ -58,7 +58,7 @@ pub enum ProcessEventType {
 /// Filter for process log output
 pub trait LogFilter: Send + Sync {
     /// Filter a log line, returning None to drop it
-    /// 
+    ///
     /// The returned &str can be the same as the input (pass-through)
     /// or a substring of it (partial filtering).
     fn filter<'a>(&self, line: &'a str, source: LogSource) -> Option<&'a str>;

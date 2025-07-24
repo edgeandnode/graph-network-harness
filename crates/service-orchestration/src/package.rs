@@ -93,7 +93,11 @@ impl PackageDeployer {
     }
 
     /// Deploy a package to a remote target
-    pub async fn deploy(&self, package_path: &str, target: RemoteTarget) -> Result<DeployedPackage> {
+    pub async fn deploy(
+        &self,
+        package_path: &str,
+        target: RemoteTarget,
+    ) -> Result<DeployedPackage> {
         info!(
             "Deploying package {} to {}@{}:{}",
             package_path,
@@ -104,21 +108,21 @@ impl PackageDeployer {
 
         // Step 1: Validate package
         let manifest = self.validate_package(package_path).await?;
-        
+
         // Step 2: Transfer package to remote host
         self.transfer_package(package_path, &target).await?;
-        
+
         // Step 3: Extract package on remote host
         self.extract_package(&target).await?;
-        
+
         // Step 4: Generate environment file
         self.generate_env_file(&target, &manifest).await?;
-        
+
         // Step 5: Make scripts executable
         self.setup_permissions(&target).await?;
-        
+
         info!("Successfully deployed package to {}", target.install_path());
-        
+
         let install_path = target.install_path();
         Ok(DeployedPackage {
             target,
@@ -130,45 +134,51 @@ impl PackageDeployer {
     /// Start a deployed service
     pub async fn start_service(&self, deployed: &DeployedPackage) -> Result<()> {
         info!("Starting deployed service: {}", deployed.manifest.name);
-        
+
         // TODO: Implement remote service start via SSH
         // This would execute the start.sh script in the package directory
-        
+
         Ok(())
     }
 
     /// Stop a deployed service
     pub async fn stop_service(&self, deployed: &DeployedPackage) -> Result<()> {
         info!("Stopping deployed service: {}", deployed.manifest.name);
-        
+
         // TODO: Implement remote service stop via SSH
         // This would execute the stop.sh script in the package directory
-        
+
         Ok(())
     }
 
     /// Remove a deployed package
     pub async fn undeploy(&self, deployed: &DeployedPackage) -> Result<()> {
         info!("Undeploying package: {}", deployed.manifest.name);
-        
+
         // TODO: Implement package removal via SSH
-        
+
         Ok(())
     }
 
     /// Validate package format and extract manifest
     async fn validate_package(&self, package_path: &str) -> Result<PackageManifest> {
         debug!("Validating package: {}", package_path);
-        
+
         let path = Path::new(package_path);
         if !path.exists() {
-            return Err(crate::Error::Package(format!("Package not found: {}", package_path)));
+            return Err(crate::Error::Package(format!(
+                "Package not found: {}",
+                package_path
+            )));
         }
-        
+
         if !path.is_file() {
-            return Err(crate::Error::Package(format!("Package path is not a file: {}", package_path)));
+            return Err(crate::Error::Package(format!(
+                "Package path is not a file: {}",
+                package_path
+            )));
         }
-        
+
         // TODO: Extract and validate package contents
         // For now, return a dummy manifest
         let manifest = PackageManifest {
@@ -183,51 +193,58 @@ impl PackageDeployer {
             dependencies: vec![],
             environment: HashMap::new(),
         };
-        
+
         Ok(manifest)
     }
 
     /// Transfer package to remote host
     async fn transfer_package(&self, package_path: &str, target: &RemoteTarget) -> Result<()> {
-        debug!("Transferring package {} to {}@{}", package_path, target.user, target.host);
-        
+        debug!(
+            "Transferring package {} to {}@{}",
+            package_path, target.user, target.host
+        );
+
         // TODO: Implement SCP transfer using SSH executor
-        
+
         Ok(())
     }
 
     /// Extract package on remote host
     async fn extract_package(&self, target: &RemoteTarget) -> Result<()> {
         debug!("Extracting package on {}@{}", target.user, target.host);
-        
+
         // TODO: Implement remote extraction:
         // 1. Create installation directory
         // 2. Extract tarball
         // 3. Validate extracted contents
-        
+
         Ok(())
     }
 
     /// Generate environment file with dependency IPs
-    async fn generate_env_file(&self, target: &RemoteTarget, manifest: &PackageManifest) -> Result<()> {
+    async fn generate_env_file(
+        &self,
+        target: &RemoteTarget,
+        manifest: &PackageManifest,
+    ) -> Result<()> {
         debug!("Generating environment file for {}", manifest.name);
-        
+
         // TODO: Implement environment file generation:
         // 1. Resolve dependency service IPs
         // 2. Generate .env file with variables
         // 3. Upload to remote host
-        
+
         Ok(())
     }
 
     /// Setup proper file permissions
     async fn setup_permissions(&self, target: &RemoteTarget) -> Result<()> {
         debug!("Setting up permissions for {}", target.service_name);
-        
+
         // TODO: Implement permission setup:
         // - Make start.sh and stop.sh executable
         // - Set proper ownership
-        
+
         Ok(())
     }
 }
@@ -260,12 +277,12 @@ impl PackageBuilder {
         output_path: P,
     ) -> Result<()> {
         info!("Creating package from {:?}", source_dir.as_ref());
-        
+
         // TODO: Implement package creation:
         // 1. Create manifest.yaml file
         // 2. Create tar.gz archive with source files
         // 3. Validate package structure
-        
+
         Ok(())
     }
 }
@@ -282,16 +299,16 @@ mod tests {
             user: "testuser".to_string(),
             install_dir: None,
         };
-        
+
         assert_eq!(target.install_path(), "/opt/harness/test-service");
-        
+
         let custom_target = RemoteTarget {
             service_name: "test-service".to_string(),
             host: "192.168.1.100".to_string(),
             user: "testuser".to_string(),
             install_dir: Some("/custom/path".to_string()),
         };
-        
+
         assert_eq!(custom_target.install_path(), "/custom/path");
     }
 
@@ -315,7 +332,8 @@ mod tests {
         };
 
         let yaml = serde_yaml::to_string(&manifest).expect("Failed to serialize");
-        let deserialized: PackageManifest = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+        let deserialized: PackageManifest =
+            serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(manifest.name, deserialized.name);
         assert_eq!(manifest.version, deserialized.version);
     }

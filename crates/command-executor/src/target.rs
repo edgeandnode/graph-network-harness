@@ -1,5 +1,5 @@
 //! Execution target types
-//! 
+//!
 //! This module defines the various target types that can be executed by launchers.
 //! Targets are location-agnostic - they define WHAT to execute, while launchers
 //! determine WHERE to execute them.
@@ -45,12 +45,12 @@ impl ManagedProcess {
             restart_on_failure: false,
         }
     }
-    
+
     /// Create a builder for more complex configurations
     pub fn builder() -> ManagedProcessBuilder {
         ManagedProcessBuilder::new()
     }
-    
+
     /// Set the process group ID
     pub fn with_process_group(mut self, pgid: i32) -> Self {
         self.process_group = Some(pgid);
@@ -84,19 +84,19 @@ impl ManagedProcessBuilder {
             restart_on_failure: false,
         }
     }
-    
+
     /// Set the process group ID
     pub fn process_group(mut self, pgid: i32) -> Self {
         self.process_group = Some(pgid);
         self
     }
-    
+
     /// Enable restart on failure
     pub fn restart_on_failure(mut self, enabled: bool) -> Self {
         self.restart_on_failure = enabled;
         self
     }
-    
+
     /// Build the ManagedProcess
     pub fn build(self) -> ManagedProcess {
         ManagedProcess {
@@ -410,15 +410,19 @@ impl ComposeService {
 impl crate::backends::ssh::SshTransformable for ManagedService {
     fn transform_for_ssh(&self, ssh_config: &crate::backends::ssh::SshConfig) -> Self {
         use crate::backends::ssh::wrap_command_with_ssh;
-        
+
         Self {
             name: self.name.clone(),
             status_command: wrap_command_with_ssh(&self.status_command, ssh_config),
             start_command: wrap_command_with_ssh(&self.start_command, ssh_config),
             stop_command: wrap_command_with_ssh(&self.stop_command, ssh_config),
-            restart_command: self.restart_command.as_ref()
+            restart_command: self
+                .restart_command
+                .as_ref()
                 .map(|cmd| wrap_command_with_ssh(cmd, ssh_config)),
-            reload_command: self.reload_command.as_ref()
+            reload_command: self
+                .reload_command
+                .as_ref()
                 .map(|cmd| wrap_command_with_ssh(cmd, ssh_config)),
             log_command: wrap_command_with_ssh(&self.log_command, ssh_config),
         }

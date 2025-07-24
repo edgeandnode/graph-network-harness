@@ -213,3 +213,9 @@ error_set! {
 - Switching from TLS to plain connections because of compile errors
 - Changing from a daemon architecture to something simpler
 - Removing features that were explicitly requested
+
+## Rust Type Safety and Mutability
+
+### Mutability Guidelines
+- Whenever we use Mutex, Arc, or RefCell in the codebase, we should ALWAYS note in the struct doc comments what we're intending with internal or external mutability
+- When making notes about internal mutability, refer to that not what primitive we are using for it.

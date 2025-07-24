@@ -7,13 +7,13 @@ use futures_lite::io::{AsyncBufReadExt, BufReader, Lines};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 use crate::command::Command;
 use crate::error::{Error, Result};
 use crate::event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 use crate::launcher::Launcher;
-use crate::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 use crate::process::{ExitStatus, ProcessHandle};
-use crate::target::{Target, ManagedService};
+use crate::target::{ManagedService, Target};
 
 // Re-export target types for backwards compatibility
 pub use crate::target::ManagedServiceBuilder;
@@ -55,7 +55,7 @@ impl Launcher for LocalLauncher {
             Target::Command | Target::ManagedProcess(_) => {
                 // Prepare the command for execution
                 let mut async_cmd = command.prepare();
-                
+
                 // Configure stdio for streaming
                 async_cmd.stdout(Stdio::piped());
                 async_cmd.stderr(Stdio::piped());
@@ -150,7 +150,9 @@ impl Launcher for LocalLauncher {
 
                 // Add volume mounts
                 for (host, container_path) in container.volumes() {
-                    docker_cmd.arg("-v").arg(format!("{}:{}", host, container_path));
+                    docker_cmd
+                        .arg("-v")
+                        .arg(format!("{}:{}", host, container_path));
                 }
 
                 // Add working directory
@@ -175,24 +177,22 @@ impl Launcher for LocalLauncher {
                 create_cmd.stdout(Stdio::piped());
                 create_cmd.stderr(Stdio::piped());
 
-                let output = create_cmd
-                    .output()
-                    .await
-                    .map_err(|e| Error::spawn_failed(format!("Failed to run docker: {}", e))
-                        .with_layer_context("Docker"))?;
+                let output = create_cmd.output().await.map_err(|e| {
+                    Error::spawn_failed(format!("Failed to run docker: {}", e))
+                        .with_layer_context("Docker")
+                })?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     return Err(Error::spawn_failed(format!(
                         "Failed to create container: {}",
                         stderr
-                    )).with_layer_context("Docker"));
+                    ))
+                    .with_layer_context("Docker"));
                 }
 
                 // Extract container ID from output
-                let container_id = String::from_utf8_lossy(&output.stdout)
-                    .trim()
-                    .to_string();
+                let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
                 if container_id.is_empty() {
                     return Err(Error::spawn_failed("Failed to get container ID"));
@@ -210,9 +210,9 @@ impl Launcher for LocalLauncher {
                 log_cmd.stdout(Stdio::piped());
                 log_cmd.stderr(Stdio::piped());
 
-                let mut log_child = log_cmd
-                    .spawn()
-                    .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {}", e)))?;
+                let mut log_child = log_cmd.spawn().map_err(|e| {
+                    Error::spawn_failed(format!("Failed to start log streaming: {}", e))
+                })?;
 
                 let child_id = log_child.id();
                 let stdout = log_child.stdout.take().map(|s| BufReader::new(s).lines());
@@ -245,7 +245,7 @@ impl Launcher for LocalLauncher {
             Target::ComposeService(compose) => {
                 // Build docker-compose command
                 let mut compose_cmd = Command::new("docker-compose");
-                
+
                 // Add compose file
                 compose_cmd.arg("-f").arg(compose.compose_file());
 
@@ -272,24 +272,22 @@ impl Launcher for LocalLauncher {
                 create_cmd.stdout(Stdio::piped());
                 create_cmd.stderr(Stdio::piped());
 
-                let output = create_cmd
-                    .output()
-                    .await
-                    .map_err(|e| Error::spawn_failed(format!("Failed to run docker-compose: {}", e))
-                        .with_layer_context("DockerCompose"))?;
+                let output = create_cmd.output().await.map_err(|e| {
+                    Error::spawn_failed(format!("Failed to run docker-compose: {}", e))
+                        .with_layer_context("DockerCompose")
+                })?;
 
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     return Err(Error::spawn_failed(format!(
                         "Failed to start compose service: {}",
                         stderr
-                    )).with_layer_context("DockerCompose"));
+                    ))
+                    .with_layer_context("DockerCompose"));
                 }
 
                 // Extract container ID from output
-                let container_id = String::from_utf8_lossy(&output.stdout)
-                    .trim()
-                    .to_string();
+                let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
                 if container_id.is_empty() {
                     return Err(Error::spawn_failed("Failed to get container ID"));
@@ -307,9 +305,9 @@ impl Launcher for LocalLauncher {
                 log_cmd.stdout(Stdio::piped());
                 log_cmd.stderr(Stdio::piped());
 
-                let mut log_child = log_cmd
-                    .spawn()
-                    .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {}", e)))?;
+                let mut log_child = log_cmd.spawn().map_err(|e| {
+                    Error::spawn_failed(format!("Failed to start log streaming: {}", e))
+                })?;
 
                 let child_id = log_child.id();
                 let stdout = log_child.stdout.take().map(|s| BufReader::new(s).lines());
@@ -801,4 +799,3 @@ async fn check_service_status(service: &ManagedService) -> Result<ServiceStatus>
         }
     }
 }
-

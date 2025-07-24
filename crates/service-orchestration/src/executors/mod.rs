@@ -3,12 +3,12 @@
 //! This module provides abstractions over command-executor for different
 //! service execution environments.
 
-pub mod process;
 pub mod docker;
+pub mod process;
 pub mod remote;
 
-pub use process::ProcessExecutor;
 pub use docker::DockerExecutor;
+pub use process::ProcessExecutor;
 pub use remote::RemoteExecutor;
 
 use crate::{config::ServiceConfig, health::HealthStatus, Result};

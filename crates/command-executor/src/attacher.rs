@@ -1,9 +1,9 @@
 //! Attacher trait for connecting to existing services
 
-use async_trait::async_trait;
-use futures::stream::Stream;
 use crate::error::Result;
 use crate::event::ProcessEvent;
+use async_trait::async_trait;
+use futures::stream::Stream;
 
 /// Configuration for attaching to an existing service
 #[derive(Debug, Clone)]
@@ -31,22 +31,22 @@ impl Default for AttachConfig {
 pub trait AttachedHandle: Send + Sync {
     /// Get the service identifier (name, ID, etc.)
     fn id(&self) -> String;
-    
+
     /// Check the current status of the service
     async fn status(&self) -> Result<ServiceStatus>;
-    
+
     /// Start the service (if stopped)
     async fn start(&mut self) -> Result<()>;
-    
+
     /// Stop the service
     async fn stop(&mut self) -> Result<()>;
-    
+
     /// Restart the service
     async fn restart(&mut self) -> Result<()>;
-    
+
     /// Reload the service configuration
     async fn reload(&mut self) -> Result<()>;
-    
+
     /// Disconnect from the service (stop monitoring)
     async fn disconnect(&mut self) -> Result<()>;
 }
@@ -69,13 +69,17 @@ pub enum ServiceStatus {
 pub trait Attacher: Send + Sync + 'static {
     /// The target configuration type for this attacher
     type Target: Send + Sync;
-    
+
     /// The event stream type this attacher produces
     type EventStream: Stream<Item = ProcessEvent> + Send + Unpin;
-    
+
     /// The service handle type this attacher produces
     type Handle: AttachedHandle;
-    
+
     /// Attach to an existing service, returning event stream and control handle
-    async fn attach(&self, target: &Self::Target, config: AttachConfig) -> Result<(Self::EventStream, Self::Handle)>;
+    async fn attach(
+        &self,
+        target: &Self::Target,
+        config: AttachConfig,
+    ) -> Result<(Self::EventStream, Self::Handle)>;
 }

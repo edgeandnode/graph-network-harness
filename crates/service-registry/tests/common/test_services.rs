@@ -1,7 +1,7 @@
 //! Test service definitions and utilities
 
-use service_registry::{ServiceEntry, ExecutionInfo, Location, Endpoint, Protocol};
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use service_registry::{Endpoint, ExecutionInfo, Location, Protocol, ServiceEntry};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use tempfile::TempDir;
 
@@ -17,7 +17,7 @@ pub fn create_echo_service() -> anyhow::Result<ServiceEntry> {
         },
         Location::Local,
     )?;
-    
+
     Ok(service)
 }
 
@@ -37,7 +37,7 @@ pub fn create_web_service() -> anyhow::Result<ServiceEntry> {
         },
         Location::Local,
     )?;
-    
+
     // Add HTTP endpoint
     let endpoint = Endpoint::new(
         "http".to_string(),
@@ -45,7 +45,7 @@ pub fn create_web_service() -> anyhow::Result<ServiceEntry> {
         Protocol::Http,
     );
     service.add_endpoint(endpoint);
-    
+
     Ok(service)
 }
 
@@ -61,7 +61,7 @@ pub fn create_docker_service() -> anyhow::Result<ServiceEntry> {
         },
         Location::Local,
     )?;
-    
+
     // Add HTTP endpoint
     let endpoint = Endpoint::new(
         "http".to_string(),
@@ -69,7 +69,7 @@ pub fn create_docker_service() -> anyhow::Result<ServiceEntry> {
         Protocol::Http,
     );
     service.add_endpoint(endpoint);
-    
+
     Ok(service)
 }
 
@@ -83,7 +83,7 @@ pub fn create_systemd_service() -> anyhow::Result<ServiceEntry> {
         },
         Location::Local,
     )?;
-    
+
     Ok(service)
 }
 
@@ -98,7 +98,7 @@ pub fn create_systemd_portable_service() -> anyhow::Result<ServiceEntry> {
         },
         Location::Local,
     )?;
-    
+
     Ok(service)
 }
 
@@ -110,7 +110,10 @@ pub fn create_remote_service() -> anyhow::Result<ServiceEntry> {
         ExecutionInfo::ManagedProcess {
             pid: None,
             command: "worker".to_string(),
-            args: vec!["--config".to_string(), "/opt/worker/config.yaml".to_string()],
+            args: vec![
+                "--config".to_string(),
+                "/opt/worker/config.yaml".to_string(),
+            ],
         },
         Location::Remote {
             host: "worker-node-1".to_string(),
@@ -118,24 +121,29 @@ pub fn create_remote_service() -> anyhow::Result<ServiceEntry> {
             ssh_port: Some(22),
         },
     )?;
-    
+
     Ok(service)
 }
 
 /// Create a test package directory structure
-pub async fn create_test_package(temp_dir: &TempDir, name: &str, version: &str) -> anyhow::Result<PathBuf> {
+pub async fn create_test_package(
+    temp_dir: &TempDir,
+    name: &str,
+    version: &str,
+) -> anyhow::Result<PathBuf> {
     let package_dir = temp_dir.path().join(format!("{}-{}", name, version));
     let scripts_dir = package_dir.join("scripts");
     let bin_dir = package_dir.join("bin");
     let config_dir = package_dir.join("config");
-    
+
     // Create directories
     async_fs::create_dir_all(&scripts_dir).await?;
     async_fs::create_dir_all(&bin_dir).await?;
     async_fs::create_dir_all(&config_dir).await?;
-    
+
     // Create manifest
-    let manifest_content = format!(r#"
+    let manifest_content = format!(
+        r#"
 name: "{}"
 version: "{}"
 description: "Test service package"
@@ -153,10 +161,12 @@ health:
   script: "scripts/health.sh"
   interval: "30s"
   timeout: "5s"
-"#, name, version);
-    
+"#,
+        name, version
+    );
+
     async_fs::write(package_dir.join("manifest.yaml"), manifest_content).await?;
-    
+
     // Create scripts
     let start_script = r#"#!/bin/bash
 echo "Starting service..."
@@ -164,7 +174,7 @@ echo $$ > /tmp/service.pid
 exec sleep 3600
 "#;
     async_fs::write(scripts_dir.join("start.sh"), start_script).await?;
-    
+
     let stop_script = r#"#!/bin/bash
 echo "Stopping service..."
 if [ -f /tmp/service.pid ]; then
@@ -173,7 +183,7 @@ if [ -f /tmp/service.pid ]; then
 fi
 "#;
     async_fs::write(scripts_dir.join("stop.sh"), stop_script).await?;
-    
+
     let health_script = r#"#!/bin/bash
 if [ -f /tmp/service.pid ] && kill -0 $(cat /tmp/service.pid) 2>/dev/null; then
     echo "Service is healthy"
@@ -184,13 +194,13 @@ else
 fi
 "#;
     async_fs::write(scripts_dir.join("health.sh"), health_script).await?;
-    
+
     // Create dummy binary
     let binary_content = r#"#!/bin/bash
 echo "Test service binary"
 "#;
     async_fs::write(bin_dir.join("test-service"), binary_content).await?;
-    
+
     // Create config file
     let config_content = r#"
 # Test service configuration
@@ -198,7 +208,7 @@ port: 8080
 host: "0.0.0.0"
 "#;
     async_fs::write(config_dir.join("config.yaml"), config_content).await?;
-    
+
     Ok(package_dir)
 }
 
@@ -221,14 +231,14 @@ impl ServiceDependencyGraph {
             },
             Location::Local,
         )?;
-        
+
         let db_endpoint = Endpoint::new(
             "postgres".to_string(),
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 5432),
             Protocol::Tcp,
         );
         database.add_endpoint(db_endpoint);
-        
+
         let mut backend = ServiceEntry::new(
             "backend".to_string(),
             "1.0.0".to_string(),
@@ -236,11 +246,13 @@ impl ServiceDependencyGraph {
                 pid: None,
                 command: "python3".to_string(),
                 args: vec!["-m", "flask", "run", "--port=3000"]
-                    .into_iter().map(String::from).collect(),
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
             },
             Location::Local,
         )?;
-        
+
         backend.add_dependency("database".to_string());
         let api_endpoint = Endpoint::new(
             "api".to_string(),
@@ -248,7 +260,7 @@ impl ServiceDependencyGraph {
             Protocol::Http,
         );
         backend.add_endpoint(api_endpoint);
-        
+
         let mut frontend = ServiceEntry::new(
             "frontend".to_string(),
             "1.0.0".to_string(),
@@ -259,7 +271,7 @@ impl ServiceDependencyGraph {
             },
             Location::Local,
         )?;
-        
+
         frontend.add_dependency("backend".to_string());
         let web_endpoint = Endpoint::new(
             "http".to_string(),
@@ -267,7 +279,7 @@ impl ServiceDependencyGraph {
             Protocol::Http,
         );
         frontend.add_endpoint(web_endpoint);
-        
+
         Ok(Self {
             services: vec![database, backend, frontend],
             dependencies: vec![

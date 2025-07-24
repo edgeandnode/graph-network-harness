@@ -81,25 +81,44 @@ impl ServiceTarget {
     /// Create a new target with updated environment variables
     pub fn with_env(&self, new_env: HashMap<String, String>) -> Self {
         match self {
-            ServiceTarget::Process { binary, args, working_dir, .. } => ServiceTarget::Process {
+            ServiceTarget::Process {
+                binary,
+                args,
+                working_dir,
+                ..
+            } => ServiceTarget::Process {
                 binary: binary.clone(),
                 args: args.clone(),
                 env: new_env,
                 working_dir: working_dir.clone(),
             },
-            ServiceTarget::Docker { image, ports, volumes, .. } => ServiceTarget::Docker {
+            ServiceTarget::Docker {
+                image,
+                ports,
+                volumes,
+                ..
+            } => ServiceTarget::Docker {
                 image: image.clone(),
                 env: new_env,
                 ports: ports.clone(),
                 volumes: volumes.clone(),
             },
-            ServiceTarget::RemoteLan { host, user, binary, args } => ServiceTarget::RemoteLan {
+            ServiceTarget::RemoteLan {
+                host,
+                user,
+                binary,
+                args,
+            } => ServiceTarget::RemoteLan {
                 host: host.clone(),
                 user: user.clone(),
                 binary: binary.clone(),
                 args: args.clone(),
             },
-            ServiceTarget::Wireguard { host, user, package } => ServiceTarget::Wireguard {
+            ServiceTarget::Wireguard {
+                host,
+                user,
+                package,
+            } => ServiceTarget::Wireguard {
                 host: host.clone(),
                 user: user.clone(),
                 package: package.clone(),
@@ -133,6 +152,18 @@ pub struct HealthCheck {
     pub retries: u32,
     /// Timeout for each health check in seconds
     pub timeout: u64,
+}
+
+impl Default for HealthCheck {
+    fn default() -> Self {
+        Self {
+            command: "true".to_string(),
+            args: vec![],
+            interval: 30,
+            retries: 3,
+            timeout: 10,
+        }
+    }
 }
 
 /// Current status of a service
@@ -181,7 +212,8 @@ mod tests {
         };
 
         let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
-        let deserialized: ServiceConfig = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+        let deserialized: ServiceConfig =
+            serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(config, deserialized);
     }
 
@@ -211,7 +243,8 @@ mod tests {
         };
 
         let yaml = serde_yaml::to_string(&target).expect("Failed to serialize");
-        let deserialized: ServiceTarget = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+        let deserialized: ServiceTarget =
+            serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(target, deserialized);
     }
 }

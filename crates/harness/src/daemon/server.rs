@@ -1,53 +1,56 @@
 //! WebSocket server for the executor daemon
 
-use anyhow::{Result, Context};
-use std::path::Path;
-use std::sync::{Arc, Mutex};
-use tracing::{info, error, debug};
-use anyhow::anyhow;
-use service_registry::Registry;
-use service_orchestration::ServiceManager;
-use async_net::{TcpListener, TcpStream};
-use async_tungstenite::accept_async;
-use futures::{SinkExt, StreamExt};
-use async_tungstenite::tungstenite::Message;
-use async_tls::TlsAcceptor;
-use rustls::{ServerConfig, Certificate, PrivateKey};
-use std::fs;
 use crate::daemon::handlers;
 use crate::protocol::{Request, Response};
+use anyhow::{Context, Result};
+use async_net::{TcpListener, TcpStream};
+use async_tls::TlsAcceptor;
+use async_tungstenite::accept_async;
+use async_tungstenite::tungstenite::Message;
+use futures::{SinkExt, StreamExt};
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use service_orchestration::ServiceManager;
+use service_registry::Registry;
+use std::fs;
+use std::path::Path;
+use std::sync::Arc;
+use tracing::{debug, error, info};
 
 /// Daemon state shared between connections
+///
+/// Both ServiceManager and Registry implement their own internal synchronization:
+/// - ServiceManager uses RwLock for active_services and health_monitors
+/// - Registry uses Arc<Mutex<>> internally for its store and subscribers
+/// Therefore, no external mutex is needed here.
 pub struct DaemonState {
-    pub service_manager: Arc<Mutex<ServiceManager>>,
-    pub registry: Arc<Mutex<Registry>>,
+    pub service_manager: Arc<ServiceManager>,
+    pub registry: Arc<Registry>,
 }
 
 /// Start the WebSocket server
 pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
     // Create service manager with persistent registry
-    let service_manager = ServiceManager::new().await
+    let service_manager = ServiceManager::new()
+        .await
         .context("Failed to create service manager")?;
-    
+
     // Get registry from service manager
     // For now, we'll create a new one (this will be refactored)
     let registry = Registry::with_persistence(data_dir.join("registry.json").to_string_lossy());
-    
-    // Create daemon state with Mutex for thread safety
+
+    // Create daemon state
     let state = Arc::new(DaemonState {
-        service_manager: Arc::new(Mutex::new(service_manager)),
-        registry: Arc::new(Mutex::new(registry)),
+        service_manager: Arc::new(service_manager),
+        registry: Arc::new(registry),
     });
-    
+
     // Load TLS configuration
     let cert_path = data_dir.join("certs/server.crt");
     let key_path = data_dir.join("certs/server.key");
-    
-    let cert_pem = fs::read_to_string(&cert_path)
-        .context("Failed to read certificate")?;
-    let key_pem = fs::read_to_string(&key_path)
-        .context("Failed to read private key")?;
-    
+
+    let cert_pem = fs::read_to_string(&cert_path).context("Failed to read certificate")?;
+    let key_pem = fs::read_to_string(&key_path).context("Failed to read private key")?;
+
     // Parse certificate and key
     let certs: Vec<Certificate> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
@@ -55,14 +58,14 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
         .into_iter()
         .map(|der| Certificate(der.to_vec()))
         .collect();
-        
+
     let mut keys: Vec<Vec<u8>> = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| anyhow::anyhow!("Failed to parse private key: {:?}", e))?
         .into_iter()
         .map(|key| key.secret_pkcs8_der().to_vec())
         .collect();
-        
+
     if keys.is_empty() {
         // Try RSA keys if PKCS8 didn't work
         keys = rustls_pemfile::rsa_private_keys(&mut key_pem.as_bytes())
@@ -72,36 +75,37 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
             .map(|key| key.secret_pkcs1_der().to_vec())
             .collect();
     }
-    
+
     if keys.is_empty() {
         return Err(anyhow::anyhow!("No private keys found in key file"));
     }
-    
+
     let key = PrivateKey(keys.into_iter().next().unwrap());
-    
+
     // Create TLS config
     let tls_config = ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .context("Failed to create TLS config")?;
-        
+
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
-    
+
     let addr = format!("127.0.0.1:{}", port);
-    let listener = TcpListener::bind(&addr).await
+    let listener = TcpListener::bind(&addr)
+        .await
         .context("Failed to bind to address")?;
-    
+
     info!("Executor daemon listening on wss://{}", addr);
-    
+
     // Set up Ctrl+C handler
     let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let shutdown_clone = shutdown.clone();
-    
+
     // Note: We can't use signal handling without tokio/async-std specific features
     // For now, the daemon will need to be stopped with Ctrl+C or kill
     // In production, it would be managed by systemd which handles signals properly
-    
+
     // Accept connections
     loop {
         match listener.accept().await {
@@ -109,7 +113,7 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
                 debug!("New connection from {}", peer_addr);
                 let state = state.clone();
                 let tls_acceptor = tls_acceptor.clone();
-                
+
                 // Spawn handler task
                 smol::spawn(async move {
                     // Accept TLS connection
@@ -123,7 +127,8 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
                             error!("TLS handshake failed: {}", e);
                         }
                     }
-                }).detach();
+                })
+                .detach();
             }
             Err(e) => {
                 error!("Failed to accept connection: {}", e);
@@ -134,12 +139,16 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
 }
 
 /// Handle a WebSocket connection
-async fn handle_connection(stream: async_tls::server::TlsStream<TcpStream>, state: Arc<DaemonState>) -> Result<()> {
-    let ws_stream = accept_async(stream).await
+async fn handle_connection(
+    stream: async_tls::server::TlsStream<TcpStream>,
+    state: Arc<DaemonState>,
+) -> Result<()> {
+    let ws_stream = accept_async(stream)
+        .await
         .context("Failed to accept WebSocket connection")?;
-    
+
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    
+
     while let Some(msg) = ws_receiver.next().await {
         match msg {
             Ok(Message::Text(text)) => {
@@ -156,10 +165,10 @@ async fn handle_connection(stream: async_tls::server::TlsStream<TcpStream>, stat
                         continue;
                     }
                 };
-                
+
                 // Handle request
                 let response = handlers::handle_request(request, state.clone()).await?;
-                
+
                 // Send response
                 let response_text = serde_json::to_string(&response)?;
                 ws_sender.send(Message::Text(response_text)).await?;
@@ -177,7 +186,7 @@ async fn handle_connection(stream: async_tls::server::TlsStream<TcpStream>, stat
             }
         }
     }
-    
+
     debug!("Connection closed");
     Ok(())
 }

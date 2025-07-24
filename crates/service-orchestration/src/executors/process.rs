@@ -7,7 +7,7 @@ use crate::{
     Result,
 };
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, Command, Executor, ProcessHandle, target::Target};
+use command_executor::{backends::LocalLauncher, target::Target, Command, Executor, ProcessHandle};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
@@ -39,8 +39,16 @@ impl Default for ProcessExecutor {
 #[async_trait]
 impl ServiceExecutor for ProcessExecutor {
     async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
-        let ServiceTarget::Process { binary, args, env, working_dir } = &config.target else {
-            return Err(crate::Error::Config("ProcessExecutor can only handle Process targets".to_string()));
+        let ServiceTarget::Process {
+            binary,
+            args,
+            env,
+            working_dir,
+        } = &config.target
+        else {
+            return Err(crate::Error::Config(
+                "ProcessExecutor can only handle Process targets".to_string(),
+            ));
         };
 
         info!("Starting process service: {}", config.name);
@@ -49,12 +57,12 @@ impl ServiceExecutor for ProcessExecutor {
         // Build command
         let mut cmd = Command::new(binary);
         cmd.args(args);
-        
+
         // Set environment variables
         for (key, value) in env {
             cmd.env(key, value);
         }
-        
+
         // Set working directory if specified
         if let Some(wd) = working_dir {
             cmd.current_dir(wd);
@@ -64,7 +72,10 @@ impl ServiceExecutor for ProcessExecutor {
         let result = self.executor.execute(&Target::Command, cmd).await?;
         let pid = 0; // TODO: Get actual PID from result
 
-        info!("Started process service '{}' with PID: {}", config.name, pid);
+        info!(
+            "Started process service '{}' with PID: {}",
+            config.name, pid
+        );
 
         // Create running service instance
         let running_service = RunningService::new(config.name.clone(), config)
@@ -82,18 +93,23 @@ impl ServiceExecutor for ProcessExecutor {
             // In a more sophisticated implementation, we'd track the actual process handle
             let mut kill_cmd = Command::new("kill");
             kill_cmd.args(&[pid.to_string()]);
-            
+
             match self.executor.execute(&Target::Command, kill_cmd).await {
                 Ok(result) => {
                     if result.success() {
                         info!("Successfully stopped service: {}", service.name);
                     } else {
-                        warn!("Kill command failed for service: {}, trying SIGKILL", service.name);
-                        
+                        warn!(
+                            "Kill command failed for service: {}, trying SIGKILL",
+                            service.name
+                        );
+
                         // Try force kill
                         let mut force_kill_cmd = Command::new("kill");
                         force_kill_cmd.args(&["-9", &pid.to_string()]);
-                        self.executor.execute(&Target::Command, force_kill_cmd).await?;
+                        self.executor
+                            .execute(&Target::Command, force_kill_cmd)
+                            .await?;
                     }
                 }
                 Err(e) => {
@@ -120,7 +136,9 @@ impl ServiceExecutor for ProcessExecutor {
                     }
                 }
                 Err(_) => {
-                    return Ok(HealthStatus::Unhealthy("Failed to check process".to_string()));
+                    return Ok(HealthStatus::Unhealthy(
+                        "Failed to check process".to_string(),
+                    ));
                 }
             }
         }
@@ -156,7 +174,7 @@ mod tests {
     #[test]
     fn test_can_handle() {
         let executor = ProcessExecutor::new();
-        
+
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
@@ -168,9 +186,9 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(executor.can_handle(&process_config));
-        
+
         let docker_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
@@ -182,7 +200,7 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(!executor.can_handle(&docker_config));
     }
 
@@ -190,19 +208,19 @@ mod tests {
     fn test_start_simple_process() {
         smol::block_on(async {
             let executor = ProcessExecutor::new();
-        
-        let config = ServiceConfig {
-            name: "echo-test".to_string(),
-            target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello world".to_string()],
-                env: HashMap::new(),
-                working_dir: None,
-            },
-            dependencies: vec![],
-            health_check: None,
-        };
-        
+
+            let config = ServiceConfig {
+                name: "echo-test".to_string(),
+                target: ServiceTarget::Process {
+                    binary: "echo".to_string(),
+                    args: vec!["hello world".to_string()],
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+                dependencies: vec![],
+                health_check: None,
+            };
+
             let service = executor.start(config).await.unwrap();
             assert_eq!(service.name, "echo-test");
             assert!(service.pid.is_some());

@@ -4,16 +4,18 @@
 //! service lifecycle across different execution environments.
 
 use crate::{
-    config::{ServiceConfig, ServiceStatus},
+    config::{HealthCheck, ServiceConfig, ServiceStatus},
     executors::{DockerExecutor, ProcessExecutor, RemoteExecutor, RunningService, ServiceExecutor},
-    health::{HealthMonitor, HealthStatus},
+    health::{HealthChecker, HealthMonitor, HealthStatus},
     package::{DeployedPackage, PackageDeployer, RemoteTarget},
     Result,
 };
-use service_registry::{network::{NetworkManager, NetworkConfig}, registry::Registry};
+use service_registry::{
+    network::{NetworkConfig, NetworkManager},
+    registry::Registry,
+};
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::{Arc as StdArc, RwLock};
+use std::sync::{Arc, RwLock};
 use tracing::{debug, info, warn};
 
 /// Central service orchestrator
@@ -25,9 +27,9 @@ pub struct ServiceManager {
     /// Service executors by type
     executors: HashMap<String, Arc<dyn ServiceExecutor>>,
     /// Currently running services
-    active_services: StdArc<RwLock<HashMap<String, RunningService>>>,
+    active_services: Arc<RwLock<HashMap<String, RunningService>>>,
     /// Service health monitors
-    health_monitors: StdArc<RwLock<HashMap<String, HealthMonitor>>>,
+    health_monitors: Arc<RwLock<HashMap<String, HealthMonitor>>>,
     /// Package deployer for remote services
     package_deployer: PackageDeployer,
 }
@@ -36,14 +38,13 @@ impl ServiceManager {
     /// Create a new service manager
     pub async fn new() -> Result<Self> {
         info!("Initializing ServiceManager");
-        
+
         // Create harness directory if it doesn't exist
         let state_dir = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("harness");
-        std::fs::create_dir_all(&state_dir)
-            .map_err(|e| crate::Error::Io(e))?;
-        
+        std::fs::create_dir_all(&state_dir).map_err(|e| crate::Error::Io(e))?;
+
         // Create registry with persistence
         let registry_path = state_dir.join("registry.json");
         let registry = if registry_path.exists() {
@@ -54,30 +55,36 @@ impl ServiceManager {
                     registry
                 }
                 Err(e) => {
-                    warn!("Failed to load registry state: {}. Starting with empty registry.", e);
+                    warn!(
+                        "Failed to load registry state: {}. Starting with empty registry.",
+                        e
+                    );
                     Registry::with_persistence(registry_path.to_string_lossy())
                 }
             }
         } else {
-            info!("No existing registry found, creating new one at {:?}", registry_path);
+            info!(
+                "No existing registry found, creating new one at {:?}",
+                registry_path
+            );
             Registry::with_persistence(registry_path.to_string_lossy())
         };
-        
+
         let network_config = NetworkConfig::default();
         let network_manager = NetworkManager::new(network_config)?;
-        
+
         // Initialize executors
         let mut executors: HashMap<String, Arc<dyn ServiceExecutor>> = HashMap::new();
         executors.insert("process".to_string(), Arc::new(ProcessExecutor::new()));
         executors.insert("docker".to_string(), Arc::new(DockerExecutor::new()));
         executors.insert("remote".to_string(), Arc::new(RemoteExecutor::new()));
-        
+
         Ok(Self {
             registry,
             network_manager,
             executors,
-            active_services: StdArc::new(RwLock::new(HashMap::new())),
-            health_monitors: StdArc::new(RwLock::new(HashMap::new())),
+            active_services: Arc::new(RwLock::new(HashMap::new())),
+            health_monitors: Arc::new(RwLock::new(HashMap::new())),
             package_deployer: PackageDeployer::new(),
         })
     }
@@ -85,7 +92,7 @@ impl ServiceManager {
     /// Start a service with the given configuration
     pub async fn start_service(&self, name: &str, config: ServiceConfig) -> Result<()> {
         info!("Starting service: {}", name);
-        
+
         // Check if service is already running
         {
             let active = self.active_services.read().unwrap();
@@ -96,22 +103,28 @@ impl ServiceManager {
 
         // Inject network configuration
         let network_config = self.inject_network_config(&config).await?;
-        
+
         // Find appropriate executor
         let executor = self.find_executor(&network_config)?;
-        
+
         // Start the service
         let running_service = executor.start(network_config.clone()).await?;
-        
+
         // Start health monitoring if configured
         if let Some(health_check) = &network_config.health_check {
             let monitor = HealthMonitor::new(health_check.clone());
-            self.health_monitors.write().unwrap().insert(name.to_string(), monitor);
+            self.health_monitors
+                .write()
+                .unwrap()
+                .insert(name.to_string(), monitor);
         }
-        
+
         // Store running service
-        self.active_services.write().unwrap().insert(name.to_string(), running_service.clone());
-        
+        self.active_services
+            .write()
+            .unwrap()
+            .insert(name.to_string(), running_service.clone());
+
         // Register with service registry
         let execution_info = match &config.target {
             crate::config::ServiceTarget::Process { binary, args, .. } => {
@@ -137,19 +150,19 @@ impl ServiceManager {
                 }
             }
         };
-        
+
         let service_entry = service_registry::models::ServiceEntry::new(
             name.to_string(),
             "1.0.0".to_string(), // Version could come from config
             execution_info,
             service_registry::models::Location::Local,
         )?;
-        
+
         // Register the service
         if let Err(e) = self.registry.register(service_entry).await {
             warn!("Failed to register service with registry: {}", e);
         }
-        
+
         info!("Successfully started service: {}", name);
         Ok(())
     }
@@ -157,38 +170,46 @@ impl ServiceManager {
     /// Stop a running service
     pub async fn stop_service(&self, name: &str) -> Result<()> {
         info!("Stopping service: {}", name);
-        
+
         let service = {
             let mut active = self.active_services.write().unwrap();
             active.remove(name)
         };
-        
+
         let Some(service) = service else {
             return Err(crate::Error::ServiceNotFound(name.to_string()));
         };
-        
+
         // Find executor and stop service
         let executor = self.find_executor(&service.config)?;
         executor.stop(&service).await?;
-        
+
         // Remove health monitor
         self.health_monitors.write().unwrap().remove(name);
-        
+
         // Update service state in registry to stopped
-        if let Err(e) = self.registry.update_state(name, service_registry::models::ServiceState::Stopped).await {
+        if let Err(e) = self
+            .registry
+            .update_state(name, service_registry::models::ServiceState::Stopped)
+            .await
+        {
             warn!("Failed to update service state in registry: {}", e);
         }
-        
+
         info!("Successfully stopped service: {}", name);
         Ok(())
     }
 
     /// Deploy a package to a remote target
-    pub async fn deploy_package(&self, target: RemoteTarget, package_path: &str) -> Result<DeployedPackage> {
+    pub async fn deploy_package(
+        &self,
+        target: RemoteTarget,
+        package_path: &str,
+    ) -> Result<DeployedPackage> {
         info!("Deploying package {} to {}", package_path, target.host);
-        
+
         let deployed = self.package_deployer.deploy(package_path, target).await?;
-        
+
         info!("Successfully deployed package: {}", deployed.manifest.name);
         Ok(deployed)
     }
@@ -220,12 +241,12 @@ impl ServiceManager {
                 }
             }
         }
-        
+
         let active = self.active_services.read().unwrap();
         let Some(service) = active.get(name) else {
             return Ok(ServiceStatus::Stopped);
         };
-        
+
         // Check health if monitor exists
         if let Some(monitor) = self.health_monitors.read().unwrap().get(name) {
             match monitor.current_status() {
@@ -254,34 +275,84 @@ impl ServiceManager {
     /// Run health checks for all monitored services
     pub async fn run_health_checks(&self) -> Result<HashMap<String, HealthStatus>> {
         let mut results = HashMap::new();
-        
-        let mut monitors = self.health_monitors.write().unwrap();
-        for (name, monitor) in monitors.iter_mut() {
-            debug!("Running health check for service: {}", name);
-            
-            match monitor.check().await {
-                Ok(status) => {
-                    results.insert(name.clone(), status);
+
+        // Get all service names to check
+        let services_to_check: Vec<String> = {
+            let monitors = self.health_monitors.read().unwrap();
+            monitors.keys().cloned().collect()
+        };
+
+        // Run health checks for each service
+        for service_name in services_to_check {
+            debug!("Running health check for service: {}", service_name);
+
+            // Get the monitor config and check status
+            let (has_monitor, config) = {
+                let monitors = self.health_monitors.read().unwrap();
+                if let Some(monitor) = monitors.get(&service_name) {
+                    (true, monitor.config.clone())
+                } else {
+                    (false, HealthCheck::default())
                 }
-                Err(e) => {
-                    warn!("Health check failed for service {}: {}", name, e);
-                    results.insert(name.clone(), HealthStatus::Unhealthy(e.to_string()));
+            };
+
+            let status = if has_monitor {
+                // Create a temporary checker to run the health check
+                let checker = HealthChecker::new();
+                match checker.check_health(&config).await {
+                    Ok(HealthStatus::Healthy) => {
+                        // Update consecutive failures to 0
+                        if let Some(monitor) =
+                            self.health_monitors.write().unwrap().get_mut(&service_name)
+                        {
+                            monitor.consecutive_failures = 0;
+                            monitor.last_status = HealthStatus::Healthy;
+                        }
+                        HealthStatus::Healthy
+                    }
+                    Ok(status) => {
+                        // Update monitor state
+                        if let Some(monitor) =
+                            self.health_monitors.write().unwrap().get_mut(&service_name)
+                        {
+                            if matches!(status, HealthStatus::Unhealthy(_)) {
+                                monitor.consecutive_failures += 1;
+                            }
+                            monitor.last_status = status.clone();
+                        }
+                        status
+                    }
+                    Err(e) => {
+                        warn!("Health check failed for service {}: {}", service_name, e);
+                        let status = HealthStatus::Unhealthy(e.to_string());
+                        if let Some(monitor) =
+                            self.health_monitors.write().unwrap().get_mut(&service_name)
+                        {
+                            monitor.consecutive_failures += 1;
+                            monitor.last_status = status.clone();
+                        }
+                        status
+                    }
                 }
-            }
+            } else {
+                HealthStatus::Unknown
+            };
+
+            results.insert(service_name, status);
         }
-        
+
         Ok(results)
     }
 
     /// Inject network configuration into service config
     async fn inject_network_config(&self, config: &ServiceConfig) -> Result<ServiceConfig> {
         debug!("Injecting network config for service: {}", config.name);
-        
+
         // TODO: Implement network injection:
         // 1. Register service with network manager
         // 2. Resolve dependency IPs
         // 3. Update environment variables
-        
+
         // For now, return config as-is
         Ok(config.clone())
     }
@@ -293,17 +364,11 @@ impl ServiceManager {
                 return Ok(executor.clone());
             }
         }
-        
+
         Err(crate::Error::Config(format!(
             "No executor found for service target: {:?}",
             config.target
         )))
-    }
-
-    /// Register a custom executor
-    pub fn register_executor(&mut self, name: String, executor: Arc<dyn ServiceExecutor>) {
-        info!("Registering custom executor: {}", name);
-        self.executors.insert(name, executor);
     }
 
     /// Get network manager reference
@@ -327,7 +392,7 @@ mod tests {
     fn test_service_manager_creation() {
         smol::block_on(async {
             let manager = ServiceManager::new().await.unwrap();
-            
+
             // Verify executors are registered
             assert!(manager.executors.contains_key("process"));
             assert!(manager.executors.contains_key("docker"));
@@ -339,7 +404,7 @@ mod tests {
     fn test_find_executor() {
         smol::block_on(async {
             let manager = ServiceManager::new().await.unwrap();
-            
+
             let process_config = ServiceConfig {
                 name: "test".to_string(),
                 target: ServiceTarget::Process {
@@ -351,7 +416,7 @@ mod tests {
                 dependencies: vec![],
                 health_check: None,
             };
-            
+
             let executor = manager.find_executor(&process_config).unwrap();
             assert!(executor.can_handle(&process_config));
         });
@@ -361,7 +426,7 @@ mod tests {
     fn test_service_not_found() {
         smol::block_on(async {
             let manager = ServiceManager::new().await.unwrap();
-            
+
             let result = manager.stop_service("nonexistent").await;
             assert!(matches!(result, Err(crate::Error::ServiceNotFound(_))));
         });
@@ -371,7 +436,7 @@ mod tests {
     fn test_list_services_empty() {
         smol::block_on(async {
             let manager = ServiceManager::new().await.unwrap();
-            
+
             let services = manager.list_services().await.unwrap();
             assert!(services.is_empty());
         });

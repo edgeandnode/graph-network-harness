@@ -7,7 +7,7 @@ use crate::{
     Result,
 };
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, Command, Executor, target::Target};
+use command_executor::{backends::LocalLauncher, target::Target, Command, Executor};
 use futures::stream::{self, StreamExt};
 use tracing::{info, warn};
 
@@ -36,8 +36,16 @@ impl Default for DockerExecutor {
 #[async_trait]
 impl ServiceExecutor for DockerExecutor {
     async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
-        let ServiceTarget::Docker { image, env, ports, volumes } = &config.target else {
-            return Err(crate::Error::Config("DockerExecutor can only handle Docker targets".to_string()));
+        let ServiceTarget::Docker {
+            image,
+            env,
+            ports,
+            volumes,
+        } = &config.target
+        else {
+            return Err(crate::Error::Config(
+                "DockerExecutor can only handle Docker targets".to_string(),
+            ));
         };
 
         info!("Starting Docker service: {}", config.name);
@@ -73,11 +81,17 @@ impl ServiceExecutor for DockerExecutor {
         let result = self.executor.execute(&Target::Command, cmd).await?;
 
         if !result.success() {
-            return Err(crate::Error::Config(format!("Docker run failed: {}", result.output)));
+            return Err(crate::Error::Config(format!(
+                "Docker run failed: {}",
+                result.output
+            )));
         }
 
         let container_id = result.output.trim().to_string();
-        info!("Started Docker service '{}' with container ID: {}", config.name, container_id);
+        info!(
+            "Started Docker service '{}' with container ID: {}",
+            config.name, container_id
+        );
 
         // Create running service instance
         let running_service = RunningService::new(config.name.clone(), config)
@@ -100,8 +114,11 @@ impl ServiceExecutor for DockerExecutor {
                 let mut rm_cmd = Command::new("docker");
                 rm_cmd.args(&["rm", container_id]);
                 self.executor.execute(&Target::Command, rm_cmd).await?;
-                
-                info!("Successfully stopped and removed Docker service: {}", service.name);
+
+                info!(
+                    "Successfully stopped and removed Docker service: {}",
+                    service.name
+                );
             } else {
                 warn!("Failed to stop Docker service: {}", service.name);
             }
@@ -115,13 +132,13 @@ impl ServiceExecutor for DockerExecutor {
             // Check container status
             let mut inspect_cmd = Command::new("docker");
             inspect_cmd.args(&["inspect", "--format", "{{.State.Running}}", container_id]);
-            
+
             let result = self.executor.execute(&Target::Command, inspect_cmd).await?;
-            
+
             if !result.success() {
                 return Ok(HealthStatus::Unhealthy("Container not found".to_string()));
             }
-            
+
             let running = result.output.trim();
             if running != "true" {
                 return Ok(HealthStatus::Unhealthy("Container not running".to_string()));
@@ -135,11 +152,11 @@ impl ServiceExecutor for DockerExecutor {
                 let mut exec_args = vec!["exec".to_string(), container_id.clone()];
                 exec_args.push(health_check.command.clone());
                 exec_args.extend(health_check.args.clone());
-                
+
                 let mut exec_cmd = Command::new("docker");
                 exec_cmd.args(&exec_args);
                 let result = self.executor.execute(&Target::Command, exec_cmd).await?;
-                
+
                 if result.success() {
                     Ok(HealthStatus::Healthy)
                 } else {
@@ -179,7 +196,7 @@ mod tests {
     #[test]
     fn test_can_handle() {
         let executor = DockerExecutor::new();
-        
+
         let docker_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
@@ -191,9 +208,9 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(executor.can_handle(&docker_config));
-        
+
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
@@ -205,7 +222,7 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(!executor.can_handle(&process_config));
     }
 }

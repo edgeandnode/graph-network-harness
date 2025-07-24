@@ -34,62 +34,85 @@ impl Default for RemoteExecutor {
 impl ServiceExecutor for RemoteExecutor {
     async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
         match config.target.clone() {
-            ServiceTarget::RemoteLan { host, user, binary, args } => {
-                info!("Starting remote LAN service: {} on {}@{}", config.name, user, host);
-                
+            ServiceTarget::RemoteLan {
+                host,
+                user,
+                binary,
+                args,
+            } => {
+                info!(
+                    "Starting remote LAN service: {} on {}@{}",
+                    config.name, user, host
+                );
+
                 // TODO: Implement SSH connection and command execution
                 // This would use command-executor's SshLauncher
-                
+
                 // For now, return a placeholder
                 let running_service = RunningService::new(config.name.clone(), config)
                     .with_metadata("executor_type".to_string(), "remote_lan".to_string())
                     .with_metadata("host".to_string(), host.clone())
                     .with_metadata("user".to_string(), user.clone());
-                
+
                 Ok(running_service)
             }
-            ServiceTarget::Wireguard { host, user, package } => {
-                info!("Starting WireGuard service: {} on {}@{}", config.name, user, host);
-                
+            ServiceTarget::Wireguard {
+                host,
+                user,
+                package,
+            } => {
+                info!(
+                    "Starting WireGuard service: {} on {}@{}",
+                    config.name, user, host
+                );
+
                 // TODO: Implement package deployment and service start
-                
+
                 let running_service = RunningService::new(config.name.clone(), config)
                     .with_metadata("executor_type".to_string(), "wireguard".to_string())
                     .with_metadata("host".to_string(), host.clone())
                     .with_metadata("user".to_string(), user.clone())
                     .with_metadata("package".to_string(), package.clone());
-                
+
                 Ok(running_service)
             }
-            _ => Err(crate::Error::Config("RemoteExecutor can only handle RemoteLan and Wireguard targets".to_string())),
+            _ => Err(crate::Error::Config(
+                "RemoteExecutor can only handle RemoteLan and Wireguard targets".to_string(),
+            )),
         }
     }
 
     async fn stop(&self, service: &RunningService) -> Result<()> {
         info!("Stopping remote service: {}", service.name);
-        
+
         // TODO: Implement remote service stopping via SSH
-        
-        warn!("Remote service stopping not yet implemented for: {}", service.name);
+
+        warn!(
+            "Remote service stopping not yet implemented for: {}",
+            service.name
+        );
         Ok(())
     }
 
     async fn health_check(&self, service: &RunningService) -> Result<HealthStatus> {
         // TODO: Implement remote health checking
-        
+
         // For now, return unknown
         Ok(HealthStatus::Unknown)
     }
 
     async fn get_logs(&self, service: &RunningService) -> Result<LogStream> {
         // TODO: Implement remote log streaming
-        
+
         let stream = stream::empty().boxed();
         Ok(stream)
     }
 
     fn can_handle(&self, config: &ServiceConfig) -> bool {
-        matches!(config.target, ServiceTarget::RemoteLan { .. } | ServiceTarget::Wireguard { .. })
+        matches!(
+            config.target,
+            ServiceTarget::RemoteLan { .. } | ServiceTarget::Wireguard { .. }
+        )
     }
 }
 
@@ -101,7 +124,7 @@ mod tests {
     #[test]
     fn test_can_handle() {
         let executor = RemoteExecutor::new();
-        
+
         let remote_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::RemoteLan {
@@ -113,9 +136,9 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(executor.can_handle(&remote_config));
-        
+
         let wireguard_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Wireguard {
@@ -126,9 +149,9 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(executor.can_handle(&wireguard_config));
-        
+
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
@@ -140,7 +163,7 @@ mod tests {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         assert!(!executor.can_handle(&process_config));
     }
 }

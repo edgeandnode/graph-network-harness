@@ -4,22 +4,21 @@ use std::path::Path;
 
 pub async fn run(config_path: &Path) -> Result<()> {
     println!("Validating {}...", config_path.display());
-    
+
     // Try to parse the configuration
-    let config = parser::parse_file(config_path)
-        .context("Failed to parse configuration")?;
-    
+    let config = parser::parse_file(config_path).context("Failed to parse configuration")?;
+
     // Basic validation is done during parsing
     println!("✓ Configuration valid");
     println!("  Version: {}", config.version);
-    
+
     if let Some(name) = &config.name {
         println!("  Name: {}", name);
     }
-    
+
     println!("  Networks: {}", config.networks.len());
     println!("  Services: {}", config.services.len());
-    
+
     // Check for any services with missing environment variables
     // This is a dry-run check, we don't fail on missing vars during validate
     for (name, service) in &config.services {
@@ -38,13 +37,16 @@ pub async fn run(config_path: &Path) -> Result<()> {
                     }
                 }
             }
-            
+
             if !missing_vars.is_empty() {
-                println!("  ⚠ Service '{}' references undefined environment variables: {}", 
-                    name, missing_vars.join(", "));
+                println!(
+                    "  ⚠ Service '{}' references undefined environment variables: {}",
+                    name,
+                    missing_vars.join(", ")
+                );
             }
         }
     }
-    
+
     Ok(())
 }

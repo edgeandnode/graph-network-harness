@@ -1,12 +1,12 @@
 //! Command type for building executable commands
 
 use async_process::Command as AsyncCommand;
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
-use std::collections::HashMap;
 
 /// A command to be executed
-/// 
+///
 /// This is a builder for creating commands that can be converted to `async_process::Command`
 /// when needed. Unlike `AsyncCommand`, this type is `Clone` and can be reused multiple times.
 #[derive(Debug, Clone)]
@@ -59,7 +59,8 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
-        self.env.insert(key.as_ref().to_owned(), val.as_ref().to_owned());
+        self.env
+            .insert(key.as_ref().to_owned(), val.as_ref().to_owned());
         self
     }
 
@@ -111,10 +112,10 @@ impl Command {
     /// Prepare this command for execution by converting to an `async_process::Command`
     pub fn prepare(&self) -> AsyncCommand {
         let mut cmd = AsyncCommand::new(&self.program);
-        
+
         // Add arguments
         cmd.args(&self.args);
-        
+
         // Set environment
         if self.env_clear {
             cmd.env_clear();
@@ -122,12 +123,12 @@ impl Command {
         for (key, val) in &self.env {
             cmd.env(key, val);
         }
-        
+
         // Set working directory
         if let Some(dir) = &self.current_dir {
             cmd.current_dir(dir);
         }
-        
+
         cmd
     }
 }
@@ -197,7 +198,7 @@ mod tests {
     fn test_command_with_args() {
         let mut cmd = Command::new("ls");
         cmd.arg("-la").arg("/tmp");
-        
+
         assert_eq!(cmd.get_args().len(), 2);
         assert_eq!(cmd.get_args()[0], "-la");
         assert_eq!(cmd.get_args()[1], "/tmp");
@@ -211,22 +212,22 @@ mod tests {
             .env("TEST_VAR", "test_value")
             .current_dir("/tmp")
             .build();
-        
+
         assert_eq!(cmd.get_program(), "echo");
         assert_eq!(cmd.get_args().len(), 2);
         assert_eq!(cmd.get_args()[0], "hello");
         assert_eq!(cmd.get_args()[1], "world");
-        assert_eq!(cmd.get_envs().get(OsStr::new("TEST_VAR")), Some(&OsString::from("test_value")));
+        assert_eq!(
+            cmd.get_envs().get(OsStr::new("TEST_VAR")),
+            Some(&OsString::from("test_value"))
+        );
         assert_eq!(cmd.get_current_dir(), Some(std::path::Path::new("/tmp")));
     }
 
     #[test]
     fn test_command_prepare() {
-        let cmd = Command::builder("echo")
-            .arg("hello")
-            .arg("world")
-            .build();
-        
+        let cmd = Command::builder("echo").arg("hello").arg("world").build();
+
         let _async_cmd = cmd.prepare();
         // We can't easily test the AsyncCommand internals, but we can ensure it's created
         // The fact that it compiles and doesn't panic is the test
@@ -238,9 +239,9 @@ mod tests {
             .arg("arg1")
             .env("KEY", "VALUE")
             .build();
-        
+
         let cmd2 = cmd1.clone();
-        
+
         assert_eq!(cmd1.get_program(), cmd2.get_program());
         assert_eq!(cmd1.get_args(), cmd2.get_args());
         assert_eq!(cmd1.get_envs(), cmd2.get_envs());

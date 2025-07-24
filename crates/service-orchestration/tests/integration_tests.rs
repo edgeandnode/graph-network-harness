@@ -3,11 +3,9 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    ServiceConfig, ServiceTarget, ServiceStatus, HealthCheck,
-    HealthChecker, HealthStatus,
-    ProcessExecutor, DockerExecutor, RemoteExecutor, ServiceExecutor,
-    PackageDeployer, RemoteTarget, PackageManifest, PackageService, PackageHealthCheck,
-    ServiceManager,
+    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, PackageDeployer, PackageHealthCheck,
+    PackageManifest, PackageService, ProcessExecutor, RemoteExecutor, RemoteTarget, ServiceConfig,
+    ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -37,7 +35,7 @@ fn test_service_config_yaml_roundtrip() {
     // Test YAML serialization
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
     let deserialized: ServiceConfig = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
-    
+
     assert_eq!(config.name, deserialized.name);
     assert_eq!(config.dependencies, deserialized.dependencies);
     assert!(matches!(deserialized.target, ServiceTarget::Process { .. }));
@@ -66,7 +64,7 @@ fn test_docker_service_config() {
     // Test that Docker executor can handle this config
     let executor = DockerExecutor::new();
     assert!(executor.can_handle(&config));
-    
+
     // Test that other executors cannot handle this config
     let process_executor = ProcessExecutor::new();
     let remote_executor = RemoteExecutor::new();
@@ -91,7 +89,7 @@ fn test_remote_lan_service_config() {
     // Test that Remote executor can handle this config
     let executor = RemoteExecutor::new();
     assert!(executor.can_handle(&config));
-    
+
     // Test that other executors cannot handle this config
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
@@ -135,10 +133,10 @@ fn test_service_target_env_methods() {
     // Test with_env() method
     let mut new_env = HashMap::new();
     new_env.insert("NEW_VAR".to_string(), "new_value".to_string());
-    
+
     let updated_target = target.with_env(new_env.clone());
     assert_eq!(updated_target.env(), new_env);
-    
+
     // Original target should be unchanged
     assert_eq!(target.env(), env);
 }
@@ -147,7 +145,7 @@ fn test_service_target_env_methods() {
 fn test_health_checker_basic_functionality() {
     smol::block_on(async {
         let checker = HealthChecker::new();
-        
+
         // Test successful health check
         let success_config = HealthCheck {
             command: "true".to_string(),
@@ -156,10 +154,10 @@ fn test_health_checker_basic_functionality() {
             retries: 1,
             timeout: 5,
         };
-        
+
         let result = checker.check_health(&success_config).await.unwrap();
         assert_eq!(result, HealthStatus::Healthy);
-        
+
         // Test failing health check
         let fail_config = HealthCheck {
             command: "false".to_string(),
@@ -168,7 +166,7 @@ fn test_health_checker_basic_functionality() {
             retries: 1,
             timeout: 5,
         };
-        
+
         let result = checker.check_health(&fail_config).await.unwrap();
         assert!(matches!(result, HealthStatus::Unhealthy(_)));
     });
@@ -192,14 +190,18 @@ fn test_package_manifest_serialization() {
         dependencies: vec!["redis".to_string(), "postgres".to_string()],
         environment: HashMap::from([
             ("LOG_LEVEL".to_string(), "info".to_string()),
-            ("DATABASE_URL".to_string(), "postgres://localhost/mydb".to_string()),
+            (
+                "DATABASE_URL".to_string(),
+                "postgres://localhost/mydb".to_string(),
+            ),
         ]),
     };
 
     // Test YAML serialization
     let yaml = serde_yaml::to_string(&manifest).expect("Failed to serialize manifest");
-    let deserialized: PackageManifest = serde_yaml::from_str(&yaml).expect("Failed to deserialize manifest");
-    
+    let deserialized: PackageManifest =
+        serde_yaml::from_str(&yaml).expect("Failed to deserialize manifest");
+
     assert_eq!(manifest.name, deserialized.name);
     assert_eq!(manifest.version, deserialized.version);
     assert_eq!(manifest.dependencies, deserialized.dependencies);
@@ -214,17 +216,17 @@ fn test_remote_target_install_paths() {
         user: "deployer".to_string(),
         install_dir: None,
     };
-    
+
     // Test default install path
     assert_eq!(target.install_path(), "/opt/harness/my-app");
-    
+
     let custom_target = RemoteTarget {
         service_name: "my-app".to_string(),
         host: "example.com".to_string(),
         user: "deployer".to_string(),
         install_dir: Some("/custom/install/path".to_string()),
     };
-    
+
     // Test custom install path
     assert_eq!(custom_target.install_path(), "/custom/install/path");
 }
@@ -233,7 +235,7 @@ fn test_remote_target_install_paths() {
 fn test_service_manager_initialization() {
     smol::block_on(async {
         let manager = ServiceManager::new().await.unwrap();
-        
+
         // Test that all executors are registered
         let process_config = ServiceConfig {
             name: "test-process".to_string(),
@@ -246,7 +248,7 @@ fn test_service_manager_initialization() {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         let docker_config = ServiceConfig {
             name: "test-docker".to_string(),
             target: ServiceTarget::Docker {
@@ -258,7 +260,7 @@ fn test_service_manager_initialization() {
             dependencies: vec![],
             health_check: None,
         };
-        
+
         // The manager should be able to find appropriate executors
         // (We can't test the actual service starting without infrastructure)
         assert!(manager.list_services().await.unwrap().is_empty());
@@ -274,20 +276,21 @@ fn test_service_status_serialization() {
         ServiceStatus::Unhealthy,
         ServiceStatus::Failed("Something went wrong".to_string()),
     ];
-    
+
     for status in statuses {
         let yaml = serde_yaml::to_string(&status).expect("Failed to serialize status");
-        let deserialized: ServiceStatus = serde_yaml::from_str(&yaml).expect("Failed to deserialize status");
-        
+        let deserialized: ServiceStatus =
+            serde_yaml::from_str(&yaml).expect("Failed to deserialize status");
+
         // Check that serialization/deserialization preserves the status type
         match (&status, &deserialized) {
-            (ServiceStatus::Stopped, ServiceStatus::Stopped) => {},
-            (ServiceStatus::Starting, ServiceStatus::Starting) => {},
-            (ServiceStatus::Running, ServiceStatus::Running) => {},
-            (ServiceStatus::Unhealthy, ServiceStatus::Unhealthy) => {},
+            (ServiceStatus::Stopped, ServiceStatus::Stopped) => {}
+            (ServiceStatus::Starting, ServiceStatus::Starting) => {}
+            (ServiceStatus::Running, ServiceStatus::Running) => {}
+            (ServiceStatus::Unhealthy, ServiceStatus::Unhealthy) => {}
             (ServiceStatus::Failed(msg1), ServiceStatus::Failed(msg2)) => {
                 assert_eq!(msg1, msg2);
-            },
+            }
             _ => panic!("Status mismatch: {:?} != {:?}", status, deserialized),
         }
     }
@@ -298,7 +301,7 @@ fn test_executor_type_detection() {
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
     let remote_executor = RemoteExecutor::new();
-    
+
     let process_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Process {
@@ -310,7 +313,7 @@ fn test_executor_type_detection() {
         dependencies: vec![],
         health_check: None,
     };
-    
+
     let docker_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Docker {
@@ -322,7 +325,7 @@ fn test_executor_type_detection() {
         dependencies: vec![],
         health_check: None,
     };
-    
+
     let remote_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::RemoteLan {
@@ -334,16 +337,16 @@ fn test_executor_type_detection() {
         dependencies: vec![],
         health_check: None,
     };
-    
+
     // Test that each executor only handles its own type
     assert!(process_executor.can_handle(&process_config));
     assert!(!process_executor.can_handle(&docker_config));
     assert!(!process_executor.can_handle(&remote_config));
-    
+
     assert!(!docker_executor.can_handle(&process_config));
     assert!(docker_executor.can_handle(&docker_config));
     assert!(!docker_executor.can_handle(&remote_config));
-    
+
     assert!(!remote_executor.can_handle(&process_config));
     assert!(!remote_executor.can_handle(&docker_config));
     assert!(remote_executor.can_handle(&remote_config));
@@ -351,10 +354,8 @@ fn test_executor_type_detection() {
 
 #[test]
 fn test_service_config_env_injection() {
-    let original_env = HashMap::from([
-        ("ORIGINAL".to_string(), "value".to_string()),
-    ]);
-    
+    let original_env = HashMap::from([("ORIGINAL".to_string(), "value".to_string())]);
+
     let config = ServiceConfig {
         name: "test-service".to_string(),
         target: ServiceTarget::Process {
@@ -366,18 +367,18 @@ fn test_service_config_env_injection() {
         dependencies: vec!["db".to_string()],
         health_check: None,
     };
-    
+
     // Test environment injection (simulating network config injection)
     let injected_env = HashMap::from([
         ("DB_ADDR".to_string(), "192.168.1.100".to_string()),
         ("SERVICE_NAME".to_string(), "test-service".to_string()),
     ]);
-    
+
     let updated_config = config.with_env(injected_env.clone());
-    
+
     // Original config should be unchanged
     assert_eq!(config.target.env(), original_env);
-    
+
     // Updated config should have new environment
     assert_eq!(updated_config.target.env(), injected_env);
     assert_eq!(updated_config.name, config.name);

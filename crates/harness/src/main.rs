@@ -12,7 +12,7 @@ struct Cli {
     /// Configuration file path
     #[arg(short, long, global = true, default_value = "services.yaml")]
     config: PathBuf,
-    
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -21,22 +21,22 @@ struct Cli {
 enum Commands {
     /// Validate configuration file
     Validate,
-    
+
     /// Start services
     Start {
         /// Services to start (empty means all)
         services: Vec<String>,
     },
-    
+
     /// Stop services
     Stop {
         /// Services to stop (empty means all)
         services: Vec<String>,
     },
-    
+
     /// Show service status
     Status,
-    
+
     /// Daemon management commands
     Daemon {
         #[command(subcommand)]
@@ -52,24 +52,14 @@ enum DaemonCommands {
 
 fn main() -> Result<()> {
     smol::block_on(async {
-    let cli = Cli::parse();
-    
-    match cli.command {
-        Commands::Validate => {
-            commands::validate::run(&cli.config).await
+        let cli = Cli::parse();
+
+        match cli.command {
+            Commands::Validate => commands::validate::run(&cli.config).await,
+            Commands::Start { services } => commands::start::run(&cli.config, services).await,
+            Commands::Stop { services } => commands::stop::run(&cli.config, services).await,
+            Commands::Status => commands::status::run(&cli.config).await,
+            Commands::Daemon { command } => commands::daemon::run(command).await,
         }
-        Commands::Start { services } => {
-            commands::start::run(&cli.config, services).await
-        }
-        Commands::Stop { services } => {
-            commands::stop::run(&cli.config, services).await
-        }
-        Commands::Status => {
-            commands::status::run(&cli.config).await
-        }
-        Commands::Daemon { command } => {
-            commands::daemon::run(command).await
-        }
-    }
     })
 }

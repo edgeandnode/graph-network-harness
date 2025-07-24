@@ -1,6 +1,6 @@
 //! Integration tests for harness-config
 
-use harness_config::{parser, Config, Service, ServiceType, Network, HealthCheck, HealthCheckType};
+use harness_config::{parser, Config, HealthCheck, HealthCheckType, Network, Service, ServiceType};
 use std::collections::HashMap;
 
 #[test]
@@ -93,45 +93,58 @@ services:
 "#;
 
     let config = parser::parse_str(yaml).unwrap();
-    
+
     // Check basic fields
     assert_eq!(config.version, "1.0");
     assert_eq!(config.name.as_deref(), Some("test-deployment"));
     assert_eq!(config.description.as_deref(), Some("Test configuration"));
-    
+
     // Check settings
     assert_eq!(config.settings.log_level.as_deref(), Some("debug"));
     assert_eq!(config.settings.health_check_interval, Some(30));
     assert_eq!(config.settings.startup_timeout, Some(300));
     assert_eq!(config.settings.shutdown_timeout, Some(30));
-    
+
     // Check networks
     assert_eq!(config.networks.len(), 2);
-    assert!(matches!(config.networks.get("local"), Some(Network::Local { .. })));
-    assert!(matches!(config.networks.get("lan"), Some(Network::Lan { .. })));
-    
+    assert!(matches!(
+        config.networks.get("local"),
+        Some(Network::Local { .. })
+    ));
+    assert!(matches!(
+        config.networks.get("lan"),
+        Some(Network::Lan { .. })
+    ));
+
     // Check services
     assert_eq!(config.services.len(), 4);
-    
+
     // Check Docker service
     let postgres = config.services.get("postgres").unwrap();
     assert_eq!(postgres.network, "local");
-    assert!(matches!(&postgres.service_type, ServiceType::Docker { image, .. } if image == "postgres:15"));
-    assert_eq!(postgres.env.get("POSTGRES_PASSWORD"), Some(&"secret".to_string()));
-    
+    assert!(
+        matches!(&postgres.service_type, ServiceType::Docker { image, .. } if image == "postgres:15")
+    );
+    assert_eq!(
+        postgres.env.get("POSTGRES_PASSWORD"),
+        Some(&"secret".to_string())
+    );
+
     // Check health check
     assert!(postgres.health_check.is_some());
     let hc = postgres.health_check.as_ref().unwrap();
-    assert!(matches!(&hc.check_type, HealthCheckType::Command { command, .. } if command == "pg_isready"));
+    assert!(
+        matches!(&hc.check_type, HealthCheckType::Command { command, .. } if command == "pg_isready")
+    );
     assert_eq!(hc.interval, 10);
     assert_eq!(hc.retries, 5);
     assert_eq!(hc.timeout, 5);
     assert_eq!(hc.start_period, 30);
-    
+
     // Check dependencies
     let api = config.services.get("api").unwrap();
     assert_eq!(api.dependencies, vec!["postgres"]);
-    
+
     let worker = config.services.get("worker").unwrap();
     assert_eq!(worker.dependencies, vec!["api"]);
 }
@@ -164,11 +177,11 @@ services:
 
     let config = parser::parse_str(yaml).unwrap();
     let service_config = parser::convert_to_orchestrator(&config, "test-service").unwrap();
-    
+
     assert_eq!(service_config.name, "test-service");
     assert_eq!(service_config.dependencies.len(), 0);
     assert!(service_config.health_check.is_some());
-    
+
     let hc = service_config.health_check.unwrap();
     assert_eq!(hc.command, "test");
     assert_eq!(hc.args, vec!["-e", "/tmp/healthy"]);
@@ -187,11 +200,14 @@ networks:
     type: local
 services: {}
 "#;
-    
+
     let result = parser::parse_str(yaml);
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Unsupported version"));
-    
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Unsupported version"));
+
     // Test missing network reference
     let yaml = r#"
 version: "1.0"
@@ -204,11 +220,11 @@ services:
     network: nonexistent
     binary: "/usr/bin/test"
 "#;
-    
+
     let result = parser::parse_str(yaml);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("unknown network"));
-    
+
     // Test missing dependency
     let yaml = r#"
 version: "1.0"
@@ -223,7 +239,7 @@ services:
     dependencies:
       - nonexistent
 "#;
-    
+
     let result = parser::parse_str(yaml);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("unknown service"));
@@ -251,10 +267,10 @@ services:
 
     let config = parser::parse_str(yaml).unwrap();
     let service = config.services.get("redis").unwrap();
-    
+
     assert!(service.health_check.is_some());
     let hc = service.health_check.as_ref().unwrap();
-    
+
     // Verify TCP check is converted to nc command
     let orchestrator_config = parser::convert_to_orchestrator(&config, "redis").unwrap();
     let orch_hc = orchestrator_config.health_check.unwrap();
@@ -281,7 +297,7 @@ services:
 "#;
 
     let config = parser::parse_str(yaml).unwrap();
-    
+
     // Verify HTTP check is converted to curl command
     let orchestrator_config = parser::convert_to_orchestrator(&config, "api").unwrap();
     let hc = orchestrator_config.health_check.unwrap();

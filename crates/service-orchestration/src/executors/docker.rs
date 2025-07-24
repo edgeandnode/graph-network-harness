@@ -17,6 +17,15 @@ pub struct DockerExecutor {
     health_checker: HealthChecker,
 }
 
+/// Container state information
+#[derive(Debug)]
+struct ContainerState {
+    id: String,
+    state: String,
+    status: String,
+    is_running: bool,
+}
+
 impl DockerExecutor {
     /// Create a new Docker executor
     pub fn new() -> Self {
@@ -24,6 +33,64 @@ impl DockerExecutor {
             executor: Executor::new("docker-executor".to_string(), LocalLauncher),
             health_checker: HealthChecker::new(),
         }
+    }
+    
+    /// Detect existing container by name
+    async fn detect_existing_container(&self, name: &str) -> Result<Option<ContainerState>> {
+        let container_name = format!("orchestrator-{}", name);
+        
+        // Check if container exists
+        let mut ps_cmd = Command::new("docker");
+        ps_cmd.args(&[
+            "ps", "-a",
+            "--filter", &format!("name={}", container_name),
+            "--format", "{{.ID}}|{{.State}}|{{.Status}}",
+            "--no-trunc",
+        ]);
+        
+        let result = self.executor.execute(&Target::Command, ps_cmd).await?;
+        if !result.success() {
+            return Ok(None);
+        }
+        
+        let output = result.output.trim();
+        if output.is_empty() {
+            return Ok(None);
+        }
+        
+        // Parse the output (ID|State|Status)
+        let parts: Vec<&str> = output.split('|').collect();
+        if parts.len() >= 3 {
+            Ok(Some(ContainerState {
+                id: parts[0].to_string(),
+                state: parts[1].to_string(),
+                status: parts[2].to_string(),
+                is_running: parts[1] == "running",
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Adopt an existing container as a running service
+    async fn adopt_container(&self, container_state: &ContainerState, config: ServiceConfig) -> Result<RunningService> {
+        info!(
+            "Adopting existing container '{}' for service '{}'", 
+            &container_state.id[..12], 
+            config.name
+        );
+        
+        // Get network information
+        let network_info = self.get_container_network_info(&container_state.id).await?;
+        
+        // Create running service instance
+        let running_service = RunningService::new(config.name.clone(), config)
+            .with_container_id(container_state.id.clone())
+            .with_network_info(network_info)
+            .with_metadata("executor_type".to_string(), "docker".to_string())
+            .with_metadata("adopted".to_string(), "true".to_string());
+            
+        Ok(running_service)
     }
     
     /// Get network information for a container
@@ -98,6 +165,35 @@ impl ServiceExecutor for DockerExecutor {
         };
 
         info!("Starting Docker service: {}", config.name);
+        
+        // Check if container already exists
+        if let Some(existing) = self.detect_existing_container(&config.name).await? {
+            match existing.is_running {
+                true => {
+                    // Container is running - adopt it
+                    info!(
+                        "Container 'orchestrator-{}' is already running (status: {}). Adopting it.",
+                        config.name, existing.status
+                    );
+                    return self.adopt_container(&existing, config).await;
+                }
+                false => {
+                    // Container exists but is not running - remove it
+                    info!(
+                        "Container 'orchestrator-{}' exists but is {} (status: {}). Removing it.",
+                        config.name, existing.state, existing.status
+                    );
+                    
+                    let mut rm_cmd = Command::new("docker");
+                    rm_cmd.args(&["rm", "-f", &existing.id]);
+                    let result = self.executor.execute(&Target::Command, rm_cmd).await?;
+                    
+                    if !result.success() {
+                        warn!("Failed to remove container: {}", result.output);
+                    }
+                }
+            }
+        }
 
         // Build docker run command
         let mut args = vec![
@@ -132,7 +228,7 @@ impl ServiceExecutor for DockerExecutor {
         if !result.success() {
             return Err(crate::Error::Config(format!(
                 "Docker run failed: {}",
-                result.output
+                result.output.trim()
             )));
         }
 
@@ -162,6 +258,27 @@ impl ServiceExecutor for DockerExecutor {
         info!("Stopping Docker service: {}", service.name);
 
         if let Some(container_id) = &service.container_id {
+            // First check if container exists
+            let mut inspect_cmd = Command::new("docker");
+            inspect_cmd.args(&["inspect", "--format", "{{.State.Status}}", container_id]);
+            let inspect_result = self.executor.execute(&Target::Command, inspect_cmd).await?;
+            
+            if !inspect_result.success() {
+                info!("Container {} not found, nothing to stop", &container_id[..12]);
+                return Ok(());
+            }
+            
+            let status = inspect_result.output.trim();
+            if status == "exited" || status == "dead" {
+                info!("Container {} is already stopped (status: {})", &container_id[..12], status);
+                // Just remove it
+                let mut rm_cmd = Command::new("docker");
+                rm_cmd.args(&["rm", "-f", container_id]);
+                self.executor.execute(&Target::Command, rm_cmd).await?;
+                return Ok(());
+            }
+            
+            // Container is running, stop it
             let mut stop_cmd = Command::new("docker");
             stop_cmd.args(&["stop", container_id]);
             let result = self.executor.execute(&Target::Command, stop_cmd).await?;

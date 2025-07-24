@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 pub mod parser;
+pub mod resolver;
 
 /// Configuration error types
 #[derive(Debug, Error)]

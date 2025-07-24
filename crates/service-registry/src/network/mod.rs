@@ -16,8 +16,9 @@ pub mod topology;
 pub mod ip_allocator;
 pub mod resolver;
 
-#[cfg(feature = "wireguard")]
-pub mod wireguard;
+// TODO: Implement wireguard module when adding WireGuard support
+// #[cfg(feature = "wireguard")]
+// pub mod wireguard;
 
 pub use topology::{NetworkTopology, NetworkLocation};
 pub use ip_allocator::IpAllocator;

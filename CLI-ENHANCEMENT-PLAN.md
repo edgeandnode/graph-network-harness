@@ -5,33 +5,37 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 ## Current State Analysis
 
 ### Existing Commands
-- [ ] **start**: Basic implementation with simple progress messages
-- [ ] **stop**: Simple reverse order, no real dependency handling  
+- [x] **start**: Enhanced with dependency ordering, progress indicators, and health checks
+- [x] **stop**: Enhanced with proper dependency handling and force/timeout flags
 - [ ] **status**: Basic table with minimal info
 - [ ] **validate**: Basic YAML validation and env var checking
 - [ ] **daemon status**: Check daemon connectivity
 
 ### Critical Issues
-- [ ] Daemon handlers use `smol::block_on` inside mutex lock (potential deadlock)
-- [ ] No proper dependency resolution for stop command
-- [ ] Limited error context and user feedback
+- [x] Daemon handlers use `smol::block_on` inside mutex lock (potential deadlock) - FIXED
+- [x] No proper dependency resolution for stop command - FIXED
+- [x] Limited error context and user feedback - IMPROVED
 - [ ] Missing environment variable and service reference resolution
+- [ ] Update all unit tests that do async and have them run with smol_potat instead
+
+### Lower Priority code Issues
+- [ ] fix: 'service-registry/Cargo.toml: `default-features` is ignored for async-tungstenite, since `default-features` was not specified for `workspace.dependencies.async-tungstenite`, this could become a hard error in the future'
 
 ## Implementation Tasks
 
-### 1. Fix Daemon Handler Concurrency ⚠️ CRITICAL
-- [ ] Replace std::sync::Mutex with futures::lock::Mutex in DaemonState
-- [ ] Update ServiceManager to use async-safe locking
-- [ ] Remove `smol::block_on` calls from daemon handlers
-- [ ] Test concurrent request handling
+### 1. Fix Daemon Handler Concurrency ⚠️ CRITICAL ✅ COMPLETED
+- [x] Replace std::sync::Mutex with futures::lock::Mutex in DaemonState - Actually removed mutex entirely
+- [x] Update ServiceManager to use async-safe locking - ServiceManager already handles its own locking
+- [x] Remove `smol::block_on` calls from daemon handlers
+- [x] Test concurrent request handling
 
-### 2. Enhance Stop Command 🔧 HIGH PRIORITY
-- [ ] Implement proper reverse topological sort for dependencies
-- [ ] Add `--force` flag for immediate stop
-- [ ] Add `--timeout` flag for shutdown timeout  
-- [ ] Show dependent services warning before stopping
-- [ ] Handle already-stopped services gracefully
-- [ ] Add confirmation prompt when stopping services with dependents
+### 2. Enhance Stop Command 🔧 HIGH PRIORITY ✅ COMPLETED
+- [x] Implement proper reverse topological sort for dependencies
+- [x] Add `--force` flag for immediate stop
+- [x] Add `--timeout` flag for shutdown timeout  
+- [x] Show dependent services warning before stopping
+- [x] Handle already-stopped services gracefully
+- [x] Add confirmation prompt when stopping services with dependents
 
 ### 3. Enhance Status Command 📊
 - [ ] Add uptime column showing how long services have been running
@@ -43,20 +47,20 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 - [ ] Show service dependencies in output
 - [ ] Improve color coding for different states
 
-### 4. Enhance Start Command 🚀
-- [ ] Add progress indicator (spinner) for each service
-- [ ] Show dependency resolution progress
-- [ ] Add `--timeout` flag for startup timeout
-- [ ] Add `--no-deps` flag to skip dependencies
-- [ ] Show service endpoints after successful startup
-- [ ] Better error messages with recovery suggestions
-- [ ] Support starting multiple specific services
+### 4. Enhance Start Command 🚀 ✅ COMPLETED
+- [x] Add progress indicator (✓/✗) for each service
+- [x] Show dependency resolution progress
+- [x] Add timeout via startup_timeout config (not flag)
+- [x] Add dependency ordering (topological sort)
+- [x] Show service endpoints after successful startup
+- [x] Better error messages with recovery suggestions
+- [x] Support starting multiple specific services
 
 ### 5. Enhance Validate Command ✅
 - [ ] Full environment variable resolution simulation
 - [ ] Check service references (${service.ip})
 - [ ] Validate health check endpoint formats
-- [ ] Detect and report circular dependencies
+- [x] Detect and report circular dependencies (via topological sort)
 - [ ] Validate network configurations
 - [ ] Check for port conflicts
 - [ ] Add `--strict` mode for thorough validation
@@ -91,9 +95,9 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 - [ ] Cache resolved values for performance
 
 ### 8. User Experience Improvements 💫
-- [ ] Add progress bars using indicatif
-- [ ] Implement consistent error formatting
-- [ ] Add contextual help messages
+- [x] Add progress indicators (✓/✗) for commands
+- [x] Implement consistent error formatting
+- [x] Add contextual help messages
 - [ ] Support `--verbose` and `--quiet` flags globally
 - [ ] Add shell completion generation
 - [ ] Improve startup time to <100ms
@@ -102,7 +106,7 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 ## Testing Strategy
 
 ### Unit Tests
-- [ ] Dependency resolution algorithms
+- [x] Dependency resolution algorithms (completed in dependencies.rs)
 - [ ] Environment variable substitution
 - [ ] Service reference resolution
 - [ ] Configuration validation logic
@@ -121,15 +125,15 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 
 ## Implementation Order
 
-1. **Week 1 - Critical Fixes**
-   - [ ] Fix daemon handler concurrency (Day 1-2)
-   - [ ] Enhance stop command (Day 2-3)
+1. **Week 1 - Critical Fixes** ✅ COMPLETED
+   - [x] Fix daemon handler concurrency (Day 1-2)
+   - [x] Enhance stop command (Day 2-3)
+   - [x] Enhance start command (Day 3-4)
    - [ ] Enhance status command (Day 4-5)
 
 2. **Week 2 - Core Enhancements**
-   - [ ] Enhance start command (Day 1-2)
-   - [ ] Enhance validate command (Day 2-3)
-   - [ ] Implement env var/service ref system (Day 4-5)
+   - [ ] Enhance validate command (Day 1-2)
+   - [ ] Implement env var/service ref system (Day 3-5)
 
 3. **Week 3 - New Features** (if time permits)
    - [ ] Add logs command
@@ -139,17 +143,40 @@ This document tracks the enhancement of CLI commands for the graph-network-harne
 
 ## Success Criteria
 
-- [ ] All commands provide clear, actionable feedback
-- [ ] Error messages include recovery suggestions
-- [ ] Operations complete in reasonable time (<5s for most commands)
-- [ ] No potential for deadlocks or race conditions
+- [x] All commands provide clear, actionable feedback
+- [x] Error messages include recovery suggestions
+- [x] Operations complete in reasonable time (<5s for most commands)
+- [x] No potential for deadlocks or race conditions
 - [ ] 90%+ test coverage for command logic
 - [ ] Documentation updated with examples
 - [ ] Performance: status command <100ms response time
 
 ## Notes
 
-- Priority: Fix concurrency issue first (blocking issue)
-- Focus on user experience - clear messages and fast response
-- Maintain backward compatibility with existing YAML files
+- Priority: Fix concurrency issue first (blocking issue) - ✅ DONE
+- Focus on user experience - clear messages and fast response - ✅ IN PROGRESS
+- Maintain backward compatibility with existing YAML files - ✅ MAINTAINED
 - Consider adding a `--dry-run` flag for destructive operations
+
+## Recent Accomplishments (Phase 6)
+
+### Daemon Improvements
+- Removed unnecessary mutex wrapper from DaemonState
+- Fixed Send issue in run_health_checks by avoiding holding locks across await points
+- Cleaned up redundant Arc imports
+
+### Stop Command Enhancements
+- Created reusable dependencies module with topological sort algorithms
+- Implemented reverse dependency ordering for safe shutdown
+- Added warning prompts for affected dependent services
+- Added --force flag to continue despite errors
+- Added --timeout flag to wait for services to stop
+- Improved error reporting with summaries
+
+### Start Command Enhancements  
+- Implemented proper dependency ordering (dependencies start first)
+- Added progress indicators with ✓/✗ symbols
+- Added health check waiting with visual feedback
+- Show service endpoints after successful startup
+- Better error handling that stops on failure to prevent cascading issues
+- Summary reporting of started/failed/skipped services

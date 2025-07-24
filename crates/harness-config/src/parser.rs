@@ -2,6 +2,7 @@
 
 use crate::{
     Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Result, Service, ServiceType,
+    resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
 use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
@@ -50,6 +51,9 @@ fn validate_config(config: &Config) -> Result<()> {
             }
         }
     }
+
+    // Validate all variable references
+    validate_references(config)?;
 
     Ok(())
 }
@@ -137,14 +141,25 @@ pub fn process_service_env(
 
 /// Convert configuration to orchestrator types
 pub fn convert_to_orchestrator(config: &Config, service_name: &str) -> Result<ServiceConfig> {
+    convert_to_orchestrator_with_context(config, service_name, None)
+}
+
+/// Convert configuration to orchestrator types with resolution context
+pub fn convert_to_orchestrator_with_context(
+    config: &Config,
+    service_name: &str,
+    context: Option<&ResolutionContext>,
+) -> Result<ServiceConfig> {
     let service = config
         .services
         .get(service_name)
         .ok_or_else(|| ConfigError::ServiceNotFound(service_name.to_string()))?;
 
-    // For MVP, we'll use empty service IPs map - the orchestrator will handle IP assignment
-    let service_ips = HashMap::new();
-    let env = process_service_env(service, &service_ips)?;
+    // Use provided context or create a default one
+    let default_context = ResolutionContext::new();
+    let ctx = context.unwrap_or(&default_context);
+    
+    let env = resolve_service_env(service, ctx)?;
 
     let target = match &service.service_type {
         ServiceType::Docker {

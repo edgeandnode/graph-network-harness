@@ -1,8 +1,8 @@
-use crate::commands::client;
+use crate::commands::{client, dependencies};
 use anyhow::{Context, Result};
 use harness::protocol::{Request, Response};
-use harness_config::parser;
-use std::collections::{HashMap, HashSet};
+use harness_config::{parser, resolver::ResolutionContext};
+use std::io::{self, Write};
 use std::path::Path;
 
 pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
@@ -12,26 +12,38 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
     // Connect to daemon
     let mut daemon = client::connect_to_daemon().await?;
 
-    // Determine which services to start
-    let services_to_start = if services.is_empty() {
-        // Start all services
-        config.services.keys().cloned().collect()
-    } else {
-        // Start specified services and their dependencies
-        resolve_dependencies(&config.services, &services)
-    };
+    // Get services in dependency order (dependencies first)
+    let ordered_services = dependencies::topological_sort(&config, &services)?;
 
-    println!("Starting {} services...", services_to_start.len());
+    println!("Starting {} services...", ordered_services.len());
 
-    // Start services in dependency order
-    let ordered_services = topological_sort(&config.services, &services_to_start)?;
+    // Track failures
+    let mut failures = Vec::new();
+    let mut started_services = Vec::new();
+    
+    // Create resolution context for environment variables and service references
+    let mut resolution_context = ResolutionContext::new();
 
-    for service_name in ordered_services {
-        println!("Starting {}...", service_name);
+    for service_name in &ordered_services {
+        let service_def = config
+            .services
+            .get(service_name)
+            .ok_or_else(|| anyhow::anyhow!("Service '{}' not found in configuration", service_name))?;
 
-        // Convert to orchestrator config
-        let service_config = parser::convert_to_orchestrator(&config, &service_name)
-            .context(format!("Failed to convert config for '{}'", service_name))?;
+        // Show progress
+        print!("Starting {}...", service_name);
+        io::stdout().flush()?;
+
+        // Convert from harness_config types to service_orchestration types with resolution context
+        let service_config = match parser::convert_to_orchestrator_with_context(&config, service_name, Some(&resolution_context)) {
+            Ok(config) => config,
+            Err(e) => {
+                println!(" ✗");
+                eprintln!("  Error: Failed to convert service config: {}", e);
+                failures.push((service_name.clone(), e.to_string()));
+                continue;
+            }
+        };
 
         // Send start request to daemon
         let request = Request::StartService {
@@ -39,96 +51,149 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
             config: service_config,
         };
 
-        let response = daemon
-            .send_request(request)
-            .await
-            .context(format!("Failed to start '{}'", service_name))?;
-
-        // Check response
-        match response {
-            Response::Success => {}
-            Response::Error { message } => {
-                anyhow::bail!("Failed to start '{}': {}", service_name, message);
+        match daemon.send_request(request).await {
+            Ok(Response::Success) => {
+                println!(" ✓");
+                started_services.push(service_name.clone());
+                
+                // Wait for service to be running if it has a health check
+                if service_def.health_check.is_some() {
+                    print!("  Waiting for health check...");
+                    io::stdout().flush()?;
+                    
+                    let start = std::time::Instant::now();
+                    let timeout = std::time::Duration::from_secs(
+                        service_def.startup_timeout.unwrap_or(60)
+                    );
+                    
+                    loop {
+                        if start.elapsed() > timeout {
+                            println!(" ⚠️  Timeout");
+                            break;
+                        }
+                        
+                        // Check service status
+                        match daemon
+                            .send_request(Request::GetServiceStatus {
+                                name: service_name.clone(),
+                            })
+                            .await
+                        {
+                            Ok(Response::ServiceStatus { status }) => {
+                                match status {
+                                    service_orchestration::ServiceStatus::Running => {
+                                        println!(" ✓");
+                                        break;
+                                    }
+                                    service_orchestration::ServiceStatus::Failed(msg) => {
+                                        println!(" ✗");
+                                        eprintln!("    Service failed: {}", msg);
+                                        break;
+                                    }
+                                    service_orchestration::ServiceStatus::Unhealthy => {
+                                        // Keep waiting, might recover
+                                    }
+                                    _ => {
+                                        // Still starting
+                                    }
+                                }
+                            }
+                            _ => break,
+                        }
+                        
+                        smol::Timer::after(std::time::Duration::from_millis(500)).await;
+                    }
+                }
             }
-            _ => anyhow::bail!("Unexpected response from daemon"),
+            Ok(Response::Error { message }) => {
+                println!(" ✗");
+                eprintln!("  Error: {}", message);
+                failures.push((service_name.clone(), message));
+                
+                // Stop on failure - dependencies won't work
+                eprintln!("  Aborting due to failure (dependent services cannot start)");
+                break;
+            }
+            Ok(_) => {
+                println!(" ✗");
+                eprintln!("  Unexpected response from daemon");
+                failures.push((service_name.clone(), "Unexpected response".to_string()));
+            }
+            Err(e) => {
+                println!(" ✗");
+                eprintln!("  Error: {}", e);
+                failures.push((service_name.clone(), e.to_string()));
+                break;
+            }
         }
-
-        println!("Started {}", service_name);
     }
 
-    println!("All services started successfully");
-    Ok(())
-}
+    // Print summary
+    println!("\n{} services started successfully", started_services.len());
+    
+    if !failures.is_empty() {
+        eprintln!("\n{} services failed to start:", failures.len());
+        for (service, error) in &failures {
+            eprintln!("  - {}: {}", service, error);
+        }
+        
+        // Show which services were not started due to failures
+        let not_started: Vec<String> = ordered_services
+            .into_iter()
+            .filter(|s| !started_services.contains(s) && !failures.iter().any(|(name, _)| name == s))
+            .collect();
+            
+        if !not_started.is_empty() {
+            eprintln!("\n{} services were not started due to dependency failures:", not_started.len());
+            for service in &not_started {
+                eprintln!("  - {}", service);
+            }
+        }
+    }
 
-/// Resolve all dependencies for the given services
-fn resolve_dependencies(
-    all_services: &HashMap<String, harness_config::Service>,
-    requested: &[String],
-) -> Vec<String> {
-    let mut to_start = HashSet::new();
-    let mut to_process: Vec<String> = requested.to_vec();
-
-    while let Some(service) = to_process.pop() {
-        if to_start.insert(service.clone()) {
-            if let Some(svc) = all_services.get(&service) {
-                for dep in &svc.dependencies {
-                    to_process.push(dep.clone());
+    // Show service endpoints if all started successfully
+    if failures.is_empty() && !started_services.is_empty() {
+        println!("\nService endpoints:");
+        for service_name in &started_services {
+            if let Some(service_def) = config.services.get(service_name) {
+                match &service_def.service_type {
+                    harness_config::ServiceType::Docker { ports, .. } => {
+                        for port in ports {
+                            match port {
+                                harness_config::PortMapping::Simple(p) => {
+                                    println!("  {}: http://localhost:{}", service_name, p);
+                                }
+                                harness_config::PortMapping::Full(mapping) => {
+                                    if let Some((host, _)) = mapping.split_once(':') {
+                                        println!("  {}: http://localhost:{}", service_name, host);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    harness_config::ServiceType::Process { .. } => {
+                        // Could check health check for endpoint info
+                        if let Some(health_check) = &service_def.health_check {
+                            match &health_check.check_type {
+                                harness_config::HealthCheckType::Http { http } => {
+                                    println!("  {}: {}", service_name, http);
+                                }
+                                harness_config::HealthCheckType::Tcp { tcp } => {
+                                    println!("  {}: tcp://localhost:{}", service_name, tcp.port);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
     }
 
-    to_start.into_iter().collect()
-}
-
-/// Sort services in dependency order (dependencies first)
-fn topological_sort(
-    all_services: &HashMap<String, harness_config::Service>,
-    services_to_start: &[String],
-) -> Result<Vec<String>> {
-    let mut sorted = Vec::new();
-    let mut visited = HashSet::new();
-    let mut visiting = HashSet::new();
-
-    for service in services_to_start {
-        visit_service(
-            service,
-            all_services,
-            &mut visited,
-            &mut visiting,
-            &mut sorted,
-        )?;
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!("{} services failed to start", failures.len())
     }
-
-    Ok(sorted)
-}
-
-fn visit_service(
-    service: &str,
-    all_services: &HashMap<String, harness_config::Service>,
-    visited: &mut HashSet<String>,
-    visiting: &mut HashSet<String>,
-    sorted: &mut Vec<String>,
-) -> Result<()> {
-    if visited.contains(service) {
-        return Ok(());
-    }
-
-    if visiting.contains(service) {
-        anyhow::bail!("Circular dependency detected involving '{}'", service);
-    }
-
-    visiting.insert(service.to_string());
-
-    if let Some(svc) = all_services.get(service) {
-        for dep in &svc.dependencies {
-            visit_service(dep, all_services, visited, visiting, sorted)?;
-        }
-    }
-
-    visiting.remove(service);
-    visited.insert(service.to_string());
-    sorted.push(service.to_string());
-
-    Ok(())
 }

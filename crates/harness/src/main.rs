@@ -20,7 +20,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Validate configuration file
-    Validate,
+    Validate {
+        /// Strict mode - fail on missing environment variables
+        #[arg(short, long)]
+        strict: bool,
+    },
 
     /// Start services
     Start {
@@ -32,6 +36,14 @@ enum Commands {
     Stop {
         /// Services to stop (empty means all)
         services: Vec<String>,
+        
+        /// Force stop even if dependents are running
+        #[arg(short, long)]
+        force: bool,
+        
+        /// Timeout in seconds to wait for services to stop
+        #[arg(short, long)]
+        timeout: Option<u64>,
     },
 
     /// Show service status
@@ -55,9 +67,9 @@ fn main() -> Result<()> {
         let cli = Cli::parse();
 
         match cli.command {
-            Commands::Validate => commands::validate::run(&cli.config).await,
+            Commands::Validate { strict } => commands::validate::run(&cli.config, strict).await,
             Commands::Start { services } => commands::start::run(&cli.config, services).await,
-            Commands::Stop { services } => commands::stop::run(&cli.config, services).await,
+            Commands::Stop { services, force, timeout } => commands::stop::run(&cli.config, services, force, timeout).await,
             Commands::Status => commands::status::run(&cli.config).await,
             Commands::Daemon { command } => commands::daemon::run(command).await,
         }

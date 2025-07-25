@@ -28,6 +28,9 @@ service-registry = { path = "../service-registry" }
 
 # Graph Protocol specific dependencies
 reqwest = { workspace = true }
+schemars = { workspace = true }
+chrono = { workspace = true }
+async-channel = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

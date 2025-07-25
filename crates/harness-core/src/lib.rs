@@ -11,6 +11,7 @@ pub mod client;
 pub mod daemon;
 pub mod error;
 pub mod service;
+pub mod typed_action;
 
 pub use error::{Error, Result};
 
@@ -20,10 +21,12 @@ pub mod prelude {
     pub use crate::client::TestClient;
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::{Error, Result};
-    pub use crate::service::{ServiceType, ServiceTypeRegistry};
+    pub use crate::service::{Service, ServiceStack, ActionDescriptor, JsonService};
+    pub use crate::typed_action::TypedAction;
     
     // Re-export commonly used types from dependencies
     pub use async_trait::async_trait;
+    pub use async_channel::Receiver;
     pub use serde::{Deserialize, Serialize};
     pub use serde_json::{json, Value};
     pub use uuid::Uuid;

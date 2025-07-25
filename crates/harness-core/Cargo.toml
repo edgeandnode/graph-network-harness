@@ -9,6 +9,7 @@ authors.workspace = true
 [dependencies]
 # Async runtime agnostic
 async-trait = { workspace = true }
+async-channel = { workspace = true }
 futures = { workspace = true }
 
 # Serialization
@@ -34,6 +35,9 @@ chrono = { workspace = true }
 
 # Collections
 indexmap = { workspace = true }
+
+# JSON Schema support
+schemars = { workspace = true }
 
 # Re-export core functionality from existing crates
 service-orchestration = { path = "../service-orchestration" }

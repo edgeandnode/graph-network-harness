@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::action::{Action, ActionRegistry};
-use crate::service::{ServiceType, ServiceTypeRegistry};
+use crate::service::ServiceStack;
 use crate::{Error, Result, ServiceManager, Registry};
 
 /// Core daemon trait that all harness daemons must implement
@@ -44,8 +44,8 @@ pub struct BaseDaemon {
     /// Action registry for custom functionality
     action_registry: ActionRegistry,
     
-    /// Service type registry
-    service_type_registry: ServiceTypeRegistry,
+    /// Service stack for actionable services
+    service_stack: ServiceStack,
     
     /// WebSocket server address
     endpoint: SocketAddr,
@@ -73,6 +73,11 @@ impl BaseDaemon {
     /// Get the endpoint
     pub fn endpoint(&self) -> SocketAddr {
         self.endpoint
+    }
+    
+    /// Get the service stack
+    pub fn service_stack(&self) -> &ServiceStack {
+        &self.service_stack
     }
 }
 
@@ -135,7 +140,7 @@ pub struct DaemonBuilder {
     endpoint: SocketAddr,
     registry_path: Option<String>,
     action_registry: ActionRegistry,
-    service_type_registry: ServiceTypeRegistry,
+    service_stack: ServiceStack,
 }
 
 impl DaemonBuilder {
@@ -145,7 +150,7 @@ impl DaemonBuilder {
             endpoint: "127.0.0.1:9443".parse().unwrap(),
             registry_path: None,
             action_registry: ActionRegistry::new(),
-            service_type_registry: ServiceTypeRegistry::new(),
+            service_stack: ServiceStack::new(),
         }
     }
     
@@ -161,10 +166,9 @@ impl DaemonBuilder {
         self
     }
     
-    /// Register a service type
-    pub fn register_service_type<T: ServiceType>(mut self) -> Result<Self> {
-        self.service_type_registry.register::<T>()?;
-        Ok(self)
+    /// Get a mutable reference to the service stack for registration
+    pub fn service_stack_mut(&mut self) -> &mut ServiceStack {
+        &mut self.service_stack
     }
     
     /// Register an action
@@ -217,7 +221,7 @@ impl DaemonBuilder {
             service_manager,
             service_registry,
             action_registry: self.action_registry,
-            service_type_registry: self.service_type_registry,
+            service_stack: self.service_stack,
             endpoint: self.endpoint,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })

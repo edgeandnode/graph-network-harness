@@ -44,6 +44,7 @@ base64 = "0.21"
 async-trait = "0.1"
 pin-project-lite = "0.2"
 nom = "7.1"
+schemars = "0.8"
 
 # New dependencies for distributed features
 wireguard-control = "1.5"
@@ -55,6 +56,7 @@ async-tungstenite = "0.25"
 tungstenite = "0.21"
 async-net = "2.0"
 async-fs = "2.1"
+async-channel = "2.1"
 async-tls = { version = "0.13", default-features = false }
 rustls = "0.21"
 rustls-pemfile = "2.0"

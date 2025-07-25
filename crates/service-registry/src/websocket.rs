@@ -15,7 +15,6 @@ use std::sync::Arc;
 use tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
-#[cfg(feature = "tls")]
 use crate::tls::TlsAcceptor;
 
 /// WebSocket server
@@ -58,7 +57,6 @@ impl WsServer {
         
         // Create appropriate connection handler based on TLS config
         match &self.tls_config {
-            #[cfg(feature = "tls")]
             Some(tls_config) => {
                 let acceptor = TlsAcceptor::from(tls_config.config.clone());
                 let tls_stream = acceptor.accept(tcp_stream).await?;
@@ -73,8 +71,6 @@ impl WsServer {
                     subscriptions: HashSet::new(),
                 }))
             }
-            #[cfg(not(feature = "tls"))]
-            Some(_) => unreachable!("TLS config without TLS feature"),
             None => {
                 let ws_stream = accept_async(tcp_stream).await?;
                 
@@ -101,7 +97,6 @@ pub enum ConnectionHandler {
     /// Plain TCP connection
     Plain(PlainConnectionHandler),
     /// TLS connection
-    #[cfg(feature = "tls")]
     Tls(TlsConnectionHandler),
 }
 
@@ -110,7 +105,6 @@ impl ConnectionHandler {
     pub async fn handle(self) -> Result<()> {
         match self {
             ConnectionHandler::Plain(handler) => handler.handle().await,
-            #[cfg(feature = "tls")]
             ConnectionHandler::Tls(handler) => handler.handle().await,
         }
     }
@@ -125,7 +119,6 @@ pub struct PlainConnectionHandler {
 }
 
 /// TLS connection handler
-#[cfg(feature = "tls")]
 pub struct TlsConnectionHandler {
     ws: WebSocketStream<async_tls::server::TlsStream<TcpStream>>,
     addr: SocketAddr,
@@ -383,7 +376,6 @@ macro_rules! impl_connection_handler {
 
 // Implement the handler logic for both types
 impl_connection_handler!(PlainConnectionHandler);
-#[cfg(feature = "tls")]
 impl_connection_handler!(TlsConnectionHandler);
 
 use serde::Deserialize;

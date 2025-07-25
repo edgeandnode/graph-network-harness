@@ -16,7 +16,6 @@ use tungstenite::Message;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-#[cfg(feature = "tls")]
 use crate::tls::TlsConnector;
 
 /// WebSocket client for service registry
@@ -28,7 +27,6 @@ pub enum WsClient {
         pending_requests: Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>,
     },
     /// TLS connection
-    #[cfg(feature = "tls")]
     Tls {
         ws: WebSocketStream<async_tls::client::TlsStream<TcpStream>>,
         addr: SocketAddr,
@@ -54,32 +52,23 @@ impl WsClient {
     
     /// Connect to a WebSocket server with TLS
     pub async fn connect_tls(addr: SocketAddr, tls_config: TlsClientConfig, server_name: &str) -> Result<Self> {
-        #[cfg(feature = "tls")]
-        {
-            let url = format!("wss://{}", addr);
-            let tcp_stream = TcpStream::connect(addr).await?;
-            
-            // Establish TLS connection
-            let connector = TlsConnector::from(tls_config.config);
-            let tls_stream = connector.connect(server_name, tcp_stream).await?;
-            
-            // WebSocket handshake over TLS
-            let (ws, _) = client_async(&url, tls_stream).await?;
-            
-            info!("Connected to WebSocket server at {} (with TLS)", addr);
-            
-            Ok(Self::Tls {
-                ws,
-                addr,
-                pending_requests: Arc::new(Mutex::new(HashMap::new())),
-            })
-        }
+        let url = format!("wss://{}", addr);
+        let tcp_stream = TcpStream::connect(addr).await?;
         
-        #[cfg(not(feature = "tls"))]
-        {
-            let _ = (tls_config, server_name);
-            Err(Error::Package("TLS support not enabled. Enable the 'tls' feature.".to_string()))
-        }
+        // Establish TLS connection
+        let connector = TlsConnector::from(tls_config.config);
+        let tls_stream = connector.connect(server_name, tcp_stream).await?;
+        
+        // WebSocket handshake over TLS
+        let (ws, _) = client_async(&url, tls_stream).await?;
+        
+        info!("Connected to WebSocket server at {} (with TLS)", addr);
+        
+        Ok(Self::Tls {
+            ws,
+            addr,
+            pending_requests: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
     
     /// Start the message handler (run in background)
@@ -142,7 +131,6 @@ impl WsClient {
                 
                 (handle, Box::pin(handler))
             }
-            #[cfg(feature = "tls")]
             Self::Tls { mut ws, addr, pending_requests } => {
                 let pending_requests_clone = pending_requests.clone();
                 let (tx, rx) = futures::channel::mpsc::unbounded();

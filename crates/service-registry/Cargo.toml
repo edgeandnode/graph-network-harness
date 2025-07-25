@@ -28,11 +28,11 @@ tungstenite = { workspace = true }
 async-net = { workspace = true }
 async-fs = { workspace = true }
 
-# TLS support (optional)
-async-tls = { workspace = true, optional = true, features = ["server", "client"] }
-rustls = { workspace = true, optional = true }
-rustls-pemfile = { workspace = true, optional = true }
-webpki-roots = { workspace = true, optional = true }
+# TLS support (required)
+async-tls = { workspace = true, features = ["server", "client"] }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+webpki-roots = { workspace = true }
 
 # Utilities
 uuid = { workspace = true }
@@ -55,8 +55,6 @@ rcgen = "0.12"
 
 [features]
 default = []
-# TLS support
-tls = ["async-tls", "rustls", "rustls-pemfile", "webpki-roots"]
 # Integration testing features
 integration-tests = []
 docker-tests = []

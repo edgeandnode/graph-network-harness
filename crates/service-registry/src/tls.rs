@@ -4,30 +4,22 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-#[cfg(feature = "tls")]
 use rustls::{Certificate, PrivateKey, ServerConfig, ClientConfig};
 
 /// TLS configuration for server
 #[derive(Clone)]
 pub struct TlsServerConfig {
-    #[cfg(feature = "tls")]
     pub config: Arc<ServerConfig>,
-    #[cfg(not(feature = "tls"))]
-    _private: (),
 }
 
 /// TLS configuration for client
 #[derive(Clone)]
 pub struct TlsClientConfig {
-    #[cfg(feature = "tls")]
     pub config: Arc<ClientConfig>,
-    #[cfg(not(feature = "tls"))]
-    _private: (),
 }
 
 impl TlsServerConfig {
     /// Create TLS server configuration from certificate and key files
-    #[cfg(feature = "tls")]
     pub async fn from_files(cert_path: impl AsRef<Path>, key_path: impl AsRef<Path>) -> Result<Self> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
@@ -78,7 +70,7 @@ impl TlsServerConfig {
     }
     
     /// Create TLS server configuration for testing with self-signed certificate
-    #[cfg(all(feature = "tls", test))]
+    #[cfg(test)]
     pub fn self_signed_for_testing() -> Result<Self> {
         use rcgen::{generate_simple_self_signed, CertifiedKey};
         
@@ -103,15 +95,10 @@ impl TlsServerConfig {
         })
     }
     
-    #[cfg(not(feature = "tls"))]
-    pub async fn from_files(_cert_path: impl AsRef<Path>, _key_path: impl AsRef<Path>) -> Result<Self> {
-        Err(Error::Package("TLS support not enabled. Enable the 'tls' feature.".to_string()))
-    }
 }
 
 impl TlsClientConfig {
     /// Create TLS client configuration with default settings (uses system root certificates)
-    #[cfg(feature = "tls")]
     pub fn default() -> Result<Self> {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.add_trust_anchors(
@@ -135,7 +122,7 @@ impl TlsClientConfig {
     }
     
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
-    #[cfg(all(feature = "tls", test))]
+    #[cfg(test)]
     pub fn dangerous_accept_any_cert() -> Result<Self> {
         use rustls::client::ServerCertVerifier;
         
@@ -166,7 +153,6 @@ impl TlsClientConfig {
     }
     
     /// Create TLS client configuration with custom CA certificate
-    #[cfg(feature = "tls")]
     pub async fn with_ca_cert(ca_cert_path: impl AsRef<Path>) -> Result<Self> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
@@ -198,17 +184,11 @@ impl TlsClientConfig {
             config: Arc::new(config),
         })
     }
-    
-    #[cfg(not(feature = "tls"))]
-    pub fn default() -> Result<Self> {
-        Err(Error::Package("TLS support not enabled. Enable the 'tls' feature.".to_string()))
-    }
 }
 
+
 /// TLS acceptor for server
-#[cfg(feature = "tls")]
 pub type TlsAcceptor = async_tls::TlsAcceptor;
 
 /// TLS connector for client
-#[cfg(feature = "tls")]
 pub type TlsConnector = async_tls::TlsConnector;

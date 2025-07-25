@@ -1,0 +1,48 @@
+[package]
+name = "harness-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Async runtime agnostic
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# WebSocket client/server
+async-tungstenite = { workspace = true }
+async-net = { workspace = true }
+
+# UUID for service IDs
+uuid = { workspace = true, features = ["v4", "serde"] }
+
+# Time handling
+chrono = { workspace = true }
+
+# Collections
+indexmap = { workspace = true }
+
+# Re-export core functionality from existing crates
+service-orchestration = { path = "../service-orchestration" }
+service-registry = { path = "../service-registry" }
+harness-config = { path = "../harness-config" }
+
+[dev-dependencies]
+smol = { workspace = true }
+tempfile = { workspace = true }
+
+[features]
+default = []

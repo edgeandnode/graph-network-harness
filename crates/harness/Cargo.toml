@@ -11,10 +11,6 @@ description = "CLI for graph-network-harness"
 name = "harness"
 path = "src/main.rs"
 
-[[bin]]
-name = "harness-executor-daemon"
-path = "src/bin/daemon.rs"
-
 [dependencies]
 # Workspace dependencies
 clap = { workspace = true }

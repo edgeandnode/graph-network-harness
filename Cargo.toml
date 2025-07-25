@@ -4,7 +4,9 @@ members = [
     "crates/service-registry",
     "crates/service-orchestration",
     "crates/harness-config",
+    "crates/harness-core",
     "crates/harness",
+    "crates/graph-test-daemon",
 ]
 resolver = "2"
 
@@ -58,6 +60,8 @@ rustls = "0.21"
 rustls-pemfile = "2.0"
 webpki-roots = "0.22"
 ipnet = { version = "2.9", features = ["serde"] }
+indexmap = "2.0"
+smol = "2.0"
 
 # Internal crates
 command-executor = { path = "crates/command-executor" }

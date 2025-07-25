@@ -1,0 +1,37 @@
+[package]
+name = "graph-test-daemon"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "Graph Protocol specialized testing daemon"
+
+[dependencies]
+# Core dependencies
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+smol = { workspace = true }
+clap = { workspace = true }
+
+# Harness dependencies
+harness-core = { path = "../harness-core" }
+service-orchestration = { path = "../service-orchestration" }
+service-registry = { path = "../service-registry" }
+
+# Graph Protocol specific dependencies
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "graph-test-daemon"
+path = "src/main.rs"

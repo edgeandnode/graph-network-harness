@@ -44,4 +44,5 @@ dirs = "5.0"
 tempfile = { workspace = true }
 # Use smol for runtime-agnostic tests
 smol = "2.0"
+smol-potat = { workspace = true }
 

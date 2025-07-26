@@ -5,7 +5,7 @@
 
 use crate::{config::HealthCheck, Result};
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, target::Target, Command, Executor, ProcessHandle};
+use command_executor::{backends::LocalLauncher, target::Target, Command, Executor};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
@@ -147,7 +147,6 @@ impl HealthMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_health_status_serialization() {
@@ -180,40 +179,36 @@ mod tests {
         assert_eq!(monitor.current_status(), &HealthStatus::Unknown);
     }
 
-    #[test]
-    fn test_health_checker_success() {
-        smol::block_on(async {
-            let checker = HealthChecker::new();
-            let config = HealthCheck {
-                command: "true".to_string(), // Always succeeds
-                args: vec![],
-                interval: 10,
-                retries: 1,
-                timeout: 5,
-            };
+    #[smol_potat::test]
+    async fn test_health_checker_success() {
+        let checker = HealthChecker::new();
+        let config = HealthCheck {
+            command: "true".to_string(), // Always succeeds
+            args: vec![],
+            interval: 10,
+            retries: 1,
+            timeout: 5,
+        };
 
-            let status = checker.check_health(&config).await.unwrap();
-            assert_eq!(status, HealthStatus::Healthy);
-        });
+        let status = checker.check_health(&config).await.unwrap();
+        assert_eq!(status, HealthStatus::Healthy);
     }
 
-    #[test]
-    fn test_health_checker_failure() {
-        smol::block_on(async {
-            let checker = HealthChecker::new();
-            let config = HealthCheck {
-                command: "false".to_string(), // Always fails
-                args: vec![],
-                interval: 10,
-                retries: 1,
-                timeout: 5,
-            };
+    #[smol_potat::test]
+    async fn test_health_checker_failure() {
+        let checker = HealthChecker::new();
+        let config = HealthCheck {
+            command: "false".to_string(), // Always fails
+            args: vec![],
+            interval: 10,
+            retries: 1,
+            timeout: 5,
+        };
 
-            let status = checker.check_health(&config).await.unwrap();
-            match status {
-                HealthStatus::Unhealthy(_) => {} // Expected
-                _ => panic!("Expected unhealthy status"),
-            }
-        });
+        let status = checker.check_health(&config).await.unwrap();
+        match status {
+            HealthStatus::Unhealthy(_) => {} // Expected
+            _ => panic!("Expected unhealthy status"),
+        }
     }
 }

@@ -13,11 +13,9 @@ pub mod services_test;
 // Export the main types
 pub use daemon::GraphTestDaemon;
 pub use services::{
-    GraphNodeService, GraphNodeAction, GraphNodeEvent,
-    AnvilService, AnvilAction, AnvilEvent,
-    PostgresService, PostgresAction, PostgresEvent,
-    IpfsService, IpfsAction, IpfsEvent,
-    GraphTestStack
+    AnvilAction, AnvilEvent, AnvilService, GraphNodeAction, GraphNodeEvent, GraphNodeService,
+    GraphTestStack, IpfsAction, IpfsEvent, IpfsService, PostgresAction, PostgresEvent,
+    PostgresService,
 };
 
 /// Re-export core types for convenience

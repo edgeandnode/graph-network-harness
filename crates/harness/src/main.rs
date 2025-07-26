@@ -1,4 +1,3 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -36,11 +35,11 @@ enum Commands {
     Stop {
         /// Services to stop (empty means all)
         services: Vec<String>,
-        
+
         /// Force stop even if dependents are running
         #[arg(short, long)]
         force: bool,
-        
+
         /// Timeout in seconds to wait for services to stop
         #[arg(short, long)]
         timeout: Option<u64>,
@@ -51,11 +50,11 @@ enum Commands {
         /// Output format (table or json)
         #[arg(short, long, default_value = "table")]
         format: String,
-        
+
         /// Watch mode - continuously update status
         #[arg(short, long)]
         watch: bool,
-        
+
         /// Show detailed information
         #[arg(short, long)]
         detailed: bool,
@@ -66,7 +65,7 @@ enum Commands {
         #[command(subcommand)]
         command: DaemonCommands,
     },
-    
+
     /// Environment variable management
     Env {
         #[command(subcommand)]
@@ -82,12 +81,6 @@ enum DaemonCommands {
 
 #[derive(Subcommand)]
 enum EnvCommands {
-    /// Set environment variables in the daemon
-    Set {
-        /// Environment variables to set (KEY=VALUE format)
-        variables: Vec<String>,
-    },
-    
     /// Get environment variables from the daemon
     Get {
         /// Variable names to get (empty for all)
@@ -102,13 +95,18 @@ fn main() {
         match cli.command {
             Commands::Validate { strict } => commands::validate::run(&cli.config, strict).await,
             Commands::Start { services } => commands::start::run(&cli.config, services).await,
-            Commands::Stop { services, force, timeout } => commands::stop::run(&cli.config, services, force, timeout).await,
-            Commands::Status { format, watch, detailed } => {
-                commands::status::run(&cli.config, format, watch, detailed).await
-            },
+            Commands::Stop {
+                services,
+                force,
+                timeout,
+            } => commands::stop::run(&cli.config, services, force, timeout).await,
+            Commands::Status {
+                format,
+                watch,
+                detailed,
+            } => commands::status::run(&cli.config, format, watch, detailed).await,
             Commands::Daemon { command } => commands::daemon::run(command).await,
             Commands::Env { command } => match command {
-                EnvCommands::Set { variables } => commands::env::set(variables).await,
                 EnvCommands::Get { names } => commands::env::get(names).await,
             },
         }

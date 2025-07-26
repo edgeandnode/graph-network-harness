@@ -21,7 +21,7 @@ services:
         Ok(_) => println!("  Unexpectedly succeeded"),
         Err(e) => println!("  Error (expected): {}", e),
     }
-    
+
     println!("\nTest 2: Invalid property");
     let yaml2 = r#"
 version: "1.0"

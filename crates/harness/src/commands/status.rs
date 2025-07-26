@@ -1,7 +1,7 @@
 use crate::commands::client;
 use anyhow::{Context, Result};
 use comfy_table::{Cell, Color, Table};
-use harness::protocol::{Request, Response, DetailedServiceInfo};
+use harness::protocol::{DetailedServiceInfo, Request, Response};
 use harness_config::parser;
 use service_orchestration::ServiceStatus;
 use std::path::Path;
@@ -66,21 +66,24 @@ async fn run_once(config_path: &Path, format: &str, detailed: bool) -> Result<()
 
 async fn run_watch_mode(config_path: &Path, format: &str, detailed: bool) -> Result<()> {
     println!("Watch mode - Press Ctrl+C to exit\n");
-    
+
     loop {
         // Clear screen and move cursor to top
         print!("\x1B[2J\x1B[1;1H");
-        
+
         if let Err(e) = run_once(config_path, format, detailed).await {
             eprintln!("Error: {}", e);
         }
-        
+
         // Wait 2 seconds before next refresh
         smol::Timer::after(Duration::from_secs(2)).await;
     }
 }
 
-fn display_basic_table(services_status: &std::collections::HashMap<String, ServiceStatus>, config: &harness_config::Config) -> Result<()> {
+fn display_basic_table(
+    services_status: &std::collections::HashMap<String, ServiceStatus>,
+    config: &harness_config::Config,
+) -> Result<()> {
     let mut table = Table::new();
     table.set_header(vec!["SERVICE", "STATUS", "HEALTH"]);
 
@@ -110,10 +113,18 @@ fn display_basic_table(services_status: &std::collections::HashMap<String, Servi
     Ok(())
 }
 
-fn display_detailed_table(detailed_services: &[DetailedServiceInfo], config: &harness_config::Config) -> Result<()> {
+fn display_detailed_table(
+    detailed_services: &[DetailedServiceInfo],
+    config: &harness_config::Config,
+) -> Result<()> {
     let mut table = Table::new();
     table.set_header(vec![
-        "SERVICE", "STATUS", "NETWORK", "PID/CONTAINER", "DEPENDENCIES", "ENDPOINTS"
+        "SERVICE",
+        "STATUS",
+        "NETWORK",
+        "PID/CONTAINER",
+        "DEPENDENCIES",
+        "ENDPOINTS",
     ]);
 
     // Create a map for quick lookup
@@ -125,7 +136,7 @@ fn display_detailed_table(detailed_services: &[DetailedServiceInfo], config: &ha
     // Display services in config order
     for (service_name, service_config) in &config.services {
         let service_info = service_map.get(service_name);
-        
+
         let (status_str, status_color) = if let Some(info) = service_info {
             match info.status {
                 ServiceStatus::Stopped => ("stopped", Color::DarkGrey),
@@ -165,7 +176,11 @@ fn display_detailed_table(detailed_services: &[DetailedServiceInfo], config: &ha
         };
 
         let dependencies = service_config.dependencies.join(", ");
-        let deps_display = if dependencies.is_empty() { "-" } else { &dependencies };
+        let deps_display = if dependencies.is_empty() {
+            "-"
+        } else {
+            &dependencies
+        };
 
         let endpoints = if let Some(info) = service_info {
             if info.endpoints.is_empty() {

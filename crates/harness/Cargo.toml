@@ -22,7 +22,7 @@ smol = "2.0"
 async-net = { workspace = true }
 async-tungstenite = { workspace = true }
 futures = { workspace = true }
-async-tls = { version = "0.13", default-features = false, features = ["client", "server"] }
+futures-rustls = { workspace = true }
 async-io = "2.0"
 
 # Internal dependencies

@@ -29,11 +29,6 @@ pub enum Request {
     /// Shutdown the daemon
     Shutdown,
 
-    /// Set environment variables in the daemon's process
-    SetEnvironmentVariables {
-        variables: HashMap<String, String>,
-    },
-
     /// Get environment variables from the daemon's process
     GetEnvironmentVariables {
         /// Optional list of variable names to get. If empty, get all.
@@ -86,7 +81,7 @@ pub enum Response {
     Error { message: String },
 
     /// Service started successfully with network info
-    ServiceStarted { 
+    ServiceStarted {
         name: String,
         network_info: ServiceNetworkInfo,
     },
@@ -100,15 +95,11 @@ pub enum Response {
     },
 
     /// List of services with detailed information
-    ServiceListDetailed {
-        services: Vec<DetailedServiceInfo>,
-    },
+    ServiceListDetailed { services: Vec<DetailedServiceInfo> },
 
     /// Health check results
     HealthCheckResults { results: HashMap<String, String> },
 
     /// Environment variables
-    EnvironmentVariables { 
-        variables: HashMap<String, String>,
-    },
+    EnvironmentVariables { variables: HashMap<String, String> },
 }

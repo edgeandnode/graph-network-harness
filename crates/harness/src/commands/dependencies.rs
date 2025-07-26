@@ -27,10 +27,7 @@ pub fn build_dependency_graph(config: &Config) -> HashMap<String, HashSet<String
 
 /// Get services in reverse dependency order (dependents first)
 /// This is used for stopping services safely
-pub fn reverse_topological_sort(
-    config: &Config,
-    services: &[String],
-) -> Result<Vec<String>> {
+pub fn reverse_topological_sort(config: &Config, services: &[String]) -> Result<Vec<String>> {
     let graph = build_dependency_graph(config);
     let mut result = Vec::new();
     let mut visited = HashSet::new();
@@ -51,13 +48,7 @@ pub fn reverse_topological_sort(
     // Perform DFS on each service
     for service in &services_to_stop {
         if !visited.contains(service) {
-            dfs_reverse(
-                service,
-                &graph,
-                &mut visited,
-                &mut visiting,
-                &mut result,
-            )?;
+            dfs_reverse(service, &graph, &mut visited, &mut visiting, &mut result)?;
         }
     }
 
@@ -66,10 +57,7 @@ pub fn reverse_topological_sort(
 
 /// Get services in forward dependency order (dependencies first)
 /// This is used for starting services in correct order
-pub fn topological_sort(
-    config: &Config,
-    services: &[String],
-) -> Result<Vec<String>> {
+pub fn topological_sort(config: &Config, services: &[String]) -> Result<Vec<String>> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
     let mut visiting = HashSet::new();
@@ -89,13 +77,7 @@ pub fn topological_sort(
     // Perform DFS on each service
     for service in &services_to_start {
         if !visited.contains(service) {
-            dfs_forward(
-                service,
-                config,
-                &mut visited,
-                &mut visiting,
-                &mut result,
-            )?;
+            dfs_forward(service, config, &mut visited, &mut visiting, &mut result)?;
         }
     }
 
@@ -147,7 +129,10 @@ fn dfs_reverse(
     result: &mut Vec<String>,
 ) -> Result<()> {
     if visiting.contains(service) {
-        anyhow::bail!("Circular dependency detected involving service '{}'", service);
+        anyhow::bail!(
+            "Circular dependency detected involving service '{}'",
+            service
+        );
     }
 
     visiting.insert(service.to_string());
@@ -177,7 +162,10 @@ fn dfs_forward(
     result: &mut Vec<String>,
 ) -> Result<()> {
     if visiting.contains(service) {
-        anyhow::bail!("Circular dependency detected involving service '{}'", service);
+        anyhow::bail!(
+            "Circular dependency detected involving service '{}'",
+            service
+        );
     }
 
     visiting.insert(service.to_string());
@@ -199,10 +187,7 @@ fn dfs_forward(
 }
 
 /// Get services that would be affected by stopping the given services
-pub fn get_affected_services(
-    config: &Config,
-    services: &[String],
-) -> Vec<String> {
+pub fn get_affected_services(config: &Config, services: &[String]) -> Vec<String> {
     let graph = build_dependency_graph(config);
     let mut affected = HashSet::new();
 
@@ -297,11 +282,11 @@ mod tests {
     #[test]
     fn test_reverse_topological_sort() {
         let config = create_test_config();
-        
+
         // When stopping all services, should stop in reverse order
         let order = reverse_topological_sort(&config, &[]).unwrap();
         assert_eq!(order, vec!["app", "api", "db"]);
-        
+
         // When stopping just db, should stop dependent services first
         let order = reverse_topological_sort(&config, &["db".to_string()]).unwrap();
         assert_eq!(order, vec!["app", "api", "db"]);
@@ -310,11 +295,11 @@ mod tests {
     #[test]
     fn test_topological_sort() {
         let config = create_test_config();
-        
+
         // When starting all services, should start dependencies first
         let order = topological_sort(&config, &[]).unwrap();
         assert_eq!(order, vec!["db", "api", "app"]);
-        
+
         // When starting just app, should start dependencies first
         let order = topological_sort(&config, &["app".to_string()]).unwrap();
         assert_eq!(order, vec!["db", "api", "app"]);
@@ -323,15 +308,15 @@ mod tests {
     #[test]
     fn test_get_affected_services() {
         let config = create_test_config();
-        
+
         // Stopping db affects api and app
         let affected = get_affected_services(&config, &["db".to_string()]);
         assert_eq!(affected, vec!["api", "app"]);
-        
+
         // Stopping api affects only app
         let affected = get_affected_services(&config, &["api".to_string()]);
         assert_eq!(affected, vec!["app"]);
-        
+
         // Stopping app affects nothing
         let affected = get_affected_services(&config, &["app".to_string()]);
         assert!(affected.is_empty());

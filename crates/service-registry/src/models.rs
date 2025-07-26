@@ -1,41 +1,40 @@
 //! Data models for the service registry
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use chrono::{DateTime, Utc};
 
 /// A registered service entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceEntry {
     /// Unique service identifier
     pub name: String,
-    
+
     /// Service version
     pub version: String,
-    
+
     /// How the service is executed
     pub execution: ExecutionInfo,
-    
+
     /// Where the service runs
     pub location: Location,
-    
+
     /// Network endpoints
     pub endpoints: Vec<Endpoint>,
-    
+
     /// Service dependencies
     pub depends_on: Vec<String>,
-    
+
     /// Current state
     pub state: ServiceState,
-    
+
     /// Last health check result
     pub last_health_check: Option<HealthStatus>,
-    
+
     /// When the service was registered
     pub registered_at: DateTime<Utc>,
-    
+
     /// Last state change
     pub last_state_change: DateTime<Utc>,
 }
@@ -98,13 +97,13 @@ pub enum Location {
 pub struct Endpoint {
     /// Endpoint name (e.g., "http", "grpc", "metrics")
     pub name: String,
-    
+
     /// Socket address
     pub address: SocketAddr,
-    
+
     /// Protocol
     pub protocol: Protocol,
-    
+
     /// Metadata (e.g., "path": "/api")
     pub metadata: HashMap<String, String>,
 }
@@ -150,13 +149,13 @@ pub enum ServiceState {
 pub struct HealthStatus {
     /// Is the service healthy?
     pub healthy: bool,
-    
+
     /// Health check message
     pub message: Option<String>,
-    
+
     /// When the check was performed
     pub checked_at: DateTime<Utc>,
-    
+
     /// Check duration in milliseconds
     pub duration_ms: u64,
 }
@@ -234,6 +233,8 @@ pub enum ServiceAction {
 pub enum EventType {
     /// Service was registered
     ServiceRegistered,
+    /// Service was updated
+    ServiceUpdated,
     /// Service was deregistered
     ServiceDeregistered,
     /// Service state changed
@@ -262,17 +263,26 @@ pub struct ErrorInfo {
 
 impl ServiceEntry {
     /// Create a new service entry
-    pub fn new(name: String, version: String, execution: ExecutionInfo, location: Location) -> crate::Result<Self> {
+    pub fn new(
+        name: String,
+        version: String,
+        execution: ExecutionInfo,
+        location: Location,
+    ) -> crate::Result<Self> {
         // Validate service name
         if name.trim().is_empty() {
-            return Err(crate::Error::Package("Service name cannot be empty".to_string()));
+            return Err(crate::Error::Package(
+                "Service name cannot be empty".to_string(),
+            ));
         }
-        
+
         // Validate version
         if version.trim().is_empty() {
-            return Err(crate::Error::Package("Service version cannot be empty".to_string()));
+            return Err(crate::Error::Package(
+                "Service version cannot be empty".to_string(),
+            ));
         }
-        
+
         let now = Utc::now();
         Ok(Self {
             name,
@@ -287,32 +297,32 @@ impl ServiceEntry {
             last_state_change: now,
         })
     }
-    
+
     /// Update service state
     pub fn update_state(&mut self, new_state: ServiceState) {
         self.state = new_state;
         self.last_state_change = Utc::now();
     }
-    
+
     /// Add an endpoint
     pub fn add_endpoint(&mut self, endpoint: Endpoint) {
         // Remove existing endpoint with same name
         self.endpoints.retain(|e| e.name != endpoint.name);
         self.endpoints.push(endpoint);
     }
-    
+
     /// Add a dependency
     pub fn add_dependency(&mut self, service_name: String) {
         if !self.depends_on.contains(&service_name) {
             self.depends_on.push(service_name);
         }
     }
-    
+
     /// Check if service has a specific endpoint
     pub fn has_endpoint(&self, name: &str) -> bool {
         self.endpoints.iter().any(|e| e.name == name)
     }
-    
+
     /// Get endpoint by name
     pub fn get_endpoint(&self, name: &str) -> Option<&Endpoint> {
         self.endpoints.iter().find(|e| e.name == name)
@@ -329,13 +339,13 @@ impl Endpoint {
             metadata: HashMap::new(),
         }
     }
-    
+
     /// Add metadata to the endpoint
     pub fn with_metadata(mut self, key: String, value: String) -> Self {
         self.metadata.insert(key, value);
         self
     }
-    
+
     /// Get metadata value
     pub fn get_metadata(&self, key: &str) -> Option<&str> {
         self.metadata.get(key).map(|s| s.as_str())

@@ -1,7 +1,7 @@
 # ADR-012: Service Registry Sled Backend
 
 ## Status
-Proposed
+Accepted
 
 ## Context
 

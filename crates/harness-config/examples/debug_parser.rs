@@ -1,4 +1,4 @@
-use harness_config::resolver::{parse_variable, find_variables};
+use harness_config::resolver::{find_variables, parse_variable};
 
 fn main() {
     let test_cases = vec![
@@ -9,7 +9,7 @@ fn main() {
         "${API_HOST:-0.0.0.0}",
         "${missing_service.ip}",
     ];
-    
+
     for test in test_cases {
         println!("\nTesting: {}", test);
         let vars = find_variables(test);
@@ -17,7 +17,7 @@ fn main() {
             match var_result {
                 Ok((start, end, var)) => {
                     println!("  Found at {}..{}: {:?}", start, end, var);
-                    let expr = &test[start+2..end-1]; // Extract the expression
+                    let expr = &test[start + 2..end - 1]; // Extract the expression
                     println!("  Expression: '{}'", expr);
                 }
                 Err(e) => {

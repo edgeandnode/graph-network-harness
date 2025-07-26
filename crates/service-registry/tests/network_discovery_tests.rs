@@ -1,208 +1,214 @@
 //! Network discovery integration tests using Docker Compose
 
-use command_executor::{backends::local::LocalLauncher, Command, Executor, Target};
-use service_registry::network::{NetworkConfig, NetworkLocation, NetworkManager, ServiceNetwork};
-use std::path::Path;
-use std::sync::OnceLock;
-use std::time::Duration;
-use uuid;
+#[cfg(feature = "docker-tests")]
+mod docker_tests {
+    use command_executor::{backends::local::LocalLauncher, Command, Executor, Target};
+    use service_registry::network::{
+        NetworkConfig, NetworkLocation, NetworkManager, ServiceNetwork,
+    };
+    use std::path::Path;
+    use std::sync::OnceLock;
+    use std::time::Duration;
+    use uuid;
 
-/// Helper to get the path to a docker-compose file
-fn compose_file(name: &str) -> String {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/network_tests/docker-compose")
-        .join(name)
-        .to_string_lossy()
-        .to_string()
-}
-
-/// Shared Docker-in-Docker container for network discovery tests
-/// This container is started once and shared across all tests for efficiency
-
-static DIND_CONTAINER_NAME: &str = "network-discovery-dind-test";
-static CONTAINER_GUARD: OnceLock<DindContainerGuard> = OnceLock::new();
-
-struct DindContainerGuard {
-    container_name: String,
-}
-
-impl Drop for DindContainerGuard {
-    fn drop(&mut self) {
-        std::process::Command::new("docker")
-            .args(&["rm", "-f", &self.container_name])
-            .output()
-            .ok();
-    }
-}
-
-/// Ensure the shared Docker-in-Docker container is running
-/// This can be called by multiple tests safely - it will only start the container once
-async fn ensure_dind_container_running() -> anyhow::Result<()> {
-    // Check if container is already running
-    let check_cmd = Command::builder("docker")
-        .arg("ps")
-        .arg("-q")
-        .arg("-f")
-        .arg(format!("name={}", DIND_CONTAINER_NAME))
-        .build();
-
-    let launcher = LocalLauncher;
-    let executor = Executor::new("dind-check".to_string(), launcher);
-    let result = executor.execute(&Target::Command, check_cmd).await?;
-
-    if !result.output.trim().is_empty() {
-        // Container is already running
-        return Ok(());
+    /// Helper to get the path to a docker-compose file
+    fn compose_file(name: &str) -> String {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/network_tests/docker-compose")
+            .join(name)
+            .to_string_lossy()
+            .to_string()
     }
 
-    // Remove any existing container with same name
-    let cleanup_cmd = Command::builder("docker")
-        .arg("rm")
-        .arg("-f")
-        .arg(DIND_CONTAINER_NAME)
-        .build();
-    let _ = executor.execute(&Target::Command, cleanup_cmd).await;
+    /// Shared Docker-in-Docker container for network discovery tests
+    /// This container is started once and shared across all tests for efficiency
 
-    // Start Docker-in-Docker container with privileged mode
-    let docker_cmd = Command::builder("docker")
-        .arg("run")
-        .arg("-d")
-        .arg("--name")
-        .arg(DIND_CONTAINER_NAME)
-        .arg("--privileged")
-        .arg("-e")
-        .arg("DOCKER_TLS_CERTDIR=")
-        .arg("docker:dind")
-        .build();
+    static DIND_CONTAINER_NAME: &str = "network-discovery-dind-test";
+    static CONTAINER_GUARD: OnceLock<DindContainerGuard> = OnceLock::new();
 
-    let result = executor.execute(&Target::Command, docker_cmd).await?;
-    if !result.success() {
-        anyhow::bail!(
-            "Failed to start Docker-in-Docker container: {:?}",
-            result.output
-        );
+    struct DindContainerGuard {
+        container_name: String,
     }
 
-    // Wait for Docker daemon to be ready with retries
-    wait_for_docker_daemon_ready(&executor).await?;
+    impl Drop for DindContainerGuard {
+        fn drop(&mut self) {
+            std::process::Command::new("docker")
+                .args(&["rm", "-f", &self.container_name])
+                .output()
+                .ok();
+        }
+    }
 
-    // Copy compose files into container
-    copy_compose_files_to_container(&executor).await?;
-
-    // Register cleanup guard
-    CONTAINER_GUARD.get_or_init(|| DindContainerGuard {
-        container_name: DIND_CONTAINER_NAME.to_string(),
-    });
-
-    Ok(())
-}
-
-async fn wait_for_docker_daemon_ready(executor: &Executor<LocalLauncher>) -> anyhow::Result<()> {
-    let max_attempts = 60; // Increased from 15 to 60
-
-    for i in 1..=max_attempts {
-        let health_check = Command::builder("docker")
-            .arg("exec")
-            .arg(DIND_CONTAINER_NAME)
-            .arg("docker")
-            .arg("version")
+    /// Ensure the shared Docker-in-Docker container is running
+    /// This can be called by multiple tests safely - it will only start the container once
+    async fn ensure_dind_container_running() -> anyhow::Result<()> {
+        // Check if container is already running
+        let check_cmd = Command::builder("docker")
+            .arg("ps")
+            .arg("-q")
+            .arg("-f")
+            .arg(format!("name={}", DIND_CONTAINER_NAME))
             .build();
 
-        if let Ok(result) = executor.execute(&Target::Command, health_check).await {
-            if result.success() {
-                return Ok(());
-            }
+        let launcher = LocalLauncher;
+        let executor = Executor::new("dind-check".to_string(), launcher);
+        let result = executor.execute(&Target::Command, check_cmd).await?;
+
+        if !result.output.trim().is_empty() {
+            // Container is already running
+            return Ok(());
         }
 
-        if i == max_attempts {
+        // Remove any existing container with same name
+        let cleanup_cmd = Command::builder("docker")
+            .arg("rm")
+            .arg("-f")
+            .arg(DIND_CONTAINER_NAME)
+            .build();
+        let _ = executor.execute(&Target::Command, cleanup_cmd).await;
+
+        // Start Docker-in-Docker container with privileged mode
+        let docker_cmd = Command::builder("docker")
+            .arg("run")
+            .arg("-d")
+            .arg("--name")
+            .arg(DIND_CONTAINER_NAME)
+            .arg("--privileged")
+            .arg("-e")
+            .arg("DOCKER_TLS_CERTDIR=")
+            .arg("docker:dind")
+            .build();
+
+        let result = executor.execute(&Target::Command, docker_cmd).await?;
+        if !result.success() {
             anyhow::bail!(
-                "Docker daemon failed to start in container after {} seconds",
-                max_attempts
+                "Failed to start Docker-in-Docker container: {:?}",
+                result.output
             );
         }
 
-        smol::Timer::after(Duration::from_secs(1)).await;
+        // Wait for Docker daemon to be ready with retries
+        wait_for_docker_daemon_ready(&executor).await?;
+
+        // Copy compose files into container
+        copy_compose_files_to_container(&executor).await?;
+
+        // Register cleanup guard
+        CONTAINER_GUARD.get_or_init(|| DindContainerGuard {
+            container_name: DIND_CONTAINER_NAME.to_string(),
+        });
+
+        Ok(())
     }
 
-    Ok(())
-}
+    async fn wait_for_docker_daemon_ready(
+        executor: &Executor<LocalLauncher>,
+    ) -> anyhow::Result<()> {
+        let max_attempts = 60; // Increased from 15 to 60
 
-async fn copy_compose_files_to_container(executor: &Executor<LocalLauncher>) -> anyhow::Result<()> {
-    let compose_dir =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/network_tests/docker-compose");
+        for i in 1..=max_attempts {
+            let health_check = Command::builder("docker")
+                .arg("exec")
+                .arg(DIND_CONTAINER_NAME)
+                .arg("docker")
+                .arg("version")
+                .build();
 
-    let cmd = Command::builder("docker")
-        .arg("cp")
-        .arg(compose_dir.to_str().unwrap())
-        .arg(format!("{}:/compose", DIND_CONTAINER_NAME))
-        .build();
+            if let Ok(result) = executor.execute(&Target::Command, health_check).await {
+                if result.success() {
+                    return Ok(());
+                }
+            }
 
-    let result = executor.execute(&Target::Command, cmd).await?;
+            if i == max_attempts {
+                anyhow::bail!(
+                    "Docker daemon failed to start in container after {} seconds",
+                    max_attempts
+                );
+            }
 
-    if !result.success() {
-        anyhow::bail!(
-            "Failed to copy compose files to container: {}",
-            result.output
-        );
+            smol::Timer::after(Duration::from_secs(1)).await;
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    async fn copy_compose_files_to_container(
+        executor: &Executor<LocalLauncher>,
+    ) -> anyhow::Result<()> {
+        let compose_dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/network_tests/docker-compose");
 
-/// Execute a docker-compose command inside the shared DinD container
-async fn dind_compose_command(
-    compose_file: &str,
-    project_name: &str,
-    args: Vec<&str>,
-) -> anyhow::Result<()> {
-    let launcher = LocalLauncher;
-    let executor = Executor::new("dind-compose".to_string(), launcher);
+        let cmd = Command::builder("docker")
+            .arg("cp")
+            .arg(compose_dir.to_str().unwrap())
+            .arg(format!("{}:/compose", DIND_CONTAINER_NAME))
+            .build();
 
-    let mut cmd = Command::builder("docker")
-        .arg("exec")
-        .arg(DIND_CONTAINER_NAME)
-        .arg("docker")
-        .arg("compose")
-        .arg("-f")
-        .arg(format!("/compose/{}", compose_file))
-        .arg("-p")
-        .arg(project_name);
+        let result = executor.execute(&Target::Command, cmd).await?;
 
-    for arg in args {
-        cmd = cmd.arg(arg);
+        if !result.success() {
+            anyhow::bail!(
+                "Failed to copy compose files to container: {}",
+                result.output
+            );
+        }
+
+        Ok(())
     }
 
-    let result = executor.execute(&Target::Command, cmd.build()).await?;
+    /// Execute a docker-compose command inside the shared DinD container
+    async fn dind_compose_command(
+        compose_file: &str,
+        project_name: &str,
+        args: Vec<&str>,
+    ) -> anyhow::Result<()> {
+        let launcher = LocalLauncher;
+        let executor = Executor::new("dind-compose".to_string(), launcher);
 
-    if !result.success() {
-        anyhow::bail!("Docker compose command failed: {}", result.output);
+        let mut cmd = Command::builder("docker")
+            .arg("exec")
+            .arg(DIND_CONTAINER_NAME)
+            .arg("docker")
+            .arg("compose")
+            .arg("-f")
+            .arg(format!("/compose/{}", compose_file))
+            .arg("-p")
+            .arg(project_name);
+
+        for arg in args {
+            cmd = cmd.arg(arg);
+        }
+
+        let result = executor.execute(&Target::Command, cmd.build()).await?;
+
+        if !result.success() {
+            anyhow::bail!("Docker compose command failed: {}", result.output);
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    /// Helper to check if Docker is available using command-executor
+    async fn check_docker() -> bool {
+        let launcher = LocalLauncher;
+        let executor = Executor::new("docker-check".to_string(), launcher);
+        let cmd = Command::builder("docker").arg("version").build();
 
-/// Helper to check if Docker is available using command-executor
-async fn check_docker() -> bool {
-    let launcher = LocalLauncher;
-    let executor = Executor::new("docker-check".to_string(), launcher);
-    let cmd = Command::builder("docker").arg("version").build();
-
-    executor
-        .execute(&Target::Command, cmd)
-        .await
-        .map(|r| r.success())
-        .unwrap_or(false)
-}
-
-#[test]
-#[cfg(feature = "docker-tests")]
-fn test_local_network_topology() {
-    if !smol::block_on(check_docker()) {
-        eprintln!("Skipping test: Docker not available");
-        return;
+        executor
+            .execute(&Target::Command, cmd)
+            .await
+            .map(|r| r.success())
+            .unwrap_or(false)
     }
 
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_local_network_topology() {
+        if !check_docker().await {
+            eprintln!("Skipping test: Docker not available");
+            return;
+        }
+
         // Ensure shared DinD container is running
         ensure_dind_container_running()
             .await
@@ -276,18 +282,15 @@ fn test_local_network_topology() {
         dind_compose_command("local-only.yml", &project_name, vec!["down", "-v"])
             .await
             .expect("Failed to stop docker-compose in DinD");
-    });
-}
-
-#[test]
-#[cfg(feature = "docker-tests")]
-fn test_lan_network_topology() {
-    if !smol::block_on(check_docker()) {
-        eprintln!("Skipping test: Docker not available");
-        return;
     }
 
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_lan_network_topology() {
+        if !check_docker().await {
+            eprintln!("Skipping test: Docker not available");
+            return;
+        }
+
         // Ensure shared DinD container is running
         ensure_dind_container_running()
             .await
@@ -369,18 +372,15 @@ enable_wireguard: true
         dind_compose_command("lan-simple.yml", &project_name, vec!["down", "-v"])
             .await
             .expect("Failed to stop docker-compose in DinD");
-    });
-}
-
-#[test]
-#[cfg(feature = "docker-tests")]
-fn test_mixed_network_topology() {
-    if !smol::block_on(check_docker()) {
-        eprintln!("Skipping test: Docker not available");
-        return;
     }
 
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_mixed_network_topology() {
+        if !check_docker().await {
+            eprintln!("Skipping test: Docker not available");
+            return;
+        }
+
         // Ensure shared DinD container is running
         ensure_dind_container_running()
             .await
@@ -482,31 +482,25 @@ enable_wireguard: true
         dind_compose_command("mixed-topology.yml", &project_name, vec!["down", "-v"])
             .await
             .expect("Failed to stop docker-compose in DinD");
-    });
-}
-
-// Network discovery tests use shared Docker-in-Docker container with unique project names for isolation
-
-#[test]
-#[cfg(feature = "docker-tests")]
-fn test_dind_container_setup() {
-    if !smol::block_on(check_docker()) {
-        eprintln!("Skipping test: Docker not available");
-        return;
     }
 
-    smol::block_on(async {
+    // Network discovery tests use shared Docker-in-Docker container with unique project names for isolation
+
+    #[smol_potat::test]
+    async fn test_dind_container_setup() {
+        if !check_docker().await {
+            eprintln!("Skipping test: Docker not available");
+            return;
+        }
+
         // Just test that we can start the DinD container
         ensure_dind_container_running()
             .await
             .expect("Failed to ensure DinD container is running");
-    });
-}
+    }
 
-#[test]
-#[cfg(feature = "docker-tests")]
-fn test_ip_allocation_with_network_manager() {
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_ip_allocation_with_network_manager() {
         let config = NetworkConfig::default();
         let mut network_manager =
             NetworkManager::new(config).expect("Failed to create network manager");
@@ -530,5 +524,5 @@ fn test_ip_allocation_with_network_manager() {
         // In a real implementation, the IP would be allocated
         // For now, we just verify the service was registered
         assert!(network_manager.requires_wireguard());
-    });
+    }
 }

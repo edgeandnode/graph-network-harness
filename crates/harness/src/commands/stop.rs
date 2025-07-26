@@ -112,7 +112,7 @@ pub async fn run(
         match daemon.send_request(request).await {
             Ok(Response::Success) => {
                 println!(" ✓");
-                
+
                 // Wait for service to stop if timeout specified
                 if let Some(timeout_secs) = timeout {
                     let start = std::time::Instant::now();
@@ -121,7 +121,7 @@ pub async fn run(
                             println!("  ⚠️  Timeout waiting for service to stop");
                             break;
                         }
-                        
+
                         // Check service status
                         match daemon
                             .send_request(Request::GetServiceStatus {
@@ -130,16 +130,13 @@ pub async fn run(
                             .await
                         {
                             Ok(Response::ServiceStatus { status }) => {
-                                if matches!(
-                                    status,
-                                    service_orchestration::ServiceStatus::Stopped
-                                ) {
+                                if matches!(status, service_orchestration::ServiceStatus::Stopped) {
                                     break;
                                 }
                             }
                             _ => break,
                         }
-                        
+
                         smol::Timer::after(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -148,7 +145,7 @@ pub async fn run(
                 println!(" ✗");
                 eprintln!("  Error: {}", message);
                 failures.push((service_name.clone(), message));
-                
+
                 if !force {
                     eprintln!("  Aborting due to failure (use --force to continue)");
                     break;
@@ -163,7 +160,7 @@ pub async fn run(
                 println!(" ✗");
                 eprintln!("  Error: {}", e);
                 failures.push((service_name.clone(), e.to_string()));
-                
+
                 if !force {
                     eprintln!("  Aborting due to failure (use --force to continue)");
                     break;
@@ -175,7 +172,7 @@ pub async fn run(
     // Print summary
     let stopped_count = ordered_services.len() - failures.len();
     println!("\n{} services stopped successfully", stopped_count);
-    
+
     if !failures.is_empty() {
         eprintln!("\n{} services failed to stop:", failures.len());
         for (service, error) in &failures {
@@ -189,4 +186,3 @@ pub async fn run(
         anyhow::bail!("{} services failed to stop", failures.len())
     }
 }
-

@@ -1,21 +1,17 @@
 //! Integration tests that use command-executor to orchestrate their own test environment
 
-#[cfg(all(feature = "ssh", feature = "docker-tests"))]
-use command_executor::{
-    backends::{local::LocalLauncher, ssh::SshLauncher},
-    target::{DockerContainer, SystemdPortable},
-    Command, Executor, Target,
-};
-
-#[cfg(all(feature = "ssh", feature = "docker-tests"))]
-mod common;
-#[cfg(all(feature = "ssh", feature = "docker-tests"))]
-use common::shared_container::{ensure_container_running, get_ssh_config};
-
-#[test]
 #[cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-fn test_self_hosted_ssh_execution() {
-    smol::block_on(async {
+mod ssh_tests {
+    use command_executor::{
+        backends::{local::LocalLauncher, ssh::SshLauncher},
+        target::{DockerContainer, SystemdPortable},
+        Command, Executor, Target,
+    };
+
+    use crate::common::shared_container::{ensure_container_running, get_ssh_config};
+
+    #[smol_potat::test]
+    async fn test_self_hosted_ssh_execution() {
         // Ensure shared container is running
         ensure_container_running()
             .await
@@ -37,13 +33,10 @@ fn test_self_hosted_ssh_execution() {
         let result = result.unwrap();
         assert!(result.success());
         assert!(result.output.contains("Hello from self-hosted test!"));
-    });
-}
+    }
 
-#[test]
-#[cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-fn test_self_hosted_systemd_portable() {
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_self_hosted_systemd_portable() {
         // Ensure shared container is running
         ensure_container_running()
             .await
@@ -66,13 +59,10 @@ fn test_self_hosted_systemd_portable() {
             "Failed to list portable services: {:?}",
             result
         );
-    });
-}
+    }
 
-#[test]
-#[cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-fn test_self_hosted_nested_docker() {
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_self_hosted_nested_docker() {
         // Ensure shared container is running
         ensure_container_running()
             .await
@@ -115,13 +105,10 @@ fn test_self_hosted_nested_docker() {
                 println!("Docker not available in test container (expected)");
             }
         }
-    });
-}
+    }
 
-#[test]
-#[cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-fn test_self_hosted_with_guard() {
-    smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_self_hosted_with_guard() {
         // Ensure shared container is running
         ensure_container_running()
             .await
@@ -143,5 +130,8 @@ fn test_self_hosted_with_guard() {
 
         assert!(result.success());
         assert!(result.output.contains("Testing with shared container"));
-    });
+    }
 }
+
+#[cfg(all(feature = "ssh", feature = "docker-tests"))]
+mod common;

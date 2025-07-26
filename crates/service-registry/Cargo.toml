@@ -21,7 +21,7 @@ futures = { workspace = true }
 futures-util = { workspace = true }
 
 # WebSocket - no runtime features!
-async-tungstenite = { workspace = true, default-features = false }
+async-tungstenite = { workspace = true }
 tungstenite = { workspace = true }
 
 # Runtime-agnostic networking and file I/O
@@ -29,7 +29,7 @@ async-net = { workspace = true }
 async-fs = { workspace = true }
 
 # TLS support (required)
-async-tls = { workspace = true, features = ["server", "client"] }
+futures-rustls = { workspace = true }
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
 webpki-roots = { workspace = true }
@@ -41,12 +41,16 @@ tempfile = { workspace = true }
 # Networking
 ipnet = { workspace = true }
 
+# Database
+sled = { workspace = true }
+
 # Command execution
 command-executor = { path = "../command-executor" }
 
 [dev-dependencies]
 # Use smol for tests - runtime agnostic
 smol = "2.0"
+smol-potat = { workspace = true }
 tempfile = { workspace = true }
 anyhow = { workspace = true }
 async-fs = { workspace = true }

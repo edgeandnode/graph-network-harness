@@ -168,7 +168,7 @@ impl ServiceExecutor for ProcessExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{HealthCheck, ServiceConfig, ServiceTarget};
+    use crate::config::{ServiceConfig, ServiceTarget};
     use std::collections::HashMap;
 
     #[test]
@@ -204,26 +204,24 @@ mod tests {
         assert!(!executor.can_handle(&docker_config));
     }
 
-    #[test]
-    fn test_start_simple_process() {
-        smol::block_on(async {
-            let executor = ProcessExecutor::new();
+    #[smol_potat::test]
+    async fn test_start_simple_process() {
+        let executor = ProcessExecutor::new();
 
-            let config = ServiceConfig {
-                name: "echo-test".to_string(),
-                target: ServiceTarget::Process {
-                    binary: "echo".to_string(),
-                    args: vec!["hello world".to_string()],
-                    env: HashMap::new(),
-                    working_dir: None,
-                },
-                dependencies: vec![],
-                health_check: None,
-            };
+        let config = ServiceConfig {
+            name: "echo-test".to_string(),
+            target: ServiceTarget::Process {
+                binary: "echo".to_string(),
+                args: vec!["hello world".to_string()],
+                env: HashMap::new(),
+                working_dir: None,
+            },
+            dependencies: vec![],
+            health_check: None,
+        };
 
-            let service = executor.start(config).await.unwrap();
-            assert_eq!(service.name, "echo-test");
-            assert!(service.pid.is_some());
-        });
+        let service = executor.start(config).await.unwrap();
+        assert_eq!(service.name, "echo-test");
+        assert!(service.pid.is_some());
     }
 }

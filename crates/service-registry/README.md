@@ -10,6 +10,7 @@ Runtime-agnostic service discovery and network topology management with TLS-secu
 - **IP Allocation**: Automatic IP address management within configured subnets
 - **Event System**: Subscribe to service state changes and network events
 - **Package Deployment**: Deploy service packages to remote hosts
+- **Persistent Storage**: Sled database backend for reliable persistence
 - **Runtime Agnostic**: Works with any async runtime
 
 ## Architecture
@@ -78,8 +79,11 @@ use service_registry::{Registry, WsServer, TlsServerConfig};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Create registry with persistence
-    let registry = Registry::with_persistence("./registry.db");
+    // Create registry with sled persistence
+    let registry = Registry::with_persistence("./registry.db").await;
+    
+    // Or load existing registry
+    // let registry = Registry::load("./registry.db").await?;
     
     // Load TLS certificates
     let tls_config = TlsServerConfig::from_files(
@@ -246,12 +250,30 @@ deployer.deploy_package(
 //     └── stop.sh
 ```
 
+## Storage Backend
+
+The registry uses [sled](https://github.com/spacejam/sled) as its embedded database:
+
+- **Persistent Storage**: All service registrations survive restarts
+- **Atomic Operations**: ACID compliance for reliability
+- **Efficient Updates**: Lock-free architecture for performance
+- **Crash Recovery**: Automatic recovery from unexpected shutdowns
+
+### Database Layout
+
+```
+registry.db/
+├── services/         # Service entries
+└── subscriptions/    # Event subscriptions (transient, not persisted)
+```
+
 ## Security Considerations
 
 1. **TLS Required**: All WebSocket connections must use TLS
 2. **Certificate Validation**: Clients validate server certificates
 3. **Secure Package Transfer**: Packages deployed over SSH
 4. **IP Isolation**: Services only see IPs in their network segment
+5. **Persistent Storage**: Sled database files should be protected
 
 ## Testing
 

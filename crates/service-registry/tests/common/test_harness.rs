@@ -19,7 +19,7 @@ impl TestHarness {
         let temp_dir = TempDir::new()?;
         let registry = Registry::with_persistence(
             temp_dir.path().join("test-registry.json").to_string_lossy(),
-        );
+        ).await;
         let executor = Executor::new("test-harness".to_string(), LocalLauncher);
 
         Ok(Self {

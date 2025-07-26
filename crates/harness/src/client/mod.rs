@@ -2,14 +2,14 @@
 
 use anyhow::{anyhow, Context, Result};
 use async_net::TcpStream;
-use async_tls::{client::TlsStream, TlsConnector};
+use futures_rustls::{client::TlsStream, TlsConnector};
 use async_tungstenite::tungstenite::Message;
 use async_tungstenite::{client_async, WebSocketStream};
-use futures::{SinkExt, StreamExt};
-use rustls::{Certificate, ClientConfig, RootCertStore};
+use futures::StreamExt;
+use rustls::{ClientConfig, RootCertStore};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tracing::{debug, error};
+use tracing::debug;
 
 /// Daemon client for sending requests
 pub enum DaemonClient {
@@ -57,12 +57,9 @@ impl DaemonClient {
         let cert_pem =
             std::fs::read_to_string(&cert_path).context("Failed to read daemon certificate")?;
 
-        let certs: Vec<Certificate> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
+        let certs = rustls_pemfile::certs(&mut cert_pem.as_bytes())
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| anyhow!("Failed to parse certificate: {:?}", e))?
-            .into_iter()
-            .map(|der| Certificate(der.to_vec()))
-            .collect();
+            .map_err(|e| anyhow!("Failed to parse certificate: {:?}", e))?;
 
         if certs.is_empty() {
             return Err(anyhow!("No certificates found in {:?}", cert_path));
@@ -72,13 +69,12 @@ impl DaemonClient {
         let mut root_store = RootCertStore::empty();
         for cert in certs {
             root_store
-                .add(&cert)
+                .add(cert)
                 .map_err(|e| anyhow!("Failed to add certificate to root store: {:?}", e))?;
         }
 
         // Create TLS config that trusts our specific certificate
         let config = ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(root_store)
             .with_no_client_auth();
 
@@ -86,8 +82,10 @@ impl DaemonClient {
 
         let tcp_stream = TcpStream::connect(addr).await?;
 
+        let server_name = rustls::pki_types::ServerName::try_from("localhost")
+            .map_err(|e| anyhow!("Invalid server name: {:?}", e))?;
         let tls_stream = tls_connector
-            .connect("localhost", tcp_stream)
+            .connect(server_name, tcp_stream)
             .await
             .context("TLS handshake failed")?;
 
@@ -110,8 +108,8 @@ impl DaemonClient {
 
         // Send request
         match self {
-            Self::Plain(ws) => ws.send(Message::Text(request_json)).await?,
-            Self::Tls(ws) => ws.send(Message::Text(request_json)).await?,
+            Self::Plain(ws) => ws.send(Message::Text(request_json.into())).await?,
+            Self::Tls(ws) => ws.send(Message::Text(request_json.into())).await?,
         }
 
         // Wait for response

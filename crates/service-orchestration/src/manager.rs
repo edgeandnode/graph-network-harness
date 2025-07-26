@@ -59,7 +59,7 @@ impl ServiceManager {
                         "Failed to load registry state: {}. Starting with empty registry.",
                         e
                     );
-                    Registry::with_persistence(registry_path.to_string_lossy())
+                    Registry::with_persistence(registry_path.to_string_lossy()).await
                 }
             }
         } else {
@@ -67,7 +67,7 @@ impl ServiceManager {
                 "No existing registry found, creating new one at {:?}",
                 registry_path
             );
-            Registry::with_persistence(registry_path.to_string_lossy())
+            Registry::with_persistence(registry_path.to_string_lossy()).await
         };
 
         let network_config = NetworkConfig::default();
@@ -388,57 +388,49 @@ mod tests {
     use crate::config::ServiceTarget;
     use std::collections::HashMap;
 
-    #[test]
-    fn test_service_manager_creation() {
-        smol::block_on(async {
-            let manager = ServiceManager::new().await.unwrap();
+    #[smol_potat::test]
+    async fn test_service_manager_creation() {
+        let manager = ServiceManager::new().await.unwrap();
 
-            // Verify executors are registered
-            assert!(manager.executors.contains_key("process"));
-            assert!(manager.executors.contains_key("docker"));
-            assert!(manager.executors.contains_key("remote"));
-        });
+        // Verify executors are registered
+        assert!(manager.executors.contains_key("process"));
+        assert!(manager.executors.contains_key("docker"));
+        assert!(manager.executors.contains_key("remote"));
     }
 
-    #[test]
-    fn test_find_executor() {
-        smol::block_on(async {
-            let manager = ServiceManager::new().await.unwrap();
+    #[smol_potat::test]
+    async fn test_find_executor() {
+        let manager = ServiceManager::new().await.unwrap();
 
-            let process_config = ServiceConfig {
-                name: "test".to_string(),
-                target: ServiceTarget::Process {
-                    binary: "echo".to_string(),
-                    args: vec![],
-                    env: HashMap::new(),
-                    working_dir: None,
-                },
-                dependencies: vec![],
-                health_check: None,
-            };
+        let process_config = ServiceConfig {
+            name: "test".to_string(),
+            target: ServiceTarget::Process {
+                binary: "echo".to_string(),
+                args: vec![],
+                env: HashMap::new(),
+                working_dir: None,
+            },
+            dependencies: vec![],
+            health_check: None,
+        };
 
-            let executor = manager.find_executor(&process_config).unwrap();
-            assert!(executor.can_handle(&process_config));
-        });
+        let executor = manager.find_executor(&process_config).unwrap();
+        assert!(executor.can_handle(&process_config));
     }
 
-    #[test]
-    fn test_service_not_found() {
-        smol::block_on(async {
-            let manager = ServiceManager::new().await.unwrap();
+    #[smol_potat::test]
+    async fn test_service_not_found() {
+        let manager = ServiceManager::new().await.unwrap();
 
-            let result = manager.stop_service("nonexistent").await;
-            assert!(matches!(result, Err(crate::Error::ServiceNotFound(_))));
-        });
+        let result = manager.stop_service("nonexistent").await;
+        assert!(matches!(result, Err(crate::Error::ServiceNotFound(_))));
     }
 
-    #[test]
-    fn test_list_services_empty() {
-        smol::block_on(async {
-            let manager = ServiceManager::new().await.unwrap();
+    #[smol_potat::test]
+    async fn test_list_services_empty() {
+        let manager = ServiceManager::new().await.unwrap();
 
-            let services = manager.list_services().await.unwrap();
-            assert!(services.is_empty());
-        });
+        let services = manager.list_services().await.unwrap();
+        assert!(services.is_empty());
     }
 }

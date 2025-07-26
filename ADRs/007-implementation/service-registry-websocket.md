@@ -324,30 +324,26 @@ for (addr, event) in events {
 
 ### Unit Tests
 ```rust
-#[test]
-fn test_service_registration() {
-    smol::block_on(async {
-        let registry = Registry::new();
-        let service = ServiceEntry::new("api", "1.0.0");
-        registry.register(service).await.unwrap();
-        assert_eq!(registry.list().await.len(), 1);
-    });
+#[smol_potat::test]
+async fn test_service_registration() {
+    let registry = Registry::new();
+    let service = ServiceEntry::new("api", "1.0.0");
+    registry.register(service).await.unwrap();
+    assert_eq!(registry.list().await.len(), 1);
 }
 ```
 
 ### Integration Tests
 ```rust
-#[test]
-fn test_websocket_flow() {
-    smol::block_on(async {
-        let registry = Registry::new();
-        let server = WsServer::new(registry);
-        
-        // Test with mock TCP streams
-        let (client, server) = async_net::TcpStream::pair()?;
-        
-        // Full protocol test
-    });
+#[smol_potat::test]
+async fn test_websocket_flow() {
+    let registry = Registry::new();
+    let server = WsServer::new(registry);
+    
+    // Test with mock TCP streams
+    let (client, server) = async_net::TcpStream::pair()?;
+    
+    // Full protocol test
 }
 ```
 

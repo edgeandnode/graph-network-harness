@@ -1,6 +1,6 @@
 use crate::commands::dependencies;
 use anyhow::{Context, Result};
-use harness_config::{parser, resolver, ServiceType, HealthCheckType};
+use harness_config::{parser, resolver, HealthCheckType, ServiceType};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -39,7 +39,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     // Check for port conflicts
     println!("\n🔍 Checking for port conflicts...");
     let mut port_usage: HashMap<u16, Vec<String>> = HashMap::new();
-    
+
     for (name, service) in &config.services {
         match &service.service_type {
             ServiceType::Docker { ports, .. } => {
@@ -55,7 +55,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
                             }
                         }
                     };
-                    
+
                     if port > 0 {
                         port_usage.entry(port).or_default().push(name.clone());
                     }
@@ -64,7 +64,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             _ => {}
         }
     }
-    
+
     for (port, services) in &port_usage {
         if services.len() > 1 {
             validation_errors.push(format!(
@@ -74,7 +74,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             ));
         }
     }
-    
+
     if port_usage.is_empty() {
         println!("  ✓ No port mappings found");
     } else {
@@ -87,11 +87,11 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     // Validate health checks
     println!("\n🔍 Validating health checks...");
     let mut health_check_count = 0;
-    
+
     for (name, service) in &config.services {
         if let Some(health_check) = &service.health_check {
             health_check_count += 1;
-            
+
             match &health_check.check_type {
                 HealthCheckType::Http { http } => {
                     // Validate HTTP URL format
@@ -112,14 +112,12 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
                 }
                 HealthCheckType::Command { command, .. } => {
                     if command.is_empty() {
-                        validation_errors.push(format!(
-                            "Service '{}' has empty health check command",
-                            name
-                        ));
+                        validation_errors
+                            .push(format!("Service '{}' has empty health check command", name));
                     }
                 }
             }
-            
+
             // Check health check parameters
             if health_check.interval == 0 {
                 warnings.push(format!("Service '{}' has health check interval of 0", name));
@@ -132,7 +130,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             }
         }
     }
-    
+
     if health_check_count == 0 {
         println!("  ⚠ No health checks configured");
     } else {
@@ -142,14 +140,14 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     // Check environment variables and service references
     println!("\n🔍 Checking variable references...");
     let (env_vars, service_refs) = resolver::find_all_references(&config)?;
-    
+
     // Check service references
     let mut invalid_refs = Vec::new();
     for service_ref in &service_refs {
         if let Some(dot_pos) = service_ref.find('.') {
             let service_name = &service_ref[..dot_pos];
             let ref_type = &service_ref[dot_pos + 1..];
-            
+
             if !config.services.contains_key(service_name) {
                 invalid_refs.push(service_ref.clone());
             } else if ref_type == "port" {
@@ -175,20 +173,20 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             }
         }
     }
-    
+
     if !invalid_refs.is_empty() {
         validation_errors.push(format!(
             "Invalid service references: {}",
             invalid_refs.join(", ")
         ));
     }
-    
+
     // Check environment variables
     let missing_env_vars: Vec<String> = env_vars
         .into_iter()
         .filter(|var| std::env::var(var).is_err())
         .collect();
-    
+
     if !missing_env_vars.is_empty() {
         if strict {
             validation_errors.push(format!(
@@ -202,42 +200,44 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             ));
         }
     }
-    
+
     println!("  ✓ {} service references found", service_refs.len());
 
     // Check network configuration
     println!("\n🔍 Checking network configuration...");
     let mut services_per_network: HashMap<String, Vec<String>> = HashMap::new();
-    
+
     for (name, service) in &config.services {
         services_per_network
             .entry(service.network.clone())
             .or_default()
             .push(name.clone());
     }
-    
+
     for (network, services) in &services_per_network {
         if services.len() == 1 && config.networks.len() > 1 {
             warnings.push(format!(
                 "Network '{}' has only one service ({}), consider consolidating networks",
-                network,
-                services[0]
+                network, services[0]
             ));
         }
     }
-    
+
     // Check for unused networks
     for network_name in config.networks.keys() {
         if !services_per_network.contains_key(network_name) {
-            warnings.push(format!("Network '{}' is defined but not used by any service", network_name));
+            warnings.push(format!(
+                "Network '{}' is defined but not used by any service",
+                network_name
+            ));
         }
     }
-    
+
     println!("  ✓ Network configuration validated");
 
     // Print summary
     println!("\n📊 Validation Summary:");
-    
+
     if validation_errors.is_empty() && warnings.is_empty() {
         println!("  ✅ All validation checks passed!");
     } else {
@@ -247,16 +247,19 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
                 println!("  - {}", error);
             }
         }
-        
+
         if !warnings.is_empty() {
             println!("\n⚠️  Warnings ({}):", warnings.len());
             for warning in &warnings {
                 println!("  - {}", warning);
             }
         }
-        
+
         if !validation_errors.is_empty() {
-            anyhow::bail!("Configuration validation failed with {} errors", validation_errors.len());
+            anyhow::bail!(
+                "Configuration validation failed with {} errors",
+                validation_errors.len()
+            );
         }
     }
 

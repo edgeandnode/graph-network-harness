@@ -7,7 +7,7 @@ use clap::{Arg, Command};
 use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::Daemon;
 use std::net::SocketAddr;
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt::init();
-    
+
     let matches = Command::new("graph-test-daemon")
         .version("0.1.0")
         .about("Graph Protocol specialized testing daemon with actionable services")
@@ -30,28 +30,28 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_value("127.0.0.1:9443"),
         )
         .get_matches();
-    
+
     let endpoint: SocketAddr = matches
         .get_one::<String>("endpoint")
         .unwrap()
         .parse()
         .expect("Invalid endpoint address");
-    
+
     info!("Starting Graph Test Daemon on {}", endpoint);
-    
+
     // Create and start the daemon
     let daemon = GraphTestDaemon::new(endpoint).await?;
-    
+
     info!("Graph Test Daemon created successfully");
-    
+
     // Start the daemon
     if let Err(e) = daemon.start().await {
         error!("Failed to start daemon: {}", e);
         return Err(e.into());
     }
-    
+
     info!("Graph Test Daemon is running");
-    
+
     // Keep the daemon running
     // In a real implementation, this would handle signals and graceful shutdown
     loop {

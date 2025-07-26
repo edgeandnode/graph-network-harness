@@ -82,20 +82,21 @@ impl RegistryConfig {
     pub async fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
-        
+
         let mut file = File::open(path.as_ref()).await?;
         let mut contents = String::new();
         file.read_to_string(&mut contents).await?;
-        
+
         // Try YAML first, then JSON
-        if path.as_ref().extension().and_then(|s| s.to_str()) == Some("yaml") 
-            || path.as_ref().extension().and_then(|s| s.to_str()) == Some("yml") {
+        if path.as_ref().extension().and_then(|s| s.to_str()) == Some("yaml")
+            || path.as_ref().extension().and_then(|s| s.to_str()) == Some("yml")
+        {
             Ok(serde_yaml::from_str(&contents)?)
         } else {
             Ok(serde_json::from_str(&contents)?)
         }
     }
-    
+
     /// Create a default configuration
     pub fn default() -> Self {
         Self {
@@ -107,7 +108,7 @@ impl RegistryConfig {
             packages: PackageConfig::default(),
         }
     }
-    
+
     /// Create a configuration with TLS enabled
     pub fn with_tls(cert_path: PathBuf, key_path: PathBuf) -> Self {
         Self {
@@ -128,7 +129,7 @@ impl RegistryConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_config_serialization() {
         let config = RegistryConfig::default();
@@ -136,7 +137,7 @@ mod tests {
         let parsed: RegistryConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(parsed.server.listen_addr, config.server.listen_addr);
     }
-    
+
     #[test]
     fn test_tls_config() {
         let config = RegistryConfig::with_tls(

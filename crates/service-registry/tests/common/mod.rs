@@ -81,18 +81,3 @@ pub trait TestScenario {
     /// Run the test scenario
     async fn run(&self) -> anyhow::Result<()>;
 }
-
-/// Macro to create a test that requires specific features
-macro_rules! integration_test {
-    ($name:ident, features = [$($feature:literal),*], $body:expr) => {
-        #[test]
-        #[cfg(all(feature = "integration-tests", $(feature = $feature),*))]
-        fn $name() {
-            smol::block_on(async {
-                $body
-            });
-        }
-    };
-}
-
-pub(crate) use integration_test;

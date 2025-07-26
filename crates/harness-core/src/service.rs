@@ -4,12 +4,12 @@
 //! perform actions. Services are strongly typed with their action and event
 //! types, while a wrapper layer handles JSON serialization for wire protocol.
 
-use async_trait::async_trait;
 use async_channel::Receiver;
-use serde::de::DeserializeOwned;
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
+use async_trait::async_trait;
 use schemars::JsonSchema;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::{Error, Result};
@@ -22,16 +22,16 @@ use crate::{Error, Result};
 pub trait Service: Send + Sync + 'static {
     /// The input type for actions this service can perform
     type Action: DeserializeOwned + Send;
-    
+
     /// The event type emitted during action execution
     type Event: Serialize + Send;
-    
+
     /// Get the service name
     fn name(&self) -> &str;
-    
+
     /// Get the service description
     fn description(&self) -> &str;
-    
+
     /// Execute an action, returning a stream of events
     async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>>;
 }
@@ -41,13 +41,13 @@ pub trait Service: Send + Sync + 'static {
 pub struct ActionDescriptor {
     /// Action name
     pub name: String,
-    
+
     /// Action description
     pub description: String,
-    
+
     /// JSON schema for the action input
     pub input_schema: Value,
-    
+
     /// JSON schema for the event type
     pub event_schema: Value,
 }
@@ -78,14 +78,14 @@ where
     pub fn new(service: S) -> Self {
         let action_schema = schemars::schema_for!(S::Action);
         let event_schema = schemars::schema_for!(S::Event);
-        
+
         Self {
             inner: service,
             action_schema: serde_json::to_value(action_schema).unwrap(),
             event_schema: serde_json::to_value(event_schema).unwrap(),
         }
     }
-    
+
     /// Get available actions with their schemas
     pub fn available_actions(&self) -> Vec<ActionDescriptor> {
         // In a real implementation, we'd have a way to enumerate actions
@@ -97,19 +97,19 @@ where
             event_schema: self.event_schema.clone(),
         }]
     }
-    
+
     /// Dispatch an action using JSON input
     pub async fn dispatch_json(&self, _action_name: &str, input: Value) -> Result<Receiver<Value>> {
         // Deserialize JSON to typed action
         let action: S::Action = serde_json::from_value(input)
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {}", e)))?;
-        
+
         // Execute the typed action
         let event_rx = self.inner.dispatch_action(action).await?;
-        
+
         // Create channel for JSON events
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Spawn task to convert events to JSON
         // Note: In production, this would use the runtime's spawn mechanism
         std::thread::spawn(move || {
@@ -121,7 +121,7 @@ where
                 }
             });
         });
-        
+
         Ok(rx)
     }
 }
@@ -131,13 +131,13 @@ where
 pub trait JsonService: Send + Sync {
     /// Get the service name
     fn name(&self) -> &str;
-    
+
     /// Get the service description
     fn description(&self) -> &str;
-    
+
     /// Get available actions
     fn available_actions(&self) -> Vec<ActionDescriptor>;
-    
+
     /// Dispatch an action using JSON
     async fn dispatch_json(&self, action_name: &str, input: Value) -> Result<Receiver<Value>>;
 }
@@ -153,15 +153,15 @@ where
     fn name(&self) -> &str {
         self.inner.name()
     }
-    
+
     fn description(&self) -> &str {
         self.inner.description()
     }
-    
+
     fn available_actions(&self) -> Vec<ActionDescriptor> {
         self.available_actions()
     }
-    
+
     async fn dispatch_json(&self, action_name: &str, input: Value) -> Result<Receiver<Value>> {
         self.dispatch_json(action_name, input).await
     }
@@ -182,7 +182,7 @@ impl ServiceStack {
             services: HashMap::new(),
         }
     }
-    
+
     /// Register a service in the stack
     ///
     /// The service must implement JsonSchema for its Action and Event types.
@@ -198,17 +198,17 @@ impl ServiceStack {
                 instance_name
             )));
         }
-        
+
         let wrapper = ServiceWrapper::new(service);
         self.services.insert(instance_name, Box::new(wrapper));
         Ok(())
     }
-    
+
     /// Get a service by instance name
     pub fn get(&self, instance_name: &str) -> Option<&dyn JsonService> {
         self.services.get(instance_name).map(|s| s.as_ref())
     }
-    
+
     /// List all registered service instances
     pub fn list(&self) -> Vec<(&str, &dyn JsonService)> {
         self.services
@@ -216,7 +216,7 @@ impl ServiceStack {
             .map(|(name, service)| (name.as_str(), service.as_ref()))
             .collect()
     }
-    
+
     /// Get all available actions across all services
     pub fn all_actions(&self) -> Vec<(String, ActionDescriptor)> {
         self.services
@@ -229,7 +229,7 @@ impl ServiceStack {
             })
             .collect()
     }
-    
+
     /// Dispatch an action to a specific service instance
     pub async fn dispatch(
         &self,
@@ -237,10 +237,10 @@ impl ServiceStack {
         action_name: &str,
         input: Value,
     ) -> Result<Receiver<Value>> {
-        let service = self
-            .get(instance_name)
-            .ok_or_else(|| Error::service_type(format!("Service instance '{}' not found", instance_name)))?;
-        
+        let service = self.get(instance_name).ok_or_else(|| {
+            Error::service_type(format!("Service instance '{}' not found", instance_name))
+        })?;
+
         service.dispatch_json(action_name, input).await
     }
 }
@@ -254,34 +254,34 @@ impl Default for ServiceStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{Deserialize, Serialize};
     use schemars::JsonSchema;
-    
+    use serde::{Deserialize, Serialize};
+
     #[derive(Debug, Serialize, Deserialize, JsonSchema)]
     struct TestAction {
         message: String,
     }
-    
+
     #[derive(Debug, Serialize, Deserialize, JsonSchema)]
     struct TestEvent {
         response: String,
     }
-    
+
     struct TestService;
-    
+
     #[async_trait]
     impl Service for TestService {
         type Action = TestAction;
         type Event = TestEvent;
-        
+
         fn name(&self) -> &str {
             "test-service"
         }
-        
+
         fn description(&self) -> &str {
             "A test service"
         }
-        
+
         async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
             let (tx, rx) = async_channel::bounded(1);
             tx.send(TestEvent {
@@ -292,36 +292,36 @@ mod tests {
             Ok(rx)
         }
     }
-    
+
     #[test]
     fn test_service_stack_registration() {
         let mut stack = ServiceStack::new();
         let service = TestService;
-        
+
         // Register service
         stack.register("test-1".to_string(), service).unwrap();
-        
+
         // Check it's registered
         assert!(stack.get("test-1").is_some());
         assert_eq!(stack.list().len(), 1);
-        
+
         // Try to register with same name (should fail)
         let result = stack.register("test-1".to_string(), TestService);
         assert!(result.is_err());
     }
-    
+
     #[smol_potat::test]
     async fn test_action_dispatch() {
-            let mut stack = ServiceStack::new();
-            stack.register("test-1".to_string(), TestService).unwrap();
-            
-            let input = serde_json::json!({
-                "message": "Hello"
-            });
-            
-            let rx = stack.dispatch("test-1", "default", input).await.unwrap();
-            let event = rx.recv().await.unwrap();
-            
-            assert_eq!(event["response"], "Echo: Hello");
+        let mut stack = ServiceStack::new();
+        stack.register("test-1".to_string(), TestService).unwrap();
+
+        let input = serde_json::json!({
+            "message": "Hello"
+        });
+
+        let rx = stack.dispatch("test-1", "default", input).await.unwrap();
+        let event = rx.recv().await.unwrap();
+
+        assert_eq!(event["response"], "Echo: Hello");
     }
 }

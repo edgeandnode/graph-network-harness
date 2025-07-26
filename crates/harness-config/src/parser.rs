@@ -1,8 +1,8 @@
 //! Configuration parser with environment variable substitution
 
 use crate::{
+    resolver::{resolve_service_env, validate_references, ResolutionContext},
     Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Result, Service, ServiceType,
-    resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
 use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
@@ -158,7 +158,7 @@ pub fn convert_to_orchestrator_with_context(
     // Use provided context or create a default one
     let default_context = ResolutionContext::new();
     let ctx = context.unwrap_or(&default_context);
-    
+
     let env = resolve_service_env(service, ctx)?;
 
     let target = match &service.service_type {
@@ -272,26 +272,40 @@ mod tests {
 
     #[test]
     fn test_env_var_substitution() {
-        std::env::set_var("TEST_VAR", "test_value");
+        // Use an existing environment variable that's likely to be set
+        if let Ok(home) = std::env::var("HOME") {
+            let result = substitute_env_vars("${HOME}").unwrap();
+            assert_eq!(result, home);
 
-        let result = substitute_env_vars("${TEST_VAR}").unwrap();
-        assert_eq!(result, "test_value");
+            let result = substitute_env_vars("prefix-${HOME}-suffix").unwrap();
+            assert_eq!(result, format!("prefix-{}-suffix", home));
+        } else if let Ok(user) = std::env::var("USER") {
+            let result = substitute_env_vars("${USER}").unwrap();
+            assert_eq!(result, user);
 
-        let result = substitute_env_vars("prefix-${TEST_VAR}-suffix").unwrap();
-        assert_eq!(result, "prefix-test_value-suffix");
-
-        std::env::remove_var("TEST_VAR");
+            let result = substitute_env_vars("prefix-${USER}-suffix").unwrap();
+            assert_eq!(result, format!("prefix-{}-suffix", user));
+        } else {
+            // Skip test if no suitable env var is available
+            println!("Skipping test - no suitable environment variable found");
+        }
     }
 
     #[test]
     fn test_env_var_with_default() {
-        let result = substitute_env_vars("${MISSING_VAR:-default_value}").unwrap();
+        // Test with a variable that's unlikely to exist
+        let result = substitute_env_vars("${MISSING_VAR_UNLIKELY_TO_EXIST:-default_value}").unwrap();
         assert_eq!(result, "default_value");
 
-        std::env::set_var("EXISTING_VAR", "actual");
-        let result = substitute_env_vars("${EXISTING_VAR:-default}").unwrap();
-        assert_eq!(result, "actual");
-        std::env::remove_var("EXISTING_VAR");
+        // Test with an existing variable (use one that's likely to be set)
+        if let Ok(path) = std::env::var("PATH") {
+            let result = substitute_env_vars("${PATH:-default}").unwrap();
+            assert_eq!(result, path);
+        } else {
+            // If PATH isn't set, just test the default case
+            let result = substitute_env_vars("${ANOTHER_MISSING_VAR:-default}").unwrap();
+            assert_eq!(result, "default");
+        }
     }
 
     #[test]

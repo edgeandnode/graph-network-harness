@@ -141,35 +141,33 @@ fn test_service_target_env_methods() {
     assert_eq!(target.env(), env);
 }
 
-#[test]
-fn test_health_checker_basic_functionality() {
-    smol::block_on(async {
-        let checker = HealthChecker::new();
+#[smol_potat::test]
+async fn test_health_checker_basic_functionality() {
+    let checker = HealthChecker::new();
 
-        // Test successful health check
-        let success_config = HealthCheck {
-            command: "true".to_string(),
-            args: vec![],
-            interval: 10,
-            retries: 1,
-            timeout: 5,
-        };
+    // Test successful health check
+    let success_config = HealthCheck {
+        command: "true".to_string(),
+        args: vec![],
+        interval: 10,
+        retries: 1,
+        timeout: 5,
+    };
 
-        let result = checker.check_health(&success_config).await.unwrap();
-        assert_eq!(result, HealthStatus::Healthy);
+    let result = checker.check_health(&success_config).await.unwrap();
+    assert_eq!(result, HealthStatus::Healthy);
 
-        // Test failing health check
-        let fail_config = HealthCheck {
-            command: "false".to_string(),
-            args: vec![],
-            interval: 10,
-            retries: 1,
-            timeout: 5,
-        };
+    // Test failing health check
+    let fail_config = HealthCheck {
+        command: "false".to_string(),
+        args: vec![],
+        interval: 10,
+        retries: 1,
+        timeout: 5,
+    };
 
-        let result = checker.check_health(&fail_config).await.unwrap();
-        assert!(matches!(result, HealthStatus::Unhealthy(_)));
-    });
+    let result = checker.check_health(&fail_config).await.unwrap();
+    assert!(matches!(result, HealthStatus::Unhealthy(_)));
 }
 
 #[test]
@@ -231,40 +229,38 @@ fn test_remote_target_install_paths() {
     assert_eq!(custom_target.install_path(), "/custom/install/path");
 }
 
-#[test]
-fn test_service_manager_initialization() {
-    smol::block_on(async {
-        let manager = ServiceManager::new().await.unwrap();
+#[smol_potat::test]
+async fn test_service_manager_initialization() {
+    let manager = ServiceManager::new().await.unwrap();
 
-        // Test that all executors are registered
-        let process_config = ServiceConfig {
-            name: "test-process".to_string(),
-            target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["test".to_string()],
-                env: HashMap::new(),
-                working_dir: None,
-            },
-            dependencies: vec![],
-            health_check: None,
-        };
+    // Test that all executors are registered
+    let process_config = ServiceConfig {
+        name: "test-process".to_string(),
+        target: ServiceTarget::Process {
+            binary: "echo".to_string(),
+            args: vec!["test".to_string()],
+            env: HashMap::new(),
+            working_dir: None,
+        },
+        dependencies: vec![],
+        health_check: None,
+    };
 
-        let docker_config = ServiceConfig {
-            name: "test-docker".to_string(),
-            target: ServiceTarget::Docker {
-                image: "hello-world".to_string(),
-                env: HashMap::new(),
-                ports: vec![],
-                volumes: vec![],
-            },
-            dependencies: vec![],
-            health_check: None,
-        };
+    let docker_config = ServiceConfig {
+        name: "test-docker".to_string(),
+        target: ServiceTarget::Docker {
+            image: "hello-world".to_string(),
+            env: HashMap::new(),
+            ports: vec![],
+            volumes: vec![],
+        },
+        dependencies: vec![],
+        health_check: None,
+    };
 
-        // The manager should be able to find appropriate executors
-        // (We can't test the actual service starting without infrastructure)
-        assert!(manager.list_services().await.unwrap().is_empty());
-    });
+    // The manager should be able to find appropriate executors
+    // (We can't test the actual service starting without infrastructure)
+    assert!(manager.list_services().await.unwrap().is_empty());
 }
 
 #[test]

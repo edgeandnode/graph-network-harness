@@ -6,13 +6,13 @@
 
 use crate::{Config, ConfigError, Result, Service};
 use nom::{
+    IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, take_while1, take_until},
+    bytes::complete::{tag, take_until, take_while1},
     character::complete::{alpha1, alphanumeric1, char},
     combinator::{map, recognize, verify},
     multi::many0,
-    sequence::{delimited, pair, preceded, separated_pair},
-    IResult,
+    sequence::{pair, separated_pair},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -59,7 +59,10 @@ impl ResolutionContext {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Variable {
     /// Environment variable with optional default
-    EnvVar { name: String, default: Option<String> },
+    EnvVar {
+        name: String,
+        default: Option<String>,
+    },
     /// Service reference
     ServiceRef { service: String, property: String },
 }
@@ -70,9 +73,13 @@ fn env_var_name(input: &str) -> IResult<&str, &str> {
         take_while1(|c: char| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'),
         |s: &str| {
             // Must start with uppercase letter
-            s.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false)
-        }
-    )(input)
+            s.chars()
+                .next()
+                .map(|c| c.is_ascii_uppercase())
+                .unwrap_or(false)
+        },
+    )
+    .parse(input)
 }
 
 /// Parse a service name (lowercase identifier)
@@ -85,17 +92,14 @@ fn service_name(input: &str) -> IResult<&str, &str> {
         |s: &str| {
             // Service names should be lowercase or have dashes/underscores
             s.chars().next().unwrap().is_alphabetic()
-        }
-    )(input)
+        },
+    )
+    .parse(input)
 }
 
 /// Parse a service property (ip, port, host)
 fn service_property(input: &str) -> IResult<&str, &str> {
-    alt((
-        tag("ip"),
-        tag("port"),
-        tag("host"),
-    ))(input)
+    alt((tag("ip"), tag("port"), tag("host"))).parse(input)
 }
 
 /// Parse an environment variable with optional default
@@ -110,14 +114,14 @@ fn parse_env_var(input: &str) -> IResult<&str, Variable> {
             },
         ),
         // Without default - consume all remaining input as the variable name
-        map(
-            nom::combinator::all_consuming(env_var_name),
-            |name| Variable::EnvVar {
+        map(nom::combinator::all_consuming(env_var_name), |name| {
+            Variable::EnvVar {
                 name: name.to_string(),
                 default: None,
-            },
-        ),
-    ))(input)
+            }
+        }),
+    ))
+    .parse(input)
 }
 
 /// Parse a service reference
@@ -128,7 +132,8 @@ fn parse_service_ref(input: &str) -> IResult<&str, Variable> {
             service: service.to_string(),
             property: property.to_string(),
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 /// Parse a variable expression (the part inside ${...})
@@ -144,24 +149,33 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
                 if parts.len() == 2 {
                     let service = parts[0];
                     let property = parts[1];
-                    
+
                     // Check what's wrong
                     if service_name(service).is_err() {
-                        Ok(("", Err(ConfigError::ValidationError(format!(
-                            "Invalid service name '{}' in reference '{}'",
-                            service, input
-                        )))))
+                        Ok((
+                            "",
+                            Err(ConfigError::ValidationError(format!(
+                                "Invalid service name '{}' in reference '{}'",
+                                service, input
+                            ))),
+                        ))
                     } else {
-                        Ok(("", Err(ConfigError::ValidationError(format!(
-                            "Invalid service reference type '{}' in '{}'",
-                            property, input
-                        )))))
+                        Ok((
+                            "",
+                            Err(ConfigError::ValidationError(format!(
+                                "Invalid service reference type '{}' in '{}'",
+                                property, input
+                            ))),
+                        ))
                     }
                 } else {
-                    Ok(("", Err(ConfigError::ValidationError(format!(
-                        "Invalid service reference format: '{}'",
-                        input
-                    )))))
+                    Ok((
+                        "",
+                        Err(ConfigError::ValidationError(format!(
+                            "Invalid service reference format: '{}'",
+                            input
+                        ))),
+                    ))
                 }
             }
         }
@@ -169,10 +183,13 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
         // No dot, must be an environment variable
         match parse_env_var(input) {
             Ok((_, var)) => Ok(("", Ok(var))),
-            Err(_) => Ok(("", Err(ConfigError::ValidationError(format!(
-                "Invalid environment variable name '{}'. Environment variables must be uppercase with underscores",
-                input
-            ))))),
+            Err(_) => Ok((
+                "",
+                Err(ConfigError::ValidationError(format!(
+                    "Invalid environment variable name '{}'. Environment variables must be uppercase with underscores",
+                    input
+                ))),
+            )),
         }
     }
 }
@@ -182,12 +199,16 @@ pub fn parse_variable(input: &str) -> IResult<&str, Result<Variable>> {
     let (input, _) = tag("${")(input)?;
     let (input, content) = take_until("}")(input)?;
     let (input, _) = tag("}")(input)?;
-    
+
     match parse_variable_expr(content) {
         Ok((_, result)) => Ok((input, result)),
-        Err(_) => Ok((input, Err(ConfigError::ValidationError(format!(
-            "Failed to parse variable expression: '{}'", content
-        ))))),
+        Err(_) => Ok((
+            input,
+            Err(ConfigError::ValidationError(format!(
+                "Failed to parse variable expression: '{}'",
+                content
+            ))),
+        )),
     }
 }
 
@@ -201,7 +222,7 @@ pub fn find_variables(input: &str) -> Vec<Result<(usize, usize, Variable)>> {
         if let Some(start) = remaining.find("${") {
             pos += start;
             remaining = &remaining[start..];
-            
+
             match parse_variable(remaining) {
                 Ok((rest, var_result)) => {
                     let end = pos + (remaining.len() - rest.len());
@@ -232,13 +253,13 @@ pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String
     let mut result = String::new();
     let mut last_end = 0;
     let mut errors = Vec::new();
-    
+
     for var_result in variables {
         let (start, end, var) = var_result?;
-        
+
         // Add the part before the variable
         result.push_str(&input[last_end..start]);
-        
+
         // Resolve the variable
         match var {
             Variable::EnvVar { name, default } => {
@@ -252,46 +273,44 @@ pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String
                     errors.push(name);
                 }
             }
-            Variable::ServiceRef { service, property } => {
-                match property.as_str() {
-                    "ip" => {
-                        if let Some(ip) = context.service_ips.get(&service) {
-                            result.push_str(ip);
-                        } else {
-                            errors.push(format!("{}.{}", service, property));
-                        }
-                    }
-                    "host" => {
-                        if let Some(host) = context.service_hosts.get(&service) {
-                            result.push_str(host);
-                        } else {
-                            errors.push(format!("{}.{}", service, property));
-                        }
-                    }
-                    "port" => {
-                        if let Some(port) = context.service_ports.get(&service) {
-                            result.push_str(&port.to_string());
-                        } else {
-                            errors.push(format!("{}.{}", service, property));
-                        }
-                    }
-                    _ => {
+            Variable::ServiceRef { service, property } => match property.as_str() {
+                "ip" => {
+                    if let Some(ip) = context.service_ips.get(&service) {
+                        result.push_str(ip);
+                    } else {
                         errors.push(format!("{}.{}", service, property));
                     }
                 }
-            }
+                "host" => {
+                    if let Some(host) = context.service_hosts.get(&service) {
+                        result.push_str(host);
+                    } else {
+                        errors.push(format!("{}.{}", service, property));
+                    }
+                }
+                "port" => {
+                    if let Some(port) = context.service_ports.get(&service) {
+                        result.push_str(&port.to_string());
+                    } else {
+                        errors.push(format!("{}.{}", service, property));
+                    }
+                }
+                _ => {
+                    errors.push(format!("{}.{}", service, property));
+                }
+            },
         }
-        
+
         last_end = end;
     }
-    
+
     // Add the remaining part
     result.push_str(&input[last_end..]);
-    
+
     if !errors.is_empty() {
         return Err(ConfigError::EnvVarNotFound(errors.join(", ")));
     }
-    
+
     Ok(result)
 }
 
@@ -319,7 +338,7 @@ pub fn find_all_references(config: &Config) -> Result<(HashSet<String>, HashSet<
     for service in config.services.values() {
         for value in service.env.values() {
             let variables = find_variables(value);
-            
+
             for var_result in variables {
                 let (_, _, var) = var_result?;
                 match var {
@@ -340,12 +359,12 @@ pub fn find_all_references(config: &Config) -> Result<(HashSet<String>, HashSet<
 /// Validate that all references can be resolved
 pub fn validate_references(config: &Config) -> Result<()> {
     let (env_vars, service_refs) = find_all_references(config)?;
-    
+
     // Check service references
     for service_ref in &service_refs {
         if let Some(dot_pos) = service_ref.find('.') {
             let service_name = &service_ref[..dot_pos];
-            
+
             if !config.services.contains_key(service_name) {
                 return Err(ConfigError::ValidationError(format!(
                     "Service reference '{}' refers to unknown service",
@@ -354,23 +373,22 @@ pub fn validate_references(config: &Config) -> Result<()> {
             }
         }
     }
-    
+
     // For environment variables, we can only warn since they might be set at runtime
     let missing_env_vars: Vec<String> = env_vars
         .into_iter()
         .filter(|var| std::env::var(var).is_err())
         .collect();
-        
+
     if !missing_env_vars.is_empty() {
         eprintln!(
             "Warning: The following environment variables are not set: {}",
             missing_env_vars.join(", ")
         );
     }
-    
+
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -379,28 +397,28 @@ mod tests {
     #[test]
     fn test_env_var_validation() {
         // Test that environment variable parsing enforces uppercase names
-        let valid_cases = vec![
-            r#"${TEST_VAR}"#,
-            r#"${TEST123}"#,
-            r#"${TEST_VAR_123}"#,
-        ];
-        
+        let valid_cases = vec![r#"${TEST_VAR}"#, r#"${TEST123}"#, r#"${TEST_VAR_123}"#];
+
         for case in valid_cases {
             let result = find_variables(case);
             assert_eq!(result.len(), 1);
             assert!(result[0].is_ok(), "Should parse valid env var: {}", case);
         }
-        
+
         let invalid_cases = vec![
-            r#"${test_var}"#,    // lowercase
-            r#"${Test_Var}"#,    // mixed case
-            r#"${123TEST}"#,     // starts with digit
+            r#"${test_var}"#, // lowercase
+            r#"${Test_Var}"#, // mixed case
+            r#"${123TEST}"#,  // starts with digit
         ];
-        
+
         for case in invalid_cases {
             let result = find_variables(case);
             assert_eq!(result.len(), 1);
-            assert!(result[0].is_err(), "Should reject invalid env var: {}", case);
+            assert!(
+                result[0].is_err(),
+                "Should reject invalid env var: {}",
+                case
+            );
         }
     }
 
@@ -418,24 +436,33 @@ mod tests {
         // Valid env var
         assert_eq!(
             parse_variable_expr("TEST_VAR").unwrap().1.unwrap(),
-            Variable::EnvVar { name: "TEST_VAR".to_string(), default: None }
+            Variable::EnvVar {
+                name: "TEST_VAR".to_string(),
+                default: None
+            }
         );
-        
+
         // Valid env var with default
         assert_eq!(
             parse_variable_expr("TEST_VAR:-default").unwrap().1.unwrap(),
-            Variable::EnvVar { name: "TEST_VAR".to_string(), default: Some("default".to_string()) }
+            Variable::EnvVar {
+                name: "TEST_VAR".to_string(),
+                default: Some("default".to_string())
+            }
         );
-        
+
         // Valid service ref
         assert_eq!(
             parse_variable_expr("postgres.ip").unwrap().1.unwrap(),
-            Variable::ServiceRef { service: "postgres".to_string(), property: "ip".to_string() }
+            Variable::ServiceRef {
+                service: "postgres".to_string(),
+                property: "ip".to_string()
+            }
         );
-        
+
         // Invalid env var (lowercase)
         assert!(parse_variable_expr("test_var").unwrap().1.is_err());
-        
+
         // Invalid service property
         assert!(parse_variable_expr("postgres.invalid").unwrap().1.is_err());
     }
@@ -444,24 +471,46 @@ mod tests {
     fn test_find_variables() {
         let input = "postgresql://${DB_USER}:${DB_PASS:-secret}@${postgres.ip}:${postgres.port}/db";
         let vars = find_variables(input);
-        
+
         assert_eq!(vars.len(), 4);
-        
-        let parsed_vars: Vec<Variable> = vars.into_iter()
-            .map(|r| r.unwrap().2)
-            .collect();
-            
-        assert_eq!(parsed_vars[0], Variable::EnvVar { name: "DB_USER".to_string(), default: None });
-        assert_eq!(parsed_vars[1], Variable::EnvVar { name: "DB_PASS".to_string(), default: Some("secret".to_string()) });
-        assert_eq!(parsed_vars[2], Variable::ServiceRef { service: "postgres".to_string(), property: "ip".to_string() });
-        assert_eq!(parsed_vars[3], Variable::ServiceRef { service: "postgres".to_string(), property: "port".to_string() });
+
+        let parsed_vars: Vec<Variable> = vars.into_iter().map(|r| r.unwrap().2).collect();
+
+        assert_eq!(
+            parsed_vars[0],
+            Variable::EnvVar {
+                name: "DB_USER".to_string(),
+                default: None
+            }
+        );
+        assert_eq!(
+            parsed_vars[1],
+            Variable::EnvVar {
+                name: "DB_PASS".to_string(),
+                default: Some("secret".to_string())
+            }
+        );
+        assert_eq!(
+            parsed_vars[2],
+            Variable::ServiceRef {
+                service: "postgres".to_string(),
+                property: "ip".to_string()
+            }
+        );
+        assert_eq!(
+            parsed_vars[3],
+            Variable::ServiceRef {
+                service: "postgres".to_string(),
+                property: "port".to_string()
+            }
+        );
     }
 
     #[test]
     fn test_invalid_variables() {
         let input = "${invalid_var} ${postgres.invalid}";
         let vars = find_variables(input);
-        
+
         assert_eq!(vars.len(), 2);
         assert!(vars[0].is_err());
         assert!(vars[1].is_err());

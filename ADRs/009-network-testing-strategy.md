@@ -56,29 +56,27 @@ Combines local, LAN, and isolated networks to test WireGuard requirement detecti
 
 ### Example Test Implementation
 ```rust
-#[test]
-fn test_mixed_network_topology() {
-    smol::block_on(async {
-        // Start docker-compose environment
-        setup_docker_compose("mixed-topology.yml").await;
-        
-        // Create network manager
-        let nm = NetworkManager::new(test_config());
-        
-        // Discover network topology
-        let topology = nm.discover_topology().await.unwrap();
-        
-        // Verify correct network detection
-        assert_eq!(topology.get("local-service").unwrap().location, NetworkLocation::Local);
-        assert_eq!(topology.get("lan-service").unwrap().location, NetworkLocation::RemoteLAN);
-        assert_eq!(topology.get("remote-service").unwrap().location, NetworkLocation::WireGuard);
-        
-        // Test IP resolution logic
-        let ip = nm.resolve_service_ip("local-service", "remote-service").await.unwrap();
-        assert!(ip.to_string().starts_with("10.42.")); // WireGuard subnet
-        
-        cleanup_docker_compose("mixed-topology.yml").await;
-    });
+#[smol_potat::test]
+async fn test_mixed_network_topology() {
+    // Start docker-compose environment
+    setup_docker_compose("mixed-topology.yml").await;
+    
+    // Create network manager
+    let nm = NetworkManager::new(test_config());
+    
+    // Discover network topology
+    let topology = nm.discover_topology().await.unwrap();
+    
+    // Verify correct network detection
+    assert_eq!(topology.get("local-service").unwrap().location, NetworkLocation::Local);
+    assert_eq!(topology.get("lan-service").unwrap().location, NetworkLocation::RemoteLAN);
+    assert_eq!(topology.get("remote-service").unwrap().location, NetworkLocation::WireGuard);
+    
+    // Test IP resolution logic
+    let ip = nm.resolve_service_ip("local-service", "remote-service").await.unwrap();
+    assert!(ip.to_string().starts_with("10.42.")); // WireGuard subnet
+    
+    cleanup_docker_compose("mixed-topology.yml").await;
 }
 ```
 

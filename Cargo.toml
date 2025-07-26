@@ -12,7 +12,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["The Graph Network Harness Contributors"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/graphprotocol/graph-network-harness"
@@ -20,53 +20,56 @@ repository = "https://github.com/graphprotocol/graph-network-harness"
 [workspace.dependencies]
 # Core dependencies
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0.12"
 clap = { version = "4.5", features = ["derive"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1.0.124"
-serde_yaml = "0.9.21"
+serde_json = "1.0"
+serde_yaml = "0.9"
 reqwest = { version = "0.12.15", features = ["json"] }
-
-# Container and process management
-duct = "0.13"
 
 # Utilities
 uuid = { version = "1.11", features = ["v4", "serde"] }
 tempfile = "3.13"
 futures = "0.3"
 futures-util = "0.3"
-notify = "6.1"
+notify = "8.1"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.11"
-base64 = "0.21"
+base64 = "0.22.1"
 async-trait = "0.1"
 pin-project-lite = "0.2"
-nom = "7.1"
-schemars = "0.8"
+nom = "8.0.0"
+schemars = "1.0.4"
 
 # New dependencies for distributed features
 wireguard-control = "1.5"
-openssh = "0.10"
-dirs = "5.0"
+
+# Database
+sled = "0.34"
+dirs = "6.0"
 
 # Service registry dependencies
-async-tungstenite = "0.25"
-tungstenite = "0.21"
+async-tungstenite = "0.30"
+tungstenite = "0.27"
 async-net = "2.0"
 async-fs = "2.1"
-async-channel = "2.1"
-async-tls = { version = "0.13", default-features = false }
-rustls = { version = "0.21", features = ["dangerous_configuration"] }
-rustls-pemfile = "2.0"
-webpki-roots = "0.22"
+async-channel = "2.5"
+futures-rustls = "0.26"
+rustls = { version = "0.23.29" }
+rustls-pemfile = "2.2"
+webpki-roots = "1.0.2"
 ipnet = { version = "2.9", features = ["serde"] }
 indexmap = "2.0"
 smol = "2.0"
 
 # Testing dependencies
 smol-potat = "1.0"
+
+# Ethereum/EVM dependencies
+alloy = { version = "1.0", features = ["full", "node-bindings", "anvil"] }
+alloy-rpc-types-anvil = "1.0"
 
 # Internal crates
 command-executor = { path = "crates/command-executor" }
@@ -79,4 +82,3 @@ missing_docs = "warn"
 
 [workspace.lints.clippy]
 all = "warn"
-

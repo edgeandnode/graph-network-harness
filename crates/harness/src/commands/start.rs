@@ -20,22 +20,25 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
     // Track failures
     let mut failures = Vec::new();
     let mut started_services = Vec::new();
-    
+
     // Create resolution context for environment variables and service references
     let mut resolution_context = ResolutionContext::new();
 
     for service_name in &ordered_services {
-        let service_def = config
-            .services
-            .get(service_name)
-            .ok_or_else(|| anyhow::anyhow!("Service '{}' not found in configuration", service_name))?;
+        let service_def = config.services.get(service_name).ok_or_else(|| {
+            anyhow::anyhow!("Service '{}' not found in configuration", service_name)
+        })?;
 
         // Show progress
         print!("Starting {}...", service_name);
         io::stdout().flush()?;
 
         // Convert from harness_config types to service_orchestration types with resolution context
-        let service_config = match parser::convert_to_orchestrator_with_context(&config, service_name, Some(&resolution_context)) {
+        let service_config = match parser::convert_to_orchestrator_with_context(
+            &config,
+            service_name,
+            Some(&resolution_context),
+        ) {
             Ok(config) => config,
             Err(e) => {
                 println!(" ✗");
@@ -52,10 +55,13 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
         };
 
         match daemon.send_request(request).await {
-            Ok(Response::ServiceStarted { name: _, network_info }) => {
+            Ok(Response::ServiceStarted {
+                name: _,
+                network_info,
+            }) => {
                 println!(" ✓");
                 started_services.push(service_name.clone());
-                
+
                 // Update resolution context with actual service network info from daemon
                 resolution_context.add_service(
                     service_name.clone(),
@@ -63,23 +69,22 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                     network_info.port,
                     network_info.hostname,
                 );
-                
+
                 // Wait for service to be running if it has a health check
                 if service_def.health_check.is_some() {
                     print!("  Waiting for health check...");
                     io::stdout().flush()?;
-                    
+
                     let start = std::time::Instant::now();
-                    let timeout = std::time::Duration::from_secs(
-                        service_def.startup_timeout.unwrap_or(60)
-                    );
-                    
+                    let timeout =
+                        std::time::Duration::from_secs(service_def.startup_timeout.unwrap_or(60));
+
                     loop {
                         if start.elapsed() > timeout {
                             println!(" ⚠️  Timeout");
                             break;
                         }
-                        
+
                         // Check service status
                         match daemon
                             .send_request(Request::GetServiceStatus {
@@ -108,7 +113,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                             }
                             _ => break,
                         }
-                        
+
                         smol::Timer::after(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -117,7 +122,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                 // Fallback for old daemon behavior
                 println!(" ✓");
                 started_services.push(service_name.clone());
-                
+
                 // Use default localhost values if daemon doesn't provide network info
                 resolution_context.add_service(
                     service_name.clone(),
@@ -125,23 +130,22 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                     None,
                     format!("{}.local", service_name),
                 );
-                
+
                 // Wait for service to be running if it has a health check
                 if service_def.health_check.is_some() {
                     print!("  Waiting for health check...");
                     io::stdout().flush()?;
-                    
+
                     let start = std::time::Instant::now();
-                    let timeout = std::time::Duration::from_secs(
-                        service_def.startup_timeout.unwrap_or(60)
-                    );
-                    
+                    let timeout =
+                        std::time::Duration::from_secs(service_def.startup_timeout.unwrap_or(60));
+
                     loop {
                         if start.elapsed() > timeout {
                             println!(" ⚠️  Timeout");
                             break;
                         }
-                        
+
                         // Check service status
                         match daemon
                             .send_request(Request::GetServiceStatus {
@@ -170,7 +174,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                             }
                             _ => break,
                         }
-                        
+
                         smol::Timer::after(std::time::Duration::from_millis(500)).await;
                     }
                 }
@@ -179,7 +183,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                 println!(" ✗");
                 eprintln!("  Error: {}", message);
                 failures.push((service_name.clone(), message));
-                
+
                 // Stop on failure - dependencies won't work
                 eprintln!("  Aborting due to failure (dependent services cannot start)");
                 break;
@@ -200,21 +204,26 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
 
     // Print summary
     println!("\n{} services started successfully", started_services.len());
-    
+
     if !failures.is_empty() {
         eprintln!("\n{} services failed to start:", failures.len());
         for (service, error) in &failures {
             eprintln!("  - {}: {}", service, error);
         }
-        
+
         // Show which services were not started due to failures
         let not_started: Vec<String> = ordered_services
             .into_iter()
-            .filter(|s| !started_services.contains(s) && !failures.iter().any(|(name, _)| name == s))
+            .filter(|s| {
+                !started_services.contains(s) && !failures.iter().any(|(name, _)| name == s)
+            })
             .collect();
-            
+
         if !not_started.is_empty() {
-            eprintln!("\n{} services were not started due to dependency failures:", not_started.len());
+            eprintln!(
+                "\n{} services were not started due to dependency failures:",
+                not_started.len()
+            );
             for service in &not_started {
                 eprintln!("  - {}", service);
             }

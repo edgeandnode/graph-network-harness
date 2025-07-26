@@ -202,7 +202,7 @@ pub async fn execute(&self, cmd: Command) -> Result<Output> {
 Write tests that work across different async runtimes.
 
 ### Guidelines:
-- Use `smol` as the test runtime
+- Use `smol_potat::test` as the test annotation
 - Test both success and error paths
 - Keep tests focused and isolated
 - Mock external dependencies
@@ -214,12 +214,10 @@ Write tests that work across different async runtimes.
 mod tests {
     use super::*;
     
-    #[test]
-    fn test_command_builder() {
-        smol::block_on(async {
-            let cmd = Command::new("echo").arg("test");
-            // ...
-        });
+    #[smol_potat::test]
+    async fn test_command_builder() {
+        let cmd = Command::new("echo").arg("test");
+        // ...
     }
 }
 ```

@@ -327,6 +327,8 @@ async fn main() {
 fn main() -> Result<()> {
     smol::block_on(async {
         let orchestrator = Orchestrator::new(config).await?;
+        // ... use orchestrator
+        Ok(())
     })
 }
 ```

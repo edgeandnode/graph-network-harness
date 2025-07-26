@@ -231,3 +231,7 @@ error_set! {
 
 ## Guidelines for Code Auditing
 - When asked to audit the code for issues, put the details into ISSUES-BACKLOG.md
+
+## Async Testing Practices
+
+- When writing async unit tests, use smol_potat::test annotation

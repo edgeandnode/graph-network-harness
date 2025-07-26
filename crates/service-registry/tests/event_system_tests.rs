@@ -10,14 +10,13 @@ use service_registry::{
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 mod common;
-use common::{integration_test, test_services::*};
+use common::test_services::*;
 
 /// Test registry with WebSocket-style event handling
-integration_test!(
-    test_registry_websocket_style_events,
-    features = ["integration-tests"],
-    {
-        let registry = Registry::new();
+#[smol_potat::test]
+#[cfg(feature = "integration-tests")]
+async fn test_registry_websocket_style_events() {
+        let registry = Registry::new().await;
         let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
         let client2_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081);
 
@@ -76,15 +75,13 @@ integration_test!(
             .expect("Failed to update endpoints");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].0, client2_addr);
-    }
-);
+}
 
 /// Test registry subscription management
-integration_test!(
-    test_registry_subscription_management,
-    features = ["integration-tests"],
-    {
-        let registry = Registry::new();
+#[smol_potat::test]
+#[cfg(feature = "integration-tests")]
+async fn test_registry_subscription_management() {
+        let registry = Registry::new().await;
         let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
 
         // Subscribe to multiple events
@@ -158,15 +155,13 @@ integration_test!(
             .await
             .expect("Failed to register service");
         assert_eq!(events.len(), 0);
-    }
-);
+}
 
 /// Test registry with complex event scenarios
-integration_test!(
-    test_complex_event_scenarios,
-    features = ["integration-tests"],
-    {
-        let registry = Registry::new();
+#[smol_potat::test]
+#[cfg(feature = "integration-tests")]
+async fn test_complex_event_scenarios() {
+        let registry = Registry::new().await;
 
         // Create multiple clients with different subscriptions
         let clients = vec![
@@ -224,5 +219,4 @@ integration_test!(
         assert!(addresses.contains(&clients[1].0));
         assert!(addresses.contains(&clients[2].0));
         assert!(!addresses.contains(&clients[0].0));
-    }
-);
+}

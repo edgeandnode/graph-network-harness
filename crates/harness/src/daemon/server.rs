@@ -4,11 +4,12 @@ use crate::daemon::handlers;
 use crate::protocol::{Request, Response};
 use anyhow::{Context, Result};
 use async_net::{TcpListener, TcpStream};
-use async_tls::TlsAcceptor;
+use futures_rustls::TlsAcceptor;
 use async_tungstenite::accept_async;
 use async_tungstenite::tungstenite::Message;
-use futures::{SinkExt, StreamExt};
-use rustls::{Certificate, PrivateKey, ServerConfig};
+use futures::StreamExt;
+use rustls::{ServerConfig};
+use rustls::pki_types::PrivateKeyDer;
 use service_orchestration::ServiceManager;
 use service_registry::Registry;
 use std::fs;
@@ -36,7 +37,8 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
 
     // Get registry from service manager
     // For now, we'll create a new one (this will be refactored)
-    let registry = Registry::with_persistence(data_dir.join("registry.json").to_string_lossy());
+    let registry =
+        Registry::with_persistence(data_dir.join("registry.json").to_string_lossy()).await;
 
     // Create daemon state
     let state = Arc::new(DaemonState {
@@ -52,39 +54,19 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
     let key_pem = fs::read_to_string(&key_path).context("Failed to read private key")?;
 
     // Parse certificate and key
-    let certs: Vec<Certificate> = rustls_pemfile::certs(&mut cert_pem.as_bytes())
+    let certs = rustls_pemfile::certs(&mut cert_pem.as_bytes())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| anyhow::anyhow!("Failed to parse certificate: {:?}", e))?
-        .into_iter()
-        .map(|der| Certificate(der.to_vec()))
-        .collect();
+        .map_err(|e| anyhow::anyhow!("Failed to parse certificate: {:?}", e))?;
 
-    let mut keys: Vec<Vec<u8>> = rustls_pemfile::pkcs8_private_keys(&mut key_pem.as_bytes())
-        .collect::<Result<Vec<_>, _>>()
+    let key_der = rustls_pemfile::private_key(&mut key_pem.as_bytes())
         .map_err(|e| anyhow::anyhow!("Failed to parse private key: {:?}", e))?
-        .into_iter()
-        .map(|key| key.secret_pkcs8_der().to_vec())
-        .collect();
+        .ok_or_else(|| anyhow::anyhow!("No private keys found in key file"))?;
 
-    if keys.is_empty() {
-        // Try RSA keys if PKCS8 didn't work
-        keys = rustls_pemfile::rsa_private_keys(&mut key_pem.as_bytes())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| anyhow::anyhow!("Failed to parse RSA private key: {:?}", e))?
-            .into_iter()
-            .map(|key| key.secret_pkcs1_der().to_vec())
-            .collect();
-    }
-
-    if keys.is_empty() {
-        return Err(anyhow::anyhow!("No private keys found in key file"));
-    }
-
-    let key = PrivateKey(keys.into_iter().next().unwrap());
+    let key = PrivateKeyDer::try_from(key_der)
+        .map_err(|e| anyhow::anyhow!("Failed to convert private key: {:?}", e))?;
 
     // Create TLS config
     let tls_config = ServerConfig::builder()
-        .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .context("Failed to create TLS config")?;
@@ -140,7 +122,7 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
 
 /// Handle a WebSocket connection
 async fn handle_connection(
-    stream: async_tls::server::TlsStream<TcpStream>,
+    stream: futures_rustls::server::TlsStream<TcpStream>,
     state: Arc<DaemonState>,
 ) -> Result<()> {
     let ws_stream = accept_async(stream)
@@ -161,7 +143,7 @@ async fn handle_connection(
                             message: format!("Invalid request format: {}", e),
                         };
                         let response_text = serde_json::to_string(&error_response)?;
-                        ws_sender.send(Message::Text(response_text)).await?;
+                        ws_sender.send(Message::Text(response_text.into())).await?;
                         continue;
                     }
                 };
@@ -171,7 +153,7 @@ async fn handle_connection(
 
                 // Send response
                 let response_text = serde_json::to_string(&response)?;
-                ws_sender.send(Message::Text(response_text)).await?;
+                ws_sender.send(Message::Text(response_text.into())).await?;
             }
             Ok(Message::Close(_)) => {
                 debug!("Client requested close");

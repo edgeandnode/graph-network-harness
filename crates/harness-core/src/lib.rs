@@ -21,18 +21,18 @@ pub mod prelude {
     pub use crate::client::TestClient;
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::{Error, Result};
-    pub use crate::service::{Service, ServiceStack, ActionDescriptor, JsonService};
+    pub use crate::service::{ActionDescriptor, JsonService, Service, ServiceStack};
     pub use crate::typed_action::TypedAction;
-    
+
     // Re-export commonly used types from dependencies
-    pub use async_trait::async_trait;
     pub use async_channel::Receiver;
+    pub use async_trait::async_trait;
     pub use serde::{Deserialize, Serialize};
     pub use serde_json::{json, Value};
     pub use uuid::Uuid;
 }
 
-// Re-export key types from existing crates for convenience  
+// Re-export key types from existing crates for convenience
 pub use harness_config::Config;
 pub use service_orchestration::{ServiceConfig, ServiceManager, ServiceStatus};
 pub use service_registry::Registry;

@@ -1,7 +1,7 @@
 //! WebSocket request handlers for the daemon
 
 use crate::daemon::server::DaemonState;
-use crate::protocol::{Request, Response, ServiceNetworkInfo, DetailedServiceInfo};
+use crate::protocol::{DetailedServiceInfo, Request, Response, ServiceNetworkInfo};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
     match request {
         Request::StartService { name, config } => {
             info!("Starting service: {}", name);
-            
+
             match state.service_manager.start_service(&name, config).await {
                 Ok(running_service) => {
                     // Get network information from the running service
@@ -34,7 +34,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                             ports: Vec::new(),
                         }
                     };
-                    
+
                     Ok(Response::ServiceStarted {
                         name: name.clone(),
                         network_info,
@@ -124,17 +124,17 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                 };
 
                 // Get detailed info if available
-                let running_service = match state
-                    .service_manager
-                    .get_service_info(&service_name)
-                    .await
-                {
-                    Ok(info) => info,
-                    Err(e) => {
-                        error!("Failed to get detailed info for service {}: {}", service_name, e);
-                        None
-                    }
-                };
+                let running_service =
+                    match state.service_manager.get_service_info(&service_name).await {
+                        Ok(info) => info,
+                        Err(e) => {
+                            error!(
+                                "Failed to get detailed info for service {}: {}",
+                                service_name, e
+                            );
+                            None
+                        }
+                    };
 
                 let detailed_info = if let Some(running) = running_service {
                     DetailedServiceInfo {
@@ -198,17 +198,9 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
             Ok(Response::Success)
         }
 
-        Request::SetEnvironmentVariables { variables } => {
-            // Set environment variables in the daemon's process
-            for (key, value) in variables {
-                std::env::set_var(key, value);
-            }
-            Ok(Response::Success)
-        }
-
         Request::GetEnvironmentVariables { names } => {
             let mut variables = HashMap::new();
-            
+
             if names.is_empty() {
                 // Get all environment variables
                 for (key, value) in std::env::vars() {
@@ -222,7 +214,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                     }
                 }
             }
-            
+
             Ok(Response::EnvironmentVariables { variables })
         }
     }

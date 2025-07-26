@@ -5,7 +5,7 @@ use service_registry::models::{EventType, ServiceState};
 use service_registry::ServiceEntry;
 
 mod common;
-use common::{integration_test, test_harness::*, test_services::*};
+use common::{test_harness::*, test_services::*};
 
 /// Test local process execution variant
 integration_test!(

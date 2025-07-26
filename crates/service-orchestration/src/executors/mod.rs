@@ -89,7 +89,7 @@ impl RunningService {
         self.metadata.insert(key, value);
         self
     }
-    
+
     /// Set network information
     pub fn with_network_info(mut self, network_info: NetworkInfo) -> Self {
         self.network_info = Some(network_info);

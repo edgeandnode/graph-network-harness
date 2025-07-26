@@ -72,14 +72,15 @@ impl TlsServerConfig {
     /// Create TLS server configuration for testing with self-signed certificate
     #[cfg(test)]
     pub fn self_signed_for_testing() -> Result<Self> {
-        use rcgen::{generate_simple_self_signed, CertifiedKey};
+        use rcgen::generate_simple_self_signed;
         
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-        let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names)
+        let cert = generate_simple_self_signed(subject_alt_names)
             .map_err(|e| Error::Package(format!("Failed to generate self-signed cert: {}", e)))?;
         
-        let cert_der = cert.der().to_vec();
-        let key_der = key_pair.serialize_der();
+        let cert_der = cert.serialize_der()
+            .map_err(|e| Error::Package(format!("Failed to serialize cert: {}", e)))?;
+        let key_der = cert.serialize_private_key_der();
         
         let certs = vec![Certificate(cert_der)];
         let key = PrivateKey(key_der);
@@ -126,9 +127,10 @@ impl TlsClientConfig {
     pub fn dangerous_accept_any_cert() -> Result<Self> {
         use rustls::client::ServerCertVerifier;
         
-        struct NoVerifier;
+        // Custom verifier that accepts any certificate
+        struct DangerousAcceptAnyVerifier;
         
-        impl ServerCertVerifier for NoVerifier {
+        impl ServerCertVerifier for DangerousAcceptAnyVerifier {
             fn verify_server_cert(
                 &self,
                 _end_entity: &Certificate,
@@ -137,14 +139,14 @@ impl TlsClientConfig {
                 _scts: &mut dyn Iterator<Item = &[u8]>,
                 _ocsp_response: &[u8],
                 _now: std::time::SystemTime,
-            ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+            ) -> std::result::Result<rustls::client::ServerCertVerified, rustls::Error> {
                 Ok(rustls::client::ServerCertVerified::assertion())
             }
         }
         
         let config = ClientConfig::builder()
             .with_safe_defaults()
-            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_custom_certificate_verifier(Arc::new(DangerousAcceptAnyVerifier))
             .with_no_client_auth();
         
         Ok(Self {

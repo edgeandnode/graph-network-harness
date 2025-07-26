@@ -58,7 +58,7 @@ async-net = "2.0"
 async-fs = "2.1"
 async-channel = "2.1"
 async-tls = { version = "0.13", default-features = false }
-rustls = "0.21"
+rustls = { version = "0.21", features = ["dangerous_configuration"] }
 rustls-pemfile = "2.0"
 webpki-roots = "0.22"
 ipnet = { version = "2.9", features = ["serde"] }

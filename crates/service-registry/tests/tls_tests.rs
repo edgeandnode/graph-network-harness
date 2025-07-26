@@ -1,9 +1,9 @@
 //! TLS integration tests for WebSocket connections
 
-#[cfg(all(test, feature = "tls", feature = "integration-tests"))]
+#[cfg(all(test, feature = "integration-tests"))]
 mod tls_tests {
     use async_fs;
-    use rcgen::{generate_simple_self_signed, CertifiedKey};
+    use rcgen::generate_simple_self_signed;
     use service_registry::{Registry, TlsClientConfig, TlsServerConfig, WsClient, WsServer};
     use std::time::Duration;
     use tempfile;
@@ -12,7 +12,7 @@ mod tls_tests {
     async fn create_test_certificates(
     ) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-        let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names)
+        let cert = generate_simple_self_signed(subject_alt_names)
             .expect("Failed to generate self-signed certificate");
 
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -20,12 +20,12 @@ mod tls_tests {
         let key_path = temp_dir.path().join("test-key.pem");
 
         // Write certificate
-        async_fs::write(&cert_path, cert.pem())
+        async_fs::write(&cert_path, cert.serialize_pem().expect("Failed to serialize cert"))
             .await
             .expect("Failed to write certificate");
 
         // Write key
-        async_fs::write(&key_path, key_pair.serialize_pem())
+        async_fs::write(&key_path, cert.serialize_private_key_pem())
             .await
             .expect("Failed to write key");
 
@@ -49,7 +49,7 @@ mod tls_tests {
                 _scts: &mut dyn Iterator<Item = &[u8]>,
                 _ocsp_response: &[u8],
                 _now: std::time::SystemTime,
-            ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+            ) -> std::result::Result<rustls::client::ServerCertVerified, rustls::Error> {
                 Ok(rustls::client::ServerCertVerified::assertion())
             }
         }
@@ -296,6 +296,6 @@ mod tls_tests {
     }
 }
 
-// Export test module when both features are enabled
-#[cfg(all(feature = "tls", feature = "integration-tests"))]
+// Export test module when integration tests are enabled
+#[cfg(feature = "integration-tests")]
 pub use tls_tests::*;

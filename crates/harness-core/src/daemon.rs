@@ -239,9 +239,8 @@ mod tests {
     use super::*;
     use serde_json::json;
     
-    #[test]
-    fn test_daemon_builder() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_daemon_builder() {
             let daemon = BaseDaemon::builder()
                 .with_endpoint("127.0.0.1:8080".parse().unwrap())
                 .register_action("test", "Test action", |params| async move {
@@ -254,12 +253,10 @@ mod tests {
             
             assert_eq!(daemon.endpoint().port(), 8080);
             assert!(daemon.actions().has_action("test"));
-        });
     }
     
-    #[test]
-    fn test_action_invocation() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_action_invocation() {
             let mut daemon = BaseDaemon::builder()
                 .register_action("echo", "Echo the input", |params| async move {
                     Ok(json!({ "result": params }))
@@ -275,6 +272,5 @@ mod tests {
                 .unwrap();
             
             assert_eq!(result, json!({ "result": { "message": "hello" } }));
-        });
     }
 }

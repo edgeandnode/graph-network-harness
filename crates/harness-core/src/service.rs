@@ -310,9 +310,8 @@ mod tests {
         assert!(result.is_err());
     }
     
-    #[test]
-    fn test_action_dispatch() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_action_dispatch() {
             let mut stack = ServiceStack::new();
             stack.register("test-1".to_string(), TestService).unwrap();
             
@@ -324,6 +323,5 @@ mod tests {
             let event = rx.recv().await.unwrap();
             
             assert_eq!(event["response"], "Echo: Hello");
-        });
     }
 }

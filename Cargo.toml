@@ -65,6 +65,9 @@ ipnet = { version = "2.9", features = ["serde"] }
 indexmap = "2.0"
 smol = "2.0"
 
+# Testing dependencies
+smol-potat = "1.0"
+
 # Internal crates
 command-executor = { path = "crates/command-executor" }
 service-registry = { path = "crates/service-registry" }

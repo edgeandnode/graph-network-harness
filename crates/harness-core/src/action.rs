@@ -194,9 +194,8 @@ mod tests {
     use super::*;
     use serde_json::json;
     
-    #[test]
-    fn test_action_registry() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_action_registry() {
             let mut registry = ActionRegistry::new();
             
             // Register a simple action
@@ -214,18 +213,15 @@ mod tests {
             let info = registry.get_info("test").unwrap();
             assert_eq!(info.name, "test");
             assert_eq!(info.description, "A test action");
-        });
     }
     
-    #[test]
-    fn test_action_not_found() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_action_not_found() {
             let registry = ActionRegistry::new();
             
             let result = registry.invoke("nonexistent", json!({})).await;
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("not found"));
-        });
     }
     
     #[test]

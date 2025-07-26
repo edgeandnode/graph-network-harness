@@ -46,6 +46,7 @@ harness-config = { path = "../harness-config" }
 
 [dev-dependencies]
 smol = { workspace = true }
+smol-potat = { workspace = true }
 tempfile = { workspace = true }
 
 [features]

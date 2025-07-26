@@ -6,9 +6,8 @@ mod tests {
     use harness_core::prelude::*;
     use serde_json::json;
     
-    #[test]
-    fn test_graph_node_service() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_graph_node_service() {
             let service = GraphNodeService::new("localhost".to_string());
             
             // Test service metadata
@@ -43,12 +42,10 @@ mod tests {
             }
             
             assert!(event_count > 0);
-        });
     }
     
-    #[test]
-    fn test_anvil_service() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_anvil_service() {
             let service = AnvilService::new(31337, 8545);
             
             // Test service metadata
@@ -72,7 +69,6 @@ mod tests {
             }
             
             assert_eq!(block_count, 3);
-        });
     }
     
     #[test]
@@ -112,9 +108,8 @@ mod tests {
         assert!(event_json.get("$schema").is_some());
     }
     
-    #[test]
-    fn test_complete_graph_stack() {
-        smol::block_on(async {
+    #[smol_potat::test]
+    async fn test_complete_graph_stack() {
             let mut stack = ServiceStack::new();
             
             // Register all Graph Protocol services
@@ -148,6 +143,5 @@ mod tests {
                 json!({"type": "AddContent", "content": "Hello IPFS"})
             ).await;
             assert!(ipfs_result.is_ok());
-        });
     }
 }

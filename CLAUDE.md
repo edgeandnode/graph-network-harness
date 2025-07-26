@@ -223,3 +223,11 @@ error_set! {
 ## Development Practices
 
 - ALWAYS use cargo to build, don't revert to using rustc directly for testing.
+
+## Workflow Guidance
+
+### Commit Message Generation
+- When asked to generate a commit message, run git diff --staged and generate one from that
+
+## Guidelines for Code Auditing
+- When asked to audit the code for issues, put the details into ISSUES-BACKLOG.md

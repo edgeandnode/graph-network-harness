@@ -143,6 +143,8 @@ pub struct DaemonBuilder {
     registry_path: Option<String>,
     action_registry: ActionRegistry,
     service_stack: ServiceStack,
+    #[cfg(test)]
+    test_mode: bool,
 }
 
 impl DaemonBuilder {
@@ -153,7 +155,16 @@ impl DaemonBuilder {
             registry_path: None,
             action_registry: ActionRegistry::new(),
             service_stack: ServiceStack::new(),
+            #[cfg(test)]
+            test_mode: false,
         }
+    }
+    
+    /// Enable test mode (uses temporary directories)
+    #[cfg(test)]
+    pub fn with_test_mode(mut self) -> Self {
+        self.test_mode = true;
+        self
     }
 
     /// Set the WebSocket endpoint
@@ -194,28 +205,26 @@ impl DaemonBuilder {
         info!("Building daemon with endpoint {}", self.endpoint);
 
         // Create service manager
+        #[cfg(test)]
+        let service_manager = if self.test_mode {
+            ServiceManager::new_for_tests()
+                .await
+                .map_err(Error::ServiceOrchestration)?
+        } else {
+            ServiceManager::new()
+                .await
+                .map_err(Error::ServiceOrchestration)?
+        };
+        
+        #[cfg(not(test))]
         let service_manager = ServiceManager::new()
             .await
             .map_err(Error::ServiceOrchestration)?;
 
         // Create service registry
         let service_registry = if let Some(path) = &self.registry_path {
-            // Try to load existing registry or create new one
-            if Path::new(path).exists() {
-                match Registry::load(path).await {
-                    Ok(registry) => {
-                        info!("Loaded existing registry from {}", path);
-                        registry
-                    }
-                    Err(e) => {
-                        warn!("Failed to load registry: {}. Creating new one.", e);
-                        Registry::with_persistence(path).await
-                    }
-                }
-            } else {
-                info!("Creating new registry at {}", path);
-                Registry::with_persistence(path).await
-            }
+            info!("Creating registry with persistence at {}", path);
+            Registry::with_persistence(path).await
         } else {
             Registry::new().await
         };
@@ -245,9 +254,10 @@ mod tests {
     #[smol_potat::test]
     async fn test_daemon_builder() {
         let daemon = BaseDaemon::builder()
+            .with_test_mode()
             .with_endpoint("127.0.0.1:8080".parse().unwrap())
             .register_action("test", "Test action", |params| async move {
-                Ok(json!({ "echo": params }))
+                Ok::<_, Error>(json!({ "echo": params }))
             })
             .unwrap()
             .build()
@@ -260,9 +270,10 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_action_invocation() {
-        let mut daemon = BaseDaemon::builder()
+        let daemon = BaseDaemon::builder()
+            .with_test_mode()
             .register_action("echo", "Echo the input", |params| async move {
-                Ok(json!({ "result": params }))
+                Ok::<_, Error>(json!({ "result": params }))
             })
             .unwrap()
             .build()

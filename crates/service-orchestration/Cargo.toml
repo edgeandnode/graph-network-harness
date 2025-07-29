@@ -11,6 +11,7 @@ description = "Heterogeneous service orchestration implementing ADR-007"
 default = []
 ssh-tests = ["command-executor/ssh-tests"]
 docker-tests = ["command-executor/docker-tests"]
+test-utils = []
 
 [dependencies]
 # Workspace dependencies

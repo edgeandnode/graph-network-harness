@@ -22,7 +22,7 @@ use common::test_services;
 async fn test_full_service_deployment() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let registry =
-        Registry::with_persistence(temp_dir.path().join("registry.json").to_string_lossy());
+        Registry::with_persistence(temp_dir.path().join("registry.json").to_string_lossy()).await;
 
     // Create a test service
     let service = ServiceEntry::new(
@@ -74,7 +74,7 @@ async fn test_full_service_deployment() {
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
 async fn test_registry_with_executor() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
     let local_launcher = LocalLauncher;
     let executor = Executor::new("registry-test".to_string(), local_launcher);
 
@@ -145,7 +145,7 @@ async fn test_registry_with_executor() {
 #[smol_potat::test]
 #[cfg(all(feature = "integration-tests", feature = "docker-tests"))]
 async fn test_docker_service_deployment() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
     let local_launcher = LocalLauncher;
     let executor = Executor::new("docker-registry-test".to_string(), local_launcher);
 
@@ -216,7 +216,7 @@ async fn test_docker_service_deployment() {
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
 async fn test_event_subscription_integration() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
     let client_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
 
     // Subscribe to all events
@@ -354,7 +354,7 @@ health:
 #[smol_potat::test]
 #[cfg(all(feature = "integration-tests", feature = "ssh-tests"))]
 async fn test_multi_node_coordination() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
 
     // Register local service
     let local_service = ServiceEntry::new(
@@ -413,13 +413,13 @@ async fn test_multi_node_coordination() {
 /// Test persistence across registry restarts
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
-fn test_registry_persistence() {
+async fn test_registry_persistence() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let persist_path = temp_dir.path().join("registry-persist.json");
 
     // Create first registry instance
     {
-        let registry = Registry::with_persistence(persist_path.display().to_string());
+        let registry = Registry::with_persistence(persist_path.display().to_string()).await;
 
         let service = ServiceEntry::new(
             "persistent-service".to_string(),

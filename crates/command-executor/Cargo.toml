@@ -38,6 +38,7 @@ ssh-tests = ["ssh", "integration-tests"]
 [dev-dependencies]
 # Use smol for testing - it's lightweight and runtime-agnostic
 smol = "2.0"
+smol-potat = { workspace = true }
 tempfile = { workspace = true }
 anyhow = "1.0"
 futures = "0.3"

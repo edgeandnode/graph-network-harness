@@ -12,7 +12,7 @@ use common::{test_services::*, websocket_client::WebSocketTestClient};
 #[smol_potat::test]
 async fn test_websocket_basic_operations() {
     // Start server
-    let registry = Registry::new();
+    let registry = Registry::new().await;
     let addr = "127.0.0.1:0"; // Use port 0 for automatic assignment
     let server = WsServer::new(addr, registry)
         .await
@@ -70,7 +70,7 @@ async fn test_websocket_basic_operations() {
 #[smol_potat::test]
 async fn test_websocket_service_operations() {
     // Start server with a service
-    let registry = Registry::new();
+    let registry = Registry::new().await;
 
     // Pre-register a service
     let service = create_echo_service().expect("Failed to create service");
@@ -145,7 +145,7 @@ async fn test_websocket_service_operations() {
 #[cfg(feature = "integration-tests")]
 #[smol_potat::test]
 async fn test_websocket_event_subscriptions() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
 
     // Pre-register a service and update its state
     let service = create_web_service().expect("Failed to create service");
@@ -210,7 +210,7 @@ async fn test_websocket_event_subscriptions() {
 #[cfg(feature = "integration-tests")]
 #[smol_potat::test]
 async fn test_concurrent_websocket_connections() {
-    let registry = Registry::new();
+    let registry = Registry::new().await;
     let server = WsServer::new("127.0.0.1:0", registry)
         .await
         .expect("Failed to create server");

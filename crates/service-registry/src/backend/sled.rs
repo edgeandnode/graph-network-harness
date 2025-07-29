@@ -21,6 +21,12 @@ impl SledBackend {
     /// Create a new sled backend
     pub async fn new(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
+        
+        // Ensure the directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
         info!("Opening sled database at {:?}", path);
 
         // Open database

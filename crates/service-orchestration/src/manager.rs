@@ -43,32 +43,22 @@ impl ServiceManager {
         let state_dir = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("harness");
+        
+        Self::with_state_dir(state_dir).await
+    }
+    
+    /// Create a new service manager with a specific state directory
+    pub async fn with_state_dir(state_dir: impl Into<std::path::PathBuf>) -> Result<Self> {
+        let state_dir = state_dir.into();
+        info!("Initializing ServiceManager with state dir: {:?}", state_dir);
+        
         std::fs::create_dir_all(&state_dir).map_err(|e| crate::Error::Io(e))?;
 
         // Create registry with persistence
-        let registry_path = state_dir.join("registry.json");
-        let registry = if registry_path.exists() {
-            // Try to load existing registry
-            match Registry::load(&registry_path).await {
-                Ok(registry) => {
-                    info!("Loaded existing registry state from {:?}", registry_path);
-                    registry
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to load registry state: {}. Starting with empty registry.",
-                        e
-                    );
-                    Registry::with_persistence(registry_path.to_string_lossy()).await
-                }
-            }
-        } else {
-            info!(
-                "No existing registry found, creating new one at {:?}",
-                registry_path
-            );
-            Registry::with_persistence(registry_path.to_string_lossy()).await
-        };
+        let registry_db_path = state_dir.join("registry_db");
+        std::fs::create_dir_all(&registry_db_path).map_err(|e| crate::Error::Io(e))?;
+        
+        let registry = Registry::with_persistence(registry_db_path.to_string_lossy()).await;
 
         let network_config = NetworkConfig::default();
         let network_manager = NetworkManager::new(network_config)?;
@@ -87,6 +77,18 @@ impl ServiceManager {
             health_monitors: Arc::new(RwLock::new(HashMap::new())),
             package_deployer: PackageDeployer::new(),
         })
+    }
+    
+    /// Create a new service manager for tests with a temporary directory
+    #[cfg(any(test, feature = "test-utils"))]
+    pub async fn new_for_tests() -> Result<Self> {
+        let temp_dir = tempfile::tempdir().map_err(|e| crate::Error::Io(e))?;
+        let state_dir = temp_dir.path().to_path_buf();
+        
+        // Keep the temp_dir alive by leaking it - it will be cleaned up when process exits
+        std::mem::forget(temp_dir);
+        
+        Self::with_state_dir(state_dir).await
     }
 
     /// Start a service with the given configuration
@@ -390,7 +392,7 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_service_manager_creation() {
-        let manager = ServiceManager::new().await.unwrap();
+        let manager = ServiceManager::new_for_tests().await.unwrap();
 
         // Verify executors are registered
         assert!(manager.executors.contains_key("process"));
@@ -400,7 +402,7 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_find_executor() {
-        let manager = ServiceManager::new().await.unwrap();
+        let manager = ServiceManager::new_for_tests().await.unwrap();
 
         let process_config = ServiceConfig {
             name: "test".to_string(),
@@ -420,7 +422,7 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_service_not_found() {
-        let manager = ServiceManager::new().await.unwrap();
+        let manager = ServiceManager::new_for_tests().await.unwrap();
 
         let result = manager.stop_service("nonexistent").await;
         assert!(matches!(result, Err(crate::Error::ServiceNotFound(_))));
@@ -428,7 +430,7 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_list_services_empty() {
-        let manager = ServiceManager::new().await.unwrap();
+        let manager = ServiceManager::new_for_tests().await.unwrap();
 
         let services = manager.list_services().await.unwrap();
         assert!(services.is_empty());

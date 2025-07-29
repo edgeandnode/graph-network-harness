@@ -40,7 +40,7 @@ indexmap = { workspace = true }
 schemars = { workspace = true }
 
 # Re-export core functionality from existing crates
-service-orchestration = { path = "../service-orchestration" }
+service-orchestration = { path = "../service-orchestration", features = ["test-utils"] }
 service-registry = { path = "../service-registry" }
 harness-config = { path = "../harness-config" }
 

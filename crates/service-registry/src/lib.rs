@@ -21,7 +21,7 @@
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! // Create registry
-//! let registry = Registry::new().await?;
+//! let registry = Registry::new().await;
 //!
 //! // Create WebSocket server
 //! let server = WsServer::new("127.0.0.1:8080", registry).await?;

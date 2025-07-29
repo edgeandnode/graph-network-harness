@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::panic;
 
 // Store the container name globally so we can clean it up
 static CONTAINER_NAME: &str = "command-executor-systemd-ssh-harness-test";
@@ -16,6 +17,12 @@ static CONTAINER_GUARD: OnceLock<ContainerCleanupGuard> = OnceLock::new();
 
 // Flag to track if signal handler is installed
 static SIGNAL_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+// Flag to track if panic handler is installed
+static PANIC_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+// Mutex for container initialization synchronization
+static INIT_MUTEX: Mutex<()> = Mutex::new(());
 
 struct ContainerCleanupGuard {
     container_name: String,
@@ -66,11 +73,38 @@ fn install_signal_handlers() {
     }
 }
 
+/// Install panic handler for cleanup
+fn install_panic_handler() {
+    if PANIC_HANDLER_INSTALLED.swap(true, Ordering::SeqCst) {
+        // Already installed
+        return;
+    }
+
+    let original_hook = panic::take_hook();
+    
+    panic::set_hook(Box::new(move |panic_info| {
+        // Call the original panic handler first
+        original_hook(panic_info);
+        
+        // Then cleanup our container
+        eprintln!("Panic detected, cleaning up test container...");
+        if let Some(guard) = CONTAINER_GUARD.get() {
+            guard.cleanup();
+        }
+    }));
+}
+
 /// Setup function that ensures the container is running
 /// This can be called by multiple tests safely - it will only start the container once
 pub async fn ensure_container_running() -> Result<()> {
+    // Lock to prevent concurrent initialization
+    let _lock = INIT_MUTEX.lock().unwrap();
+
     // Install signal handlers for cleanup
     install_signal_handlers();
+    
+    // Install panic handler for cleanup
+    install_panic_handler();
 
     // Check if container is already running
     let check_cmd = Command::builder("docker")
@@ -100,8 +134,24 @@ pub async fn ensure_container_running() -> Result<()> {
     eprintln!("Starting shared test container...");
 
     // Container not running, start it
-    let project_root = std::env::current_dir().context("Failed to get current directory")?;
-    let test_dir = project_root.join("tests/systemd-container");
+    // Find workspace root by looking for Cargo.toml with [workspace]
+    let mut current_dir = std::env::current_dir().context("Failed to get current directory")?;
+    let workspace_root = loop {
+        let cargo_toml = current_dir.join("Cargo.toml");
+        if cargo_toml.exists() {
+            // Check if this is the workspace root
+            let contents = std::fs::read_to_string(&cargo_toml)?;
+            if contents.contains("[workspace]") {
+                break current_dir;
+            }
+        }
+        
+        if !current_dir.pop() {
+            anyhow::bail!("Could not find workspace root");
+        }
+    };
+    
+    let test_dir = workspace_root.join("crates/command-executor/tests/systemd-container");
 
     // Build the Docker image
     let build_cmd = Command::builder("docker-compose")
@@ -212,9 +262,25 @@ async fn wait_for_container_ready() -> Result<()> {
 /// Get SSH configuration for the shared container
 #[cfg(feature = "ssh")]
 pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
-    let ssh_key_path = std::env::current_dir()
-        .unwrap()
-        .join("tests/systemd-container/ssh-keys/test_ed25519");
+    // Find workspace root
+    let mut current_dir = std::env::current_dir().unwrap();
+    let workspace_root = loop {
+        let cargo_toml = current_dir.join("Cargo.toml");
+        if cargo_toml.exists() {
+            if let Ok(contents) = std::fs::read_to_string(&cargo_toml) {
+                if contents.contains("[workspace]") {
+                    break current_dir;
+                }
+            }
+        }
+        
+        if !current_dir.pop() {
+            panic!("Could not find workspace root");
+        }
+    };
+    
+    let ssh_key_path = workspace_root
+        .join("crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519");
 
     command_executor::backends::ssh::SshConfig::new("localhost")
         .with_user("testuser")

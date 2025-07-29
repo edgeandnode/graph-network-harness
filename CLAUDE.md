@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Don't be overconfident. Use the scientitic method to evaluate assumptions!
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Common Development Commands
@@ -190,6 +192,13 @@ error_set! {
 - **LAN Tests**: Use docker-compose networks to simulate LAN topologies
 - **WireGuard Tests**: Mock WireGuard behavior without requiring root
 - **End-to-End Tests**: Full system tests with real services
+
+### Test Independence
+- Tests should be self-contained and not rely on test execution order
+- Each test should set up its own state and clean up after itself
+- Don't rely on files or state created by other tests
+- Exception: Docker containers can be shared between tests for efficiency, but tests should not assume specific container state from previous tests
+- Use unique identifiers (like process IDs) for test-specific resources to avoid conflicts
 ```
 
 ## Development Practices
@@ -230,6 +239,7 @@ error_set! {
 - When asked to generate a commit message, run git diff --staged and generate one from that
 
 ## Guidelines for Code Auditing
+- Don't automatically audit the code base -you will be asked.
 - When asked to audit the code for issues, put the details into ISSUES-BACKLOG.md
 
 ## Async Testing Practices

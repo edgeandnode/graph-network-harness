@@ -37,29 +37,62 @@ mod tls_tests {
 
     /// Helper to create a client config that accepts any certificate
     fn create_test_client_config() -> TlsClientConfig {
-        use rustls::client::ServerCertVerifier;
-        use rustls::{Certificate, ClientConfig};
+        use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+        use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+        use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
         use std::sync::Arc;
 
+        #[derive(Debug)]
         struct NoVerifier;
 
         impl ServerCertVerifier for NoVerifier {
             fn verify_server_cert(
                 &self,
-                _end_entity: &Certificate,
-                _intermediates: &[Certificate],
-                _server_name: &rustls::ServerName,
-                _scts: &mut dyn Iterator<Item = &[u8]>,
+                _end_entity: &CertificateDer<'_>,
+                _intermediates: &[CertificateDer<'_>],
+                _server_name: &ServerName<'_>,
                 _ocsp_response: &[u8],
-                _now: std::time::SystemTime,
-            ) -> std::result::Result<rustls::client::ServerCertVerified, rustls::Error>
+                _now: UnixTime,
+            ) -> Result<ServerCertVerified, rustls::Error>
             {
-                Ok(rustls::client::ServerCertVerified::assertion())
+                Ok(ServerCertVerified::assertion())
+            }
+            
+            fn verify_tls12_signature(
+                &self,
+                _message: &[u8],
+                _cert: &CertificateDer<'_>,
+                _dss: &DigitallySignedStruct,
+            ) -> Result<HandshakeSignatureValid, rustls::Error> {
+                Ok(HandshakeSignatureValid::assertion())
+            }
+            
+            fn verify_tls13_signature(
+                &self,
+                _message: &[u8],
+                _cert: &CertificateDer<'_>,
+                _dss: &DigitallySignedStruct,
+            ) -> Result<HandshakeSignatureValid, rustls::Error> {
+                Ok(HandshakeSignatureValid::assertion())
+            }
+            
+            fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+                vec![
+                    SignatureScheme::RSA_PKCS1_SHA256,
+                    SignatureScheme::RSA_PKCS1_SHA384,
+                    SignatureScheme::RSA_PKCS1_SHA512,
+                    SignatureScheme::ECDSA_NISTP256_SHA256,
+                    SignatureScheme::ECDSA_NISTP384_SHA384,
+                    SignatureScheme::RSA_PSS_SHA256,
+                    SignatureScheme::RSA_PSS_SHA384,
+                    SignatureScheme::RSA_PSS_SHA512,
+                    SignatureScheme::ED25519,
+                ]
             }
         }
 
         let config = ClientConfig::builder()
-            .with_safe_defaults()
+            .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
             .with_no_client_auth();
 
@@ -80,7 +113,7 @@ mod tls_tests {
             .expect("Failed to create TLS config");
 
         // Start TLS server
-        let registry = Registry::new();
+        let registry = Registry::new().await;
         let server = WsServer::new_tls("127.0.0.1:0", registry, tls_config)
             .await
             .expect("Failed to create TLS server");
@@ -144,8 +177,7 @@ mod tls_tests {
     async fn test_tls_certificate_validation() {
         // Create self-signed certificate
         let subject_alt_names = vec!["testserver.local".to_string()];
-        let CertifiedKey { cert, key_pair } =
-            generate_simple_self_signed(subject_alt_names).expect("Failed to generate certificate");
+        let cert = generate_simple_self_signed(subject_alt_names).expect("Failed to generate certificate");
 
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let cert_path = temp_dir.path().join("server-cert.pem");
@@ -153,18 +185,18 @@ mod tls_tests {
         let ca_cert_path = temp_dir.path().join("ca-cert.pem");
 
         // Write certificate files
-        async_fs::write(&cert_path, cert.pem()).await.unwrap();
-        async_fs::write(&key_path, key_pair.serialize_pem())
+        async_fs::write(&cert_path, cert.serialize_pem().unwrap()).await.unwrap();
+        async_fs::write(&key_path, cert.serialize_private_key_pem())
             .await
             .unwrap();
-        async_fs::write(&ca_cert_path, cert.pem()).await.unwrap(); // Self-signed acts as CA
+        async_fs::write(&ca_cert_path, cert.serialize_pem().unwrap()).await.unwrap(); // Self-signed acts as CA
 
         // Create server with TLS
         let tls_config = TlsServerConfig::from_files(&cert_path, &key_path)
             .await
             .expect("Failed to create TLS config");
 
-        let registry = Registry::new();
+        let registry = Registry::new().await;
         let server = WsServer::new_tls("127.0.0.1:0", registry, tls_config)
             .await
             .expect("Failed to create TLS server");
@@ -218,10 +250,12 @@ mod tls_tests {
     /// Test mixed plain and TLS connections
     #[smol_potat::test]
     async fn test_mixed_plain_and_tls_connections() {
-        let registry = Registry::new();
+        // Create separate registries for each server since Registry doesn't implement Clone
+        let plain_registry = Registry::new().await;
+        let tls_registry = Registry::new().await;
 
         // Start plain WebSocket server
-        let plain_server = WsServer::new("127.0.0.1:0", registry.clone())
+        let plain_server = WsServer::new("127.0.0.1:0", plain_registry)
             .await
             .expect("Failed to create plain server");
         let plain_addr = plain_server.listener.local_addr().unwrap();
@@ -233,7 +267,7 @@ mod tls_tests {
             .expect("Failed to create TLS config");
 
         // Start TLS WebSocket server
-        let tls_server = WsServer::new_tls("127.0.0.1:0", registry, tls_config)
+        let tls_server = WsServer::new_tls("127.0.0.1:0", tls_registry, tls_config)
             .await
             .expect("Failed to create TLS server");
         let tls_addr = tls_server.listener.local_addr().unwrap();

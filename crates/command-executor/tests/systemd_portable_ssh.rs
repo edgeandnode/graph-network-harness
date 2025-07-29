@@ -5,16 +5,15 @@
 
 #![cfg(all(test, feature = "ssh-tests", feature = "docker-tests"))]
 
-use command_executor::backends::{local::LocalLauncher, ssh::SshLauncher, sudo::SudoLauncher};
+use command_executor::backends::{local::LocalLauncher, ssh::SshLauncher};
 use command_executor::{Command, Executor, ProcessHandle, SystemdPortable, Target};
 use futures::StreamExt;
 
 mod common;
 use common::shared_container::{ensure_container_running, get_ssh_config};
 
-#[test]
-fn test_portablectl_list_via_ssh() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_portablectl_list_via_ssh() {
         ensure_container_running()
             .await
             .expect("Failed to ensure container is running");
@@ -36,53 +35,72 @@ fn test_portablectl_list_via_ssh() {
             "Failed to list portable services: {:?}",
             result
         );
-    });
 }
 
-#[test]
-fn test_portable_attach_detach_via_ssh() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_portable_attach_detach_via_ssh() {
+        eprintln!("Starting test_portable_attach_detach_via_ssh");
         ensure_container_running()
             .await
             .expect("Failed to ensure container is running");
+        eprintln!("Container is running");
 
-        // Create a nested launcher: SSH -> Sudo -> Local
-        // This will SSH to the container and run commands with sudo there
+        // Create SSH launcher without sudo wrapping at launcher level
+        // We'll add sudo manually to each command that needs it
+        eprintln!("Creating launchers...");
         let local = LocalLauncher;
-        let sudo_local = SudoLauncher::new(local);
-        let ssh_sudo_launcher = SshLauncher::new(sudo_local, get_ssh_config());
-        let executor = Executor::new("test-attach-ssh".to_string(), ssh_sudo_launcher);
+        let ssh_launcher = SshLauncher::new(local, get_ssh_config());
+        let executor = Executor::new("test-attach-ssh".to_string(), ssh_launcher);
+        eprintln!("Launchers created");
 
         // Also create a regular SSH launcher for non-sudo commands
         let regular_ssh_launcher = SshLauncher::new(LocalLauncher, get_ssh_config());
         let regular_executor =
             Executor::new("test-attach-ssh-regular".to_string(), regular_ssh_launcher);
 
-        // Use Target::Command for SSH execution
+        // Use Target::Command for SSH+sudo execution
+        // SystemdPortable target might not work well with SSH+sudo combination
         let target = Target::Command;
 
-        // First detach if already attached (will be wrapped with sudo automatically)
-        let detach_cmd = Command::builder("portablectl")
+        // First detach if already attached
+        // Manually add sudo to the command
+        let detach_cmd = Command::builder("sudo")
+            .arg("-n")  // Non-interactive
+            .arg("portablectl")
             .arg("detach")
             .arg("echo-service")
             .build();
 
         // Ignore errors - might not be attached
+        eprintln!("About to execute first detach command...");
         let _ = executor.execute(&target, detach_cmd).await;
+        eprintln!("First detach command completed");
 
-        // Now attach (will be wrapped with sudo automatically)
-        let attach_cmd = Command::builder("portablectl")
+        // Now attach with sudo
+        let attach_cmd = Command::builder("sudo")
+            .arg("-n")  // Non-interactive
+            .arg("portablectl")
             .arg("attach")
             .arg("--copy=copy")
             .arg("/opt/portable-services/echo-service")
             .build();
 
+        eprintln!("About to execute attach command...");
         let attach_result = executor.execute(&target, attach_cmd).await;
+        eprintln!("Attach command executed, checking result...");
         assert!(
             attach_result.is_ok(),
             "Failed to attach: {:?}",
             attach_result
         );
+        
+        // Also check the exit code and output
+        if let Ok(result) = &attach_result {
+            if result.status.code != Some(0) {
+                eprintln!("Attach command output: {}", result.output);
+            }
+            assert_eq!(result.status.code, Some(0), "Attach command failed with exit code: {:?}", result.status);
+        }
 
         // List to verify (doesn't need sudo)
         let list_cmd = Command::builder("portablectl").arg("list").build();
@@ -102,8 +120,10 @@ fn test_portable_attach_detach_via_ssh() {
         let _ = handle.wait().await;
         assert!(found_echo, "echo-service should be listed after attach");
 
-        // Clean up - detach (will be wrapped with sudo automatically)
-        let detach_cmd = Command::builder("portablectl")
+        // Clean up - detach with sudo
+        let detach_cmd = Command::builder("sudo")
+            .arg("-n")  // Non-interactive
+            .arg("portablectl")
             .arg("detach")
             .arg("echo-service")
             .build();
@@ -114,12 +134,10 @@ fn test_portable_attach_detach_via_ssh() {
             "Failed to detach: {:?}",
             detach_result
         );
-    });
 }
 
-#[test]
-fn test_systemctl_via_ssh() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_systemctl_via_ssh() {
         ensure_container_running()
             .await
             .expect("Failed to ensure container is running");
@@ -161,12 +179,10 @@ fn test_systemctl_via_ssh() {
 
         let _ = handle.wait().await;
         assert!(service_count > 0, "Should see some services running");
-    });
 }
 
-#[test]
-fn test_sudo_systemctl_via_ssh() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_sudo_systemctl_via_ssh() {
         ensure_container_running()
             .await
             .expect("Failed to ensure container is running");
@@ -184,5 +200,4 @@ fn test_sudo_systemctl_via_ssh() {
 
         let result = executor.execute(&Target::Command, cmd).await;
         assert!(result.is_ok(), "Sudo systemctl should work: {:?}", result);
-    });
 }

@@ -6,21 +6,25 @@
 use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Store the container name globally so we can clean it up
-static CONTAINER_NAME: &str = "command-executor-systemd-ssh-test";
+static CONTAINER_NAME: &str = "command-executor-systemd-ssh-harness-test";
 
 // Global container guard that will clean up on drop
 static CONTAINER_GUARD: OnceLock<ContainerCleanupGuard> = OnceLock::new();
+
+// Flag to track if signal handler is installed
+static SIGNAL_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
 
 struct ContainerCleanupGuard {
     container_name: String,
 }
 
-impl Drop for ContainerCleanupGuard {
-    fn drop(&mut self) {
+impl ContainerCleanupGuard {
+    fn cleanup(&self) {
         eprintln!("Cleaning up test container: {}", self.container_name);
-        // We need to do synchronous cleanup in drop
+        // We need to do synchronous cleanup
         std::process::Command::new("docker")
             .args(&["rm", "-f", &self.container_name])
             .output()
@@ -28,9 +32,46 @@ impl Drop for ContainerCleanupGuard {
     }
 }
 
+impl Drop for ContainerCleanupGuard {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
+/// Install signal handlers for cleanup
+fn install_signal_handlers() {
+    if SIGNAL_HANDLER_INSTALLED.swap(true, Ordering::SeqCst) {
+        // Already installed
+        return;
+    }
+
+    // Install handlers for common termination signals
+    #[cfg(unix)]
+    {
+        use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
+        use std::thread;
+
+        let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
+        
+        thread::spawn(move || {
+            for sig in signals.forever() {
+                eprintln!("Received signal: {:?}", sig);
+                // Cleanup containers before exiting
+                if let Some(guard) = CONTAINER_GUARD.get() {
+                    guard.cleanup();
+                }
+                std::process::exit(1);
+            }
+        });
+    }
+}
+
 /// Setup function that ensures the container is running
 /// This can be called by multiple tests safely - it will only start the container once
 pub async fn ensure_container_running() -> Result<()> {
+    // Install signal handlers for cleanup
+    install_signal_handlers();
+
     // Check if container is already running
     let check_cmd = Command::builder("docker")
         .arg("ps")
@@ -46,6 +87,15 @@ pub async fn ensure_container_running() -> Result<()> {
         // Container is already running
         return Ok(());
     }
+
+    // Clean up any stale container first
+    eprintln!("Cleaning up any stale test container...");
+    let cleanup_cmd = Command::builder("docker")
+        .arg("rm")
+        .arg("-f")
+        .arg(CONTAINER_NAME)
+        .build();
+    let _ = executor.execute(&Target::Command, cleanup_cmd).await;
 
     eprintln!("Starting shared test container...");
 
@@ -174,6 +224,20 @@ pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
         .with_extra_arg("StrictHostKeyChecking=no")
         .with_extra_arg("-o")
         .with_extra_arg("UserKnownHostsFile=/dev/null")
+}
+
+/// Manually cleanup the test container
+pub async fn cleanup_test_container() {
+    eprintln!("Manually cleaning up test container...");
+    if let Some(guard) = CONTAINER_GUARD.get() {
+        guard.cleanup();
+    } else {
+        // Even if guard doesn't exist, try to clean up the container
+        std::process::Command::new("docker")
+            .args(&["rm", "-f", CONTAINER_NAME])
+            .output()
+            .ok();
+    }
 }
 
 /// Helper macro to setup shared container for a test

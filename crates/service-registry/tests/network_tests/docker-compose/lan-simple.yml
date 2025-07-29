@@ -5,7 +5,7 @@ services:
   harness:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-harness-lan
+    container_name: harness-lan-harness-test
     networks:
       lan:
         ipv4_address: 192.168.100.10
@@ -14,7 +14,7 @@ services:
   lan-node-1:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-lan-node-1
+    container_name: lan-node-1-harness-test
     networks:
       lan:
         ipv4_address: 192.168.100.20
@@ -23,7 +23,7 @@ services:
   lan-node-2:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-lan-node-2
+    container_name: lan-node-2-harness-test
     networks:
       lan:
         ipv4_address: 192.168.100.30

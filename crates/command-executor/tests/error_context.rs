@@ -6,9 +6,8 @@ use command_executor::command::Command;
 use command_executor::Executor;
 use command_executor::Target;
 
-#[test]
-fn test_local_error_context() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_local_error_context() {
         let executor = Executor::local("test-error");
         let target = Target::Command;
 
@@ -22,17 +21,19 @@ fn test_local_error_context() {
 
         // Should contain spawn failure message
         assert!(err_str.contains("spawn") || err_str.contains("Failed"));
-    });
 }
 
 #[cfg(feature = "ssh")]
-#[test]
-fn test_ssh_error_context() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_ssh_error_context() {
         use command_executor::backends::ssh::{SshConfig, SshLauncher};
 
         let local = LocalLauncher;
-        let ssh_config = SshConfig::new("localhost");
+        let ssh_config = SshConfig::new("localhost")
+            .with_extra_arg("-o")
+            .with_extra_arg("StrictHostKeyChecking=no")
+            .with_extra_arg("-o")
+            .with_extra_arg("UserKnownHostsFile=/dev/null");
         let ssh_launcher = SshLauncher::new(local, ssh_config);
 
         let executor = Executor::new("test-ssh-error".to_string(), ssh_launcher);
@@ -51,12 +52,10 @@ fn test_ssh_error_context() {
             // Should contain SSH context in error message
             assert!(err_str.contains("SSH") || err_str.contains("ssh"));
         }
-    });
 }
 
-#[test]
-fn test_docker_error_context() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_docker_error_context() {
         use command_executor::target::DockerContainer;
 
         let executor = Executor::local("test-docker-error");
@@ -80,18 +79,20 @@ fn test_docker_error_context() {
             // Should mention Docker in the error
             assert!(err_str.contains("Docker") || err_str.contains("docker"));
         }
-    });
 }
 
 #[cfg(feature = "ssh")]
-#[test]
-fn test_nested_ssh_docker_error_context() {
-    futures::executor::block_on(async {
+#[smol_potat::test]
+async fn test_nested_ssh_docker_error_context() {
         use command_executor::backends::ssh::{SshConfig, SshLauncher};
         use command_executor::target::DockerContainer;
 
         let local = LocalLauncher;
-        let ssh_config = SshConfig::new("localhost");
+        let ssh_config = SshConfig::new("localhost")
+            .with_extra_arg("-o")
+            .with_extra_arg("StrictHostKeyChecking=no")
+            .with_extra_arg("-o")
+            .with_extra_arg("UserKnownHostsFile=/dev/null");
         let ssh_launcher = SshLauncher::new(local, ssh_config);
 
         let executor = Executor::new("test-nested-error".to_string(), ssh_launcher);
@@ -116,5 +117,4 @@ fn test_nested_ssh_docker_error_context() {
             // Should show both SSH and Docker context
             assert!(err_str.contains("SSH") || err_str.contains("Docker"));
         }
-    });
 }

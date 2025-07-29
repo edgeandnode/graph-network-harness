@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: command-executor-systemd-ssh-working:latest
-    container_name: command-executor-systemd-ssh-test
+    container_name: command-executor-systemd-ssh-harness-test
     hostname: systemd-ssh-test
     # Required for systemd
     privileged: true

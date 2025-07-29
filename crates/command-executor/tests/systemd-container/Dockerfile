@@ -46,7 +46,16 @@ RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd
 RUN mkdir -p /opt/portable-services
 
 # Copy test portable service images
-COPY test-services/ /opt/portable-services/
+COPY test-services/ /tmp/test-services/
+
+# Create portable service images from the directory structures
+RUN cd /tmp/test-services && \
+    for service in echo-service counter-service; do \
+        tar czf /opt/portable-services/${service}.tar.gz -C ${service} .; \
+    done && \
+    # Also keep the unpacked directories for direct attachment
+    cp -r /tmp/test-services/* /opt/portable-services/ && \
+    rm -rf /tmp/test-services
 
 # Create working directory
 WORKDIR /workspace

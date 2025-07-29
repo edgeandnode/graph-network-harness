@@ -23,7 +23,7 @@ mod docker_tests {
     /// Shared Docker-in-Docker container for network discovery tests
     /// This container is started once and shared across all tests for efficiency
 
-    static DIND_CONTAINER_NAME: &str = "network-discovery-dind-test";
+    static DIND_CONTAINER_NAME: &str = "network-discovery-dind-harness-test";
     static CONTAINER_GUARD: OnceLock<DindContainerGuard> = OnceLock::new();
 
     struct DindContainerGuard {

@@ -37,7 +37,7 @@ impl DockerExecutor {
 
     /// Detect existing container by name
     async fn detect_existing_container(&self, name: &str) -> Result<Option<ContainerState>> {
-        let container_name = format!("orchestrator-{}", name);
+        let container_name = format!("orchestrator-{}-harness-test", name);
 
         // Check if container exists
         let mut ps_cmd = Command::new("docker");

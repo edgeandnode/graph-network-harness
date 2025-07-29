@@ -18,7 +18,7 @@ impl TestHarness {
     /// Set up the test environment
     pub async fn setup() -> Result<Self> {
         let executor = Executor::local("test-harness");
-        let container_name = "command-executor-systemd-ssh-test".to_string();
+        let container_name = "command-executor-systemd-ssh-harness-test".to_string();
         let ssh_port = 2223;
 
         // Determine paths

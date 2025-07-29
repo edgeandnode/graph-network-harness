@@ -12,3 +12,4 @@
 
 # Since this is part of a workspace, Cargo.lock is at the workspace root
 # and should not be tracked here
+test-logs

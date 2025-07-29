@@ -112,7 +112,7 @@ let result = executor.execute(&Target::Command, cmd).await?;
   ```
 
 ### Test Failures
-- Ensure container is running: `docker ps -f name=command-executor-systemd-ssh-test`
+- Ensure container is running: `docker ps -f name=command-executor-systemd-ssh-harness-test`
 - Check if test-services are mounted properly
 - Verify SSH connectivity with manual SSH command
 - Generate SSH keys if missing: `./generate-ssh-keys.sh`

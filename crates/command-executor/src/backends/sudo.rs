@@ -85,6 +85,8 @@ where
     ) -> Result<(Self::EventStream, Self::Handle)> {
         // Build the sudo command
         let mut builder = Command::builder("sudo")
+            // Non-interactive mode (never prompt for password)
+            .arg("-n")
             // Preserve environment variables by default
             .arg("-E")
             // Add the original command and its arguments

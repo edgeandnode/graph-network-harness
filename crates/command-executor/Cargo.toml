@@ -42,6 +42,8 @@ smol-potat = { workspace = true }
 tempfile = { workspace = true }
 anyhow = "1.0"
 futures = "0.3"
+# For signal handling in tests
+signal-hook = "0.3"
 
 [lints]
 workspace = true

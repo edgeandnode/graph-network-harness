@@ -30,14 +30,14 @@ fn test_real_portablectl_attach_detach() {
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-integration");
         let target = Target::SystemdPortable(SystemdPortable::new(
-            "/opt/portable-services/echo-service.tar.gz",
+            "/opt/portable-services/echo-service",
             "echo-service.service",
         ));
 
         // First, ensure the service is not attached
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("echo-service.tar.gz")
+            .arg("echo-service")
             .build();
         let _ = executor.launch(&target, detach_cmd).await; // Ignore errors if not attached
 
@@ -45,7 +45,7 @@ fn test_real_portablectl_attach_detach() {
         let attach_cmd = Command::builder("portablectl")
             .arg("attach")
             .arg("--copy=copy") // Use copy mode for testing
-            .arg("/opt/portable-services/echo-service.tar.gz")
+            .arg("/opt/portable-services/echo-service")
             .build();
 
         let result = executor.launch(&target, attach_cmd).await;
@@ -83,7 +83,7 @@ fn test_real_portablectl_attach_detach() {
         // Clean up: detach the service
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("echo-service.tar.gz")
+            .arg("echo-service")
             .build();
 
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
@@ -106,14 +106,14 @@ fn test_portable_service_lifecycle() {
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-lifecycle");
         let target = Target::SystemdPortable(SystemdPortable::new(
-            "/opt/portable-services/counter-service.tar.gz",
+            "/opt/portable-services/counter-service",
             "counter-service.service",
         ));
 
         // Clean slate
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("counter-service.tar.gz")
+            .arg("counter-service")
             .build();
         let _ = executor.launch(&target, detach_cmd).await;
 
@@ -121,7 +121,7 @@ fn test_portable_service_lifecycle() {
         let attach_cmd = Command::builder("portablectl")
             .arg("attach")
             .arg("--copy=copy")
-            .arg("/opt/portable-services/counter-service.tar.gz")
+            .arg("/opt/portable-services/counter-service")
             .build();
 
         let (_events, mut handle) = executor.launch(&target, attach_cmd).await.unwrap();
@@ -175,7 +175,7 @@ fn test_portable_service_lifecycle() {
         // Detach the service
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("counter-service.tar.gz")
+            .arg("counter-service")
             .build();
 
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
@@ -193,14 +193,14 @@ fn test_portable_service_logs() {
     futures::executor::block_on(async {
         let executor = Executor::local("systemd-logs");
         let target = Target::SystemdPortable(SystemdPortable::new(
-            "/opt/portable-services/echo-service.tar.gz",
+            "/opt/portable-services/echo-service",
             "echo-service.service",
         ));
 
         // Clean slate
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("echo-service.tar.gz")
+            .arg("echo-service")
             .build();
         let _ = executor.launch(&target, detach_cmd).await;
 
@@ -209,7 +209,7 @@ fn test_portable_service_logs() {
             .arg("attach")
             .arg("--copy=copy")
             .arg("--now") // Start immediately
-            .arg("/opt/portable-services/echo-service.tar.gz")
+            .arg("/opt/portable-services/echo-service")
             .build();
 
         let (_events, mut handle) = executor.launch(&target, attach_cmd).await.unwrap();
@@ -257,7 +257,7 @@ fn test_portable_service_logs() {
 
         let detach_cmd = Command::builder("portablectl")
             .arg("detach")
-            .arg("echo-service.tar.gz")
+            .arg("echo-service")
             .build();
         let (_events, mut handle) = executor.launch(&target, detach_cmd).await.unwrap();
         handle.wait().await.unwrap();

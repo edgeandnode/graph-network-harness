@@ -5,7 +5,7 @@ services:
   registry:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-registry-local
+    container_name: registry-local-harness-test
     networks:
       harness-bridge:
         ipv4_address: 172.100.0.10
@@ -14,7 +14,7 @@ services:
   graph-node:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-graph-node-local
+    container_name: graph-node-local-harness-test
     networks:
       harness-bridge:
         ipv4_address: 172.100.0.20
@@ -23,7 +23,7 @@ services:
   indexer:
     image: alpine:latest
     command: sleep infinity
-    container_name: test-indexer-local
+    container_name: indexer-local-harness-test
     networks:
       harness-bridge:
         ipv4_address: 172.100.0.30

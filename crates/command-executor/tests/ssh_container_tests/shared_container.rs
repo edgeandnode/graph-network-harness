@@ -2,18 +2,11 @@
 //!
 //! These tests demonstrate that multiple tests can share the same container instance
 
-#![cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-
+use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 use command_executor::{
     backends::{local::LocalLauncher, ssh::SshLauncher},
     Command, Executor, Target,
 };
-
-mod common;
-
-// Import the shared container functionality from integration_nested.rs
-// This is the same shared harness used by other SSH tests
-use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 
 #[smol_potat::test]
 async fn test_shared_container_basic_ssh_execution() {

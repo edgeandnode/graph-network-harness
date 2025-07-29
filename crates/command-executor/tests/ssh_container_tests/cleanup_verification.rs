@@ -1,9 +1,5 @@
 //! Test to verify container cleanup on panic
 
-#![cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-
-mod common;
-
 use crate::common::shared_container::ensure_container_running;
 
 /// This test intentionally panics to help debug the container cleanup mechanism.

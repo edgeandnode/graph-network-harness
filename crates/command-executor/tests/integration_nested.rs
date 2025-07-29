@@ -96,64 +96,7 @@ mod docker_tests {
     }
 }
 
-// SSH tests that require Docker container with SSH
-#[cfg(all(feature = "ssh", feature = "ssh-tests", feature = "docker-tests"))]
-mod ssh_tests {
-    use super::*;
-    use crate::common::shared_container::{ensure_container_running, get_ssh_config};
-    use command_executor::backends::local::LocalLauncher;
-    use command_executor::backends::ssh::{SshConfig, SshLauncher};
-
-
-    #[test]
-    fn test_ssh_docker_execution() {
-        futures::executor::block_on(async {
-            use command_executor::target::DockerContainer;
-
-            // Ensure shared container is running
-            ensure_container_running()
-                .await
-                .expect("Failed to ensure container is running");
-
-            let local = LocalLauncher;
-            let ssh_launcher = SshLauncher::new(local, get_ssh_config());
-
-            let executor = Executor::new("test-ssh-docker".to_string(), ssh_launcher);
-
-            // First check if Docker is available in the SSH container
-            let docker_check = Command::builder("docker").arg("--version").build();
-
-            match executor.execute(&Target::Command, docker_check).await {
-                Ok(result) if result.success() => {
-                    println!("Docker is available in SSH container");
-
-                    // Run a Docker container over SSH
-                    let container = DockerContainer::new("alpine:latest").with_remove_on_exit(true);
-                    let target = Target::DockerContainer(container);
-
-                    let cmd = Command::builder("echo")
-                        .arg("Hello from Docker over SSH")
-                        .build();
-
-                    let result = executor.execute(&target, cmd).await;
-
-                    // Docker might not be fully functional in the test container
-                    if result.is_ok() {
-                        println!("Successfully ran Docker container over SSH");
-                    } else {
-                        println!(
-                            "Docker execution failed (expected in test environment): {:?}",
-                            result
-                        );
-                    }
-                }
-                _ => {
-                    println!("Docker not available in test container (expected)");
-                }
-            }
-        });
-    }
-}
+// SSH tests moved to ssh_container_tests/integration_nested_ssh.rs
 
 // Error context tests
 #[test]

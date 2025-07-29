@@ -21,6 +21,9 @@ static SIGNAL_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
 // Flag to track if panic handler is installed
 static PANIC_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
 
+// Flag to track if atexit handler is installed
+static ATEXIT_HANDLER_INSTALLED: AtomicBool = AtomicBool::new(false);
+
 // Mutex for container initialization synchronization
 static INIT_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -94,6 +97,25 @@ fn install_panic_handler() {
     }));
 }
 
+/// Install atexit handler for cleanup on normal exit
+fn install_atexit_handler() {
+    if ATEXIT_HANDLER_INSTALLED.swap(true, Ordering::SeqCst) {
+        // Already installed
+        return;
+    }
+
+    extern "C" fn cleanup_on_exit() {
+        eprintln!("Process exiting, cleaning up test container...");
+        if let Some(guard) = CONTAINER_GUARD.get() {
+            guard.cleanup();
+        }
+    }
+
+    unsafe {
+        libc::atexit(cleanup_on_exit);
+    }
+}
+
 /// Setup function that ensures the container is running
 /// This can be called by multiple tests safely - it will only start the container once
 pub async fn ensure_container_running() -> Result<()> {
@@ -105,6 +127,9 @@ pub async fn ensure_container_running() -> Result<()> {
     
     // Install panic handler for cleanup
     install_panic_handler();
+    
+    // Install atexit handler for cleanup on normal exit
+    install_atexit_handler();
 
     // Check if container is already running
     let check_cmd = Command::builder("docker")

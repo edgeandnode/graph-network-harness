@@ -629,6 +629,7 @@ dependencies = [
  "futures",
  "futures-lite 2.6.0",
  "futures-util",
+ "libc",
  "nix",
  "serde",
  "serde_json",

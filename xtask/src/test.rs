@@ -84,7 +84,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    print!("{}", data);
+                    println!("{}", data);
 
                     // Parse test output
                     test_summary.parse_line(data);

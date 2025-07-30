@@ -186,7 +186,7 @@ async fn run_cargo_command(args: Vec<&str>) -> Result<bool> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    print!("{}", data);
+                    println!("{}", data);
                 }
             }
             _ => {}

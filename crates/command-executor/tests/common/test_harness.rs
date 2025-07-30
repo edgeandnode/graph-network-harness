@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Test harness that manages test infrastructure using command-executor itself
+#[allow(dead_code)]
 pub struct TestHarness {
     pub executor: Executor<LocalLauncher>,
     pub container_name: String,

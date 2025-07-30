@@ -97,7 +97,7 @@ impl WsClient {
         match self {
             Self::Plain {
                 mut ws,
-                addr,
+                addr: _,
                 pending_requests,
             } => {
                 let pending_requests_clone = pending_requests.clone();
@@ -158,7 +158,7 @@ impl WsClient {
             }
             Self::Tls {
                 mut ws,
-                addr,
+                addr: _,
                 pending_requests,
             } => {
                 let pending_requests_clone = pending_requests.clone();

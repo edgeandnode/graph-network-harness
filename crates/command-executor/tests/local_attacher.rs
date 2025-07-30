@@ -169,9 +169,11 @@ fn test_attach_config_options() {
             .build()
             .unwrap();
 
-        let mut config = AttachConfig::default();
-        config.history_lines = Some(50);
-        config.follow_from_start = true;
+        let config = AttachConfig {
+            history_lines: Some(50),
+            follow_from_start: true,
+            ..Default::default()
+        };
 
         // This will construct: tail -n 50 -f
         let result = attacher.attach(&service, config).await;

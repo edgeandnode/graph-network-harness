@@ -135,7 +135,7 @@ async fn build_docker_image(image_name: &str, context_dir: &str, dockerfile: &st
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    print!("{}", data);
+                    println!("{}", data);
                 }
             }
             _ => {}
@@ -160,7 +160,7 @@ async fn remove_docker_image(image: &str) -> Result<()> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    print!("{}", data);
+                    println!("{}", data);
                 }
             }
             _ => {}

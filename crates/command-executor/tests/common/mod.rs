@@ -1,5 +1,8 @@
 //! Common test utilities
 
+// Test utilities may not all be used in every test configuration
+#![allow(dead_code)]
+
 pub mod shared_container;
 pub mod test_harness;
 

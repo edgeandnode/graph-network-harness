@@ -3,6 +3,11 @@
 //! This module provides a shared container that is started once before all tests
 //! and cleaned up after all tests complete.
 
+// We use unsafe to register atexit handlers for proper cleanup
+#![allow(unsafe_code)]
+// These items are used but clippy doesn't detect their usage correctly
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
 use std::panic;
@@ -68,6 +73,7 @@ fn install_signal_handlers() {
             Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
 
         thread::spawn(move || {
+            #[allow(clippy::never_loop)]
             for sig in signals.forever() {
                 eprintln!("Received signal: {:?}", sig);
                 // Cleanup containers before exiting
@@ -115,6 +121,12 @@ fn install_atexit_handler() {
         }
     }
 
+    // SAFETY: cleanup_on_exit is a static extern "C" function that doesn't access
+    // any invalid memory. The atexit function is a standard C library function
+    // that safely registers our cleanup function to be called at process exit.
+    // This is necessary because Rust's Drop trait doesn't guarantee execution
+    // on process termination (e.g., when killed by signals or panics).
+    #[allow(clippy::undocumented_unsafe_blocks)]
     unsafe {
         libc::atexit(cleanup_on_exit);
     }
@@ -122,8 +134,10 @@ fn install_atexit_handler() {
 
 /// Setup function that ensures the container is running
 /// This can be called by multiple tests safely - it will only start the container once
+#[allow(clippy::await_holding_lock)]
 pub async fn ensure_container_running() -> Result<()> {
     // Lock to prevent concurrent initialization
+    // We need to hold this lock throughout the entire process to prevent race conditions
     let _lock = INIT_MUTEX.lock().unwrap();
 
     // Install signal handlers for cleanup

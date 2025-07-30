@@ -17,6 +17,7 @@ cargo xtask ci all
 # Run specific checks
 cargo xtask ci fmt-check    # Format check (read-only)
 cargo xtask ci clippy       # Linting
+cargo xtask ci deny         # Dependency license and advisory check
 cargo xtask ci unit-tests   # Unit tests only
 cargo xtask ci integration-tests  # All integration tests
 ```
@@ -107,6 +108,28 @@ Test logs are automatically uploaded as artifacts:
 - Named with GitHub run ID
 - Retained for 7 days
 - Available for download from the Actions tab
+
+## Dependency Management
+
+### Cargo Deny
+
+The project uses `cargo-deny` to check for:
+- License compliance
+- Security advisories
+- Duplicate dependencies
+
+Configuration is in `deny.toml`. To run locally:
+
+```bash
+cargo xtask ci deny
+# or directly:
+cargo deny check
+```
+
+If you need to:
+- Add a new allowed license: Update the `[licenses]` section
+- Ignore a security advisory: Add to `[advisories]` ignore list
+- Allow specific git dependencies: Update `[sources]` section
 
 ## Troubleshooting
 

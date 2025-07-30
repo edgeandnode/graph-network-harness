@@ -6,9 +6,9 @@ use crate::{
     tls::TlsClientConfig,
 };
 use async_net::TcpStream;
-use async_tungstenite::{client_async, WebSocketStream};
-use futures::lock::Mutex;
+use async_tungstenite::{WebSocketStream, client_async};
 use futures::StreamExt;
+use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;

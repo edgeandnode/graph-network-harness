@@ -166,12 +166,16 @@ fn test_event_streaming() {
         ));
 
         // Should have stdout and stderr events
-        assert!(collected
-            .iter()
-            .any(|e| matches!(e.event_type, ProcessEventType::Stdout)));
-        assert!(collected
-            .iter()
-            .any(|e| matches!(e.event_type, ProcessEventType::Stderr)));
+        assert!(
+            collected
+                .iter()
+                .any(|e| matches!(e.event_type, ProcessEventType::Stdout))
+        );
+        assert!(
+            collected
+                .iter()
+                .any(|e| matches!(e.event_type, ProcessEventType::Stderr))
+        );
 
         // Verify the actual content of the events
         let stdout_events: Vec<_> = collected

@@ -9,8 +9,8 @@ mod tls_tests {
     use tempfile;
 
     /// Helper to create test certificates
-    async fn create_test_certificates(
-    ) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    async fn create_test_certificates()
+    -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
         let cert = generate_simple_self_signed(subject_alt_names)
             .expect("Failed to generate self-signed certificate");
@@ -37,7 +37,9 @@ mod tls_tests {
 
     /// Helper to create a client config that accepts any certificate
     fn create_test_client_config() -> TlsClientConfig {
-        use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+        use rustls::client::danger::{
+            HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
+        };
         use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
         use rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
         use std::sync::Arc;
@@ -53,11 +55,10 @@ mod tls_tests {
                 _server_name: &ServerName<'_>,
                 _ocsp_response: &[u8],
                 _now: UnixTime,
-            ) -> Result<ServerCertVerified, rustls::Error>
-            {
+            ) -> Result<ServerCertVerified, rustls::Error> {
                 Ok(ServerCertVerified::assertion())
             }
-            
+
             fn verify_tls12_signature(
                 &self,
                 _message: &[u8],
@@ -66,7 +67,7 @@ mod tls_tests {
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
                 Ok(HandshakeSignatureValid::assertion())
             }
-            
+
             fn verify_tls13_signature(
                 &self,
                 _message: &[u8],
@@ -75,7 +76,7 @@ mod tls_tests {
             ) -> Result<HandshakeSignatureValid, rustls::Error> {
                 Ok(HandshakeSignatureValid::assertion())
             }
-            
+
             fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
                 vec![
                     SignatureScheme::RSA_PKCS1_SHA256,
@@ -177,7 +178,8 @@ mod tls_tests {
     async fn test_tls_certificate_validation() {
         // Create self-signed certificate
         let subject_alt_names = vec!["testserver.local".to_string()];
-        let cert = generate_simple_self_signed(subject_alt_names).expect("Failed to generate certificate");
+        let cert =
+            generate_simple_self_signed(subject_alt_names).expect("Failed to generate certificate");
 
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let cert_path = temp_dir.path().join("server-cert.pem");
@@ -185,11 +187,15 @@ mod tls_tests {
         let ca_cert_path = temp_dir.path().join("ca-cert.pem");
 
         // Write certificate files
-        async_fs::write(&cert_path, cert.serialize_pem().unwrap()).await.unwrap();
+        async_fs::write(&cert_path, cert.serialize_pem().unwrap())
+            .await
+            .unwrap();
         async_fs::write(&key_path, cert.serialize_private_key_pem())
             .await
             .unwrap();
-        async_fs::write(&ca_cert_path, cert.serialize_pem().unwrap()).await.unwrap(); // Self-signed acts as CA
+        async_fs::write(&ca_cert_path, cert.serialize_pem().unwrap())
+            .await
+            .unwrap(); // Self-signed acts as CA
 
         // Create server with TLS
         let tls_config = TlsServerConfig::from_files(&cert_path, &key_path)

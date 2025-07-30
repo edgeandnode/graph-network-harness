@@ -2,8 +2,8 @@
 
 use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 use command_executor::{
-    backends::{local::LocalLauncher, ssh::SshLauncher},
     Command, Executor, Target,
+    backends::{local::LocalLauncher, ssh::SshLauncher},
 };
 
 #[smol_potat::test]
@@ -19,9 +19,11 @@ async fn test_self_hosted_ssh_execution() {
 
     // Test basic command execution
     let cmd = Command::builder("echo").arg("Self-hosted SSH test").build();
-    let result = executor.execute(&Target::Command, cmd).await
+    let result = executor
+        .execute(&Target::Command, cmd)
+        .await
         .expect("Failed to execute command");
-    
+
     assert!(result.success());
     assert!(result.output.contains("Self-hosted SSH test"));
 }

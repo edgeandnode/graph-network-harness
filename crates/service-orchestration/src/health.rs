@@ -3,9 +3,9 @@
 //! This module provides health checking functionality to monitor
 //! service status and detect failures.
 
-use crate::{config::HealthCheck, Result};
+use crate::{Result, config::HealthCheck};
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, target::Target, Command, Executor};
+use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};

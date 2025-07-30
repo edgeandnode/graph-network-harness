@@ -159,7 +159,7 @@ impl DaemonBuilder {
             test_mode: false,
         }
     }
-    
+
     /// Enable test mode (uses temporary directories)
     #[cfg(test)]
     pub fn with_test_mode(mut self) -> Self {
@@ -215,7 +215,7 @@ impl DaemonBuilder {
                 .await
                 .map_err(Error::ServiceOrchestration)?
         };
-        
+
         #[cfg(not(test))]
         let service_manager = ServiceManager::new()
             .await

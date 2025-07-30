@@ -25,7 +25,7 @@ enum Command {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    
+
     // Run in smol runtime
     smol::block_on(async {
         match args.cmd {

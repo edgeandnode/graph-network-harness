@@ -1,7 +1,7 @@
 fn main() {
     println!("Testing basic nom parsing:");
 
-    use nom::{bytes::complete::tag, sequence::delimited, IResult, Parser};
+    use nom::{IResult, Parser, bytes::complete::tag, sequence::delimited};
 
     fn simple_parser(input: &str) -> IResult<&str, &str> {
         let mut parser = delimited(tag(r#"${"#), nom::combinator::rest, tag(r#"}"#));

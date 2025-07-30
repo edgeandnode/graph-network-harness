@@ -1,8 +1,8 @@
 //! Core service registry implementation
 
 use crate::{
-    backend::sled::SledBackend,
     backend::RegistryBackend,
+    backend::sled::SledBackend,
     error::{Error, Result},
     models::*,
 };
@@ -411,10 +411,12 @@ mod tests {
             .unwrap();
 
         // Invalid transition
-        assert!(registry
-            .update_state("test-service", ServiceState::Starting)
-            .await
-            .is_err());
+        assert!(
+            registry
+                .update_state("test-service", ServiceState::Starting)
+                .await
+                .is_err()
+        );
 
         // Deregister
         let (_entry, _events) = registry.deregister("test-service").await.unwrap();

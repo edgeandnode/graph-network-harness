@@ -2,12 +2,12 @@
 
 use super::{LogStream, NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
+    Result,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
-    Result,
 };
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, target::Target, Command, Executor};
+use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
 use futures::stream::{self, StreamExt};
 use tracing::{info, warn};
 

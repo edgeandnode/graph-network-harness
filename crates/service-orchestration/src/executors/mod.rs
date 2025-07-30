@@ -11,7 +11,7 @@ pub use docker::DockerExecutor;
 pub use process::ProcessExecutor;
 pub use remote::RemoteExecutor;
 
-use crate::{config::ServiceConfig, health::HealthStatus, Result};
+use crate::{Result, config::ServiceConfig, health::HealthStatus};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

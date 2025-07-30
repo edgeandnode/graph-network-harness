@@ -4,8 +4,8 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use rustls::{ClientConfig, ServerConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
 #[derive(Clone)]
@@ -123,10 +123,12 @@ impl TlsClientConfig {
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
     #[cfg(test)]
     pub fn dangerous_accept_any_cert() -> Result<Self> {
-        use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-        use rustls::pki_types::UnixTime;
         use rustls::DigitallySignedStruct;
-        
+        use rustls::client::danger::{
+            HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
+        };
+        use rustls::pki_types::UnixTime;
+
         #[derive(Debug)]
         struct DangerousAcceptAnyVerifier;
 

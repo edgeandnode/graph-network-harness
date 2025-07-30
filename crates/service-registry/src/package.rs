@@ -1,7 +1,7 @@
 //! Package management system
 
 use crate::{Error, Result};
-use async_fs::{create_dir_all, File};
+use async_fs::{File, create_dir_all};
 use futures::io::AsyncReadExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

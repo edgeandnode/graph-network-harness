@@ -2,9 +2,9 @@
 
 use super::{LogStream, RunningService, ServiceExecutor};
 use crate::{
+    Result,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
-    Result,
 };
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};

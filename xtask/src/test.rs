@@ -65,7 +65,12 @@ pub async fn run(args: TestArgs) -> Result<()> {
     println!();
 
     // Ensure Docker images if needed
-    if args.all_features || args.features.as_ref().map_or(false, |f| f.contains("docker") || f.contains("ssh")) {
+    if args.all_features
+        || args
+            .features
+            .as_ref()
+            .map_or(false, |f| f.contains("docker") || f.contains("ssh"))
+    {
         crate::docker::ensure_test_images().await?;
     }
 
@@ -83,7 +88,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
 
                     // Parse test output
                     test_summary.parse_line(data);
-                    
+
                     if data.contains("test result: FAILED") || data.contains("FAILED") {
                         test_failed = true;
                     }

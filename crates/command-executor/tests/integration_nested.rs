@@ -90,7 +90,9 @@ mod docker_tests {
             } else {
                 // If launch API doesn't capture output for Docker, that's a known limitation
                 // We should document this and suggest using execute() for Docker containers
-                println!("Note: Docker launch API may not capture output for short-lived containers. Use execute() for reliable output capture.");
+                println!(
+                    "Note: Docker launch API may not capture output for short-lived containers. Use execute() for reliable output capture."
+                );
             }
         });
     }

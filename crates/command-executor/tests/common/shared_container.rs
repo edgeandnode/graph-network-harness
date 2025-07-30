@@ -5,9 +5,9 @@
 
 use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::panic;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 // Store the container name globally so we can clean it up
 static CONTAINER_NAME: &str = "command-executor-systemd-ssh-harness-test";
@@ -58,11 +58,15 @@ fn install_signal_handlers() {
     // Install handlers for common termination signals
     #[cfg(unix)]
     {
-        use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
+        use signal_hook::{
+            consts::{SIGINT, SIGTERM},
+            iterator::Signals,
+        };
         use std::thread;
 
-        let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
-        
+        let mut signals =
+            Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
+
         thread::spawn(move || {
             for sig in signals.forever() {
                 eprintln!("Received signal: {:?}", sig);
@@ -84,11 +88,11 @@ fn install_panic_handler() {
     }
 
     let original_hook = panic::take_hook();
-    
+
     panic::set_hook(Box::new(move |panic_info| {
         // Call the original panic handler first
         original_hook(panic_info);
-        
+
         // Then cleanup our container
         eprintln!("Panic detected, cleaning up test container...");
         if let Some(guard) = CONTAINER_GUARD.get() {
@@ -124,10 +128,10 @@ pub async fn ensure_container_running() -> Result<()> {
 
     // Install signal handlers for cleanup
     install_signal_handlers();
-    
+
     // Install panic handler for cleanup
     install_panic_handler();
-    
+
     // Install atexit handler for cleanup on normal exit
     install_atexit_handler();
 
@@ -170,12 +174,12 @@ pub async fn ensure_container_running() -> Result<()> {
                 break current_dir;
             }
         }
-        
+
         if !current_dir.pop() {
             anyhow::bail!("Could not find workspace root");
         }
     };
-    
+
     let test_dir = workspace_root.join("crates/command-executor/tests/systemd-container");
 
     // Build the Docker image
@@ -298,12 +302,12 @@ pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
                 }
             }
         }
-        
+
         if !current_dir.pop() {
             panic!("Could not find workspace root");
         }
     };
-    
+
     let ssh_key_path = workspace_root
         .join("crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519");
 

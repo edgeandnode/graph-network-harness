@@ -30,9 +30,11 @@ pub async fn run(args: DockerArgs) -> Result<()> {
 pub async fn ensure_test_images() -> Result<()> {
     println!("Checking Docker test images...");
 
-    let images = vec![
-        ("command-executor-test-systemd:latest", "crates/command-executor/tests/systemd-container", "Dockerfile"),
-    ];
+    let images = vec![(
+        "command-executor-test-systemd:latest",
+        "crates/command-executor/tests/systemd-container",
+        "Dockerfile",
+    )];
 
     for (image_name, context_dir, dockerfile) in images {
         print!("  Checking for {}... ", image_name);
@@ -59,9 +61,11 @@ pub async fn ensure_test_images() -> Result<()> {
 async fn build_test_images() -> Result<()> {
     println!("Building test container images...\n");
 
-    let images = vec![
-        ("command-executor-test-systemd:latest", "crates/command-executor/tests/systemd-container", "Dockerfile"),
-    ];
+    let images = vec![(
+        "command-executor-test-systemd:latest",
+        "crates/command-executor/tests/systemd-container",
+        "Dockerfile",
+    )];
 
     for (image_name, context_dir, dockerfile) in images {
         println!("Building {}...", image_name);
@@ -115,16 +119,16 @@ async fn docker_image_exists(image: &str) -> Result<bool> {
 
 async fn build_docker_image(image_name: &str, context_dir: &str, dockerfile: &str) -> Result<()> {
     let launcher = LocalLauncher;
-    
+
     let mut args = vec!["build", "-t", image_name, "-f"];
     args.push(dockerfile);
-    
+
     // Add caching in GitHub Actions
     if env::var("GITHUB_ACTIONS").is_ok() {
         args.extend(&["--cache-from", "type=gha"]);
         args.extend(&["--cache-to", "type=gha,mode=max"]);
     }
-    
+
     args.push(context_dir);
 
     let cmd = Command::builder("docker").args(&args).build();
@@ -151,9 +155,7 @@ async fn build_docker_image(image_name: &str, context_dir: &str, dockerfile: &st
 
 async fn remove_docker_image(image: &str) -> Result<()> {
     let launcher = LocalLauncher;
-    let cmd = Command::builder("docker")
-        .args(&["rmi", image])
-        .build();
+    let cmd = Command::builder("docker").args(&["rmi", image]).build();
 
     let (mut events, mut handle) = launcher.launch(&Target::Command, cmd).await?;
 

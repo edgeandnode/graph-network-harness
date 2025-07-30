@@ -8,7 +8,7 @@ async fn test_dind_container_setup() {
         eprintln!("Skipping test: Docker not available");
         return;
     }
-    
+
     // Just test that we can start the DinD container
     ensure_dind_container_running()
         .await

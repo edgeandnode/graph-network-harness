@@ -1,7 +1,7 @@
 //! Basic network discovery tests
 
 use crate::network_discovery_tests::shared_dind::{
-    check_docker, dind_compose_command, ensure_dind_container_running, TEST_MUTEX,
+    TEST_MUTEX, check_docker, dind_compose_command, ensure_dind_container_running,
 };
 use service_registry::network::{NetworkConfig, NetworkLocation, NetworkManager, ServiceNetwork};
 use std::time::Duration;
@@ -10,7 +10,7 @@ use std::time::Duration;
 async fn test_dind_basic_docker_compose() {
     // Lock to prevent concurrent test execution (network conflicts)
     let _test_lock = TEST_MUTEX.lock().unwrap();
-    
+
     if !check_docker().await {
         eprintln!("Skipping test: Docker not available");
         return;
@@ -40,8 +40,7 @@ async fn test_dind_basic_docker_compose() {
         enable_wireguard: false,
     };
 
-    let network_manager = NetworkManager::new(config)
-        .expect("Failed to create network manager");
+    let network_manager = NetworkManager::new(config).expect("Failed to create network manager");
 
     // Basic check that we created it
     assert!(network_manager.generate_environment("test").is_ok());
@@ -65,7 +64,7 @@ async fn test_network_manager_creation() {
     assert!(network_manager.is_ok());
 }
 
-#[smol_potat::test] 
+#[smol_potat::test]
 async fn test_service_registration() {
     let config = NetworkConfig {
         wireguard_subnet: "10.42.0.0/16".parse().unwrap(),
@@ -74,8 +73,8 @@ async fn test_service_registration() {
         enable_wireguard: false,
     };
 
-    let mut network_manager = NetworkManager::new(config)
-        .expect("Failed to create network manager");
+    let mut network_manager =
+        NetworkManager::new(config).expect("Failed to create network manager");
 
     // Create a local service
     let local_service = ServiceNetwork {
@@ -89,13 +88,16 @@ async fn test_service_registration() {
     };
 
     // Register it
-    network_manager.register_service(local_service).await
+    network_manager
+        .register_service(local_service)
+        .await
         .expect("Failed to register service");
 
     // Try to generate environment for the registered service
-    let env = network_manager.generate_environment("test-local")
+    let env = network_manager
+        .generate_environment("test-local")
         .expect("Failed to generate environment");
-    
+
     // Environment should be a HashMap (might be empty)
     // Just verify we got something back
     assert!(env.len() >= 0);

@@ -1,12 +1,12 @@
 //! Integration tests for service registry with real harness deployments
 
 use command_executor::{
-    backends::local::LocalLauncher, target::DockerContainer, Command, Executor, Target,
+    Command, Executor, Target, backends::local::LocalLauncher, target::DockerContainer,
 };
 use service_registry::{
+    Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,
     models::{EventType, ServiceState, WsMessage},
     package::{PackageBuilder, PackageInstaller},
-    Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,
 };
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;

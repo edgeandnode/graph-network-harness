@@ -4,8 +4,8 @@
 
 use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 use command_executor::{
-    backends::{local::LocalLauncher, ssh::SshLauncher},
     Command, Executor, Target,
+    backends::{local::LocalLauncher, ssh::SshLauncher},
 };
 
 #[smol_potat::test]
@@ -24,7 +24,10 @@ async fn test_shared_container_basic_ssh_execution() {
     let test_id = std::process::id();
     let cmd = Command::builder("sh")
         .arg("-c")
-        .arg(format!("echo 'test {} ran at $(date +%s%N)' > /tmp/test_first_{}.txt", test_id, test_id))
+        .arg(format!(
+            "echo 'test {} ran at $(date +%s%N)' > /tmp/test_first_{}.txt",
+            test_id, test_id
+        ))
         .build();
 
     match executor.execute(&Target::Command, cmd).await {
@@ -39,7 +42,7 @@ async fn test_shared_container_basic_ssh_execution() {
             panic!("Failed to execute command: {:?}", e);
         }
     }
-    
+
     // Clean up our own test file
     let cleanup_cmd = Command::builder("rm")
         .arg("-f")
@@ -70,13 +73,15 @@ async fn test_shared_container_hostname_consistency() {
 
     assert!(result.success());
     let hostname = result.output.trim();
-    
+
     // Verify we can execute commands
     let test_id = std::process::id();
     let cmd2 = Command::builder("sh")
         .arg("-c")
-        .arg(format!("echo 'test {} hostname: {}' > /tmp/test_second_{}.txt && cat /tmp/test_second_{}.txt", 
-                     test_id, hostname, test_id, test_id))
+        .arg(format!(
+            "echo 'test {} hostname: {}' > /tmp/test_second_{}.txt && cat /tmp/test_second_{}.txt",
+            test_id, hostname, test_id, test_id
+        ))
         .build();
 
     let result2 = executor
@@ -84,8 +89,12 @@ async fn test_shared_container_hostname_consistency() {
         .await
         .expect("Failed to execute command");
     assert!(result2.success());
-    assert!(result2.output.contains(&format!("test {} hostname:", test_id)));
-    
+    assert!(
+        result2
+            .output
+            .contains(&format!("test {} hostname:", test_id))
+    );
+
     // Clean up
     let cleanup_cmd = Command::builder("rm")
         .arg("-f")
@@ -113,13 +122,15 @@ async fn test_shared_container_independent_file_operations() {
         .expect("Failed to get hostname");
     assert!(hostname_result.success());
     let hostname = hostname_result.output.trim();
-    
+
     // Create our own test file to verify container access
     let test_id = std::process::id();
     let create_cmd = Command::builder("sh")
         .arg("-c")
-        .arg(format!("echo 'test {} in container {}' > /tmp/test_third_{}.txt && cat /tmp/test_third_{}.txt", 
-                     test_id, hostname, test_id, test_id))
+        .arg(format!(
+            "echo 'test {} in container {}' > /tmp/test_third_{}.txt && cat /tmp/test_third_{}.txt",
+            test_id, hostname, test_id, test_id
+        ))
         .build();
 
     let result = executor
@@ -128,13 +139,20 @@ async fn test_shared_container_independent_file_operations() {
         .expect("Failed to create test file");
 
     assert!(result.success());
-    assert!(result.output.contains(&format!("test {} in container", test_id)));
-    
+    assert!(
+        result
+            .output
+            .contains(&format!("test {} in container", test_id))
+    );
+
     // Verify we're in the shared container by checking that hostname matches expected pattern
     let hostname_lines: Vec<&str> = hostname.lines().collect();
     let actual_hostname = hostname_lines.last().unwrap_or(&hostname);
-    assert_eq!(actual_hostname, &"systemd-ssh-test", "Container hostname should match the shared container");
-    
+    assert_eq!(
+        actual_hostname, &"systemd-ssh-test",
+        "Container hostname should match the shared container"
+    );
+
     // Clean up our test file
     let cleanup_cmd = Command::builder("rm")
         .arg("-f")
@@ -162,11 +180,14 @@ async fn test_shared_container_uptime_verification() {
         .expect("Failed to get hostname");
     assert!(hostname_result.success());
     let hostname = hostname_result.output.trim();
-    
+
     // Verify this is the shared container (trim any SSH warnings)
     let hostname_lines: Vec<&str> = hostname.lines().collect();
     let actual_hostname = hostname_lines.last().unwrap_or(&hostname);
-    assert_eq!(actual_hostname, &"systemd-ssh-test", "Should be using the shared container");
+    assert_eq!(
+        actual_hostname, &"systemd-ssh-test",
+        "Should be using the shared container"
+    );
 
     // Get container uptime - if it's shared, it should have been up for at least a few seconds
     let uptime_cmd = Command::builder("uptime").arg("-s").build();
@@ -175,16 +196,22 @@ async fn test_shared_container_uptime_verification() {
         .await
         .expect("Failed to get uptime");
     assert!(uptime_result.success());
-    println!("Container has been up since: {}", uptime_result.output.trim());
-    
+    println!(
+        "Container has been up since: {}",
+        uptime_result.output.trim()
+    );
+
     // Create a marker to show this test ran
     let test_id = std::process::id();
     let marker_cmd = Command::builder("sh")
         .arg("-c")
-        .arg(format!("echo 'verify test {} ran at $(date)' > /tmp/test_verify_{}.txt", test_id, test_id))
+        .arg(format!(
+            "echo 'verify test {} ran at $(date)' > /tmp/test_verify_{}.txt",
+            test_id, test_id
+        ))
         .build();
     let _ = executor.execute(&Target::Command, marker_cmd).await;
-    
+
     // Clean up
     let cleanup_cmd = Command::builder("rm")
         .arg("-f")

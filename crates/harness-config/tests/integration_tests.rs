@@ -1,6 +1,6 @@
 //! Integration tests for harness-config
 
-use harness_config::{parser, Config, HealthCheck, HealthCheckType, Network, Service, ServiceType};
+use harness_config::{Config, HealthCheck, HealthCheckType, Network, Service, ServiceType, parser};
 use std::collections::HashMap;
 
 #[test]
@@ -203,10 +203,12 @@ services: {}
 
     let result = parser::parse_str(yaml);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Unsupported version"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Unsupported version")
+    );
 
     // Test missing network reference
     let yaml = r#"

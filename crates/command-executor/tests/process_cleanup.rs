@@ -1,7 +1,7 @@
 //! Tests for process cleanup on drop
 
-use command_executor::command::Command;
 use command_executor::Target;
+use command_executor::command::Command;
 use command_executor::{Executor, ProcessHandle};
 use std::time::Duration;
 

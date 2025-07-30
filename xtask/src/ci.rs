@@ -150,22 +150,20 @@ async fn run_tests(extra_args: Vec<&str>, features_desc: Option<&str>) -> Result
             ProcessEventType::Started { pid } => {
                 eprintln!("Test process started (PID: {})", pid);
             }
-            ProcessEventType::Exited { code, signal } => {
-                match (code, signal) {
-                    (Some(0), _) if !test_failed => {
-                        println!("\nAll tests passed");
-                    }
-                    (Some(code), _) => {
-                        eprintln!("\nTests exited with code: {}", code);
-                    }
-                    (_, Some(sig)) => {
-                        eprintln!("\nTests terminated by signal: {}", sig);
-                    }
-                    _ => {
-                        eprintln!("\nTests exited abnormally");
-                    }
+            ProcessEventType::Exited { code, signal } => match (code, signal) {
+                (Some(0), _) if !test_failed => {
+                    println!("\nAll tests passed");
                 }
-            }
+                (Some(code), _) => {
+                    eprintln!("\nTests exited with code: {}", code);
+                }
+                (_, Some(sig)) => {
+                    eprintln!("\nTests terminated by signal: {}", sig);
+                }
+                _ => {
+                    eprintln!("\nTests exited abnormally");
+                }
+            },
         }
     }
 
@@ -201,12 +199,14 @@ async fn run_cargo_command(args: Vec<&str>) -> Result<bool> {
 
 async fn cargo_deny_available() -> bool {
     let launcher = LocalLauncher;
-    let cmd = Command::builder("cargo").args(&["deny", "--version"]).build();
+    let cmd = Command::builder("cargo")
+        .args(&["deny", "--version"])
+        .build();
 
     if let Ok((mut events, mut handle)) = launcher.launch(&Target::Command, cmd).await {
         // Drain events
         while events.next().await.is_some() {}
-        
+
         if let Ok(status) = handle.wait().await {
             return status.success();
         }

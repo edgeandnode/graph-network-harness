@@ -56,6 +56,9 @@ anyhow = { workspace = true }
 async-fs = { workspace = true }
 # For TLS test certificate generation
 rcgen = "0.12"
+# For test container cleanup handlers
+signal-hook = "0.3"
+libc = "0.2"
 
 [features]
 default = []

@@ -126,7 +126,7 @@ pub struct ServiceDeployment<'a> {
     pub events_received: usize,
 }
 
-impl<'a> ServiceDeployment<'a> {
+impl ServiceDeployment<'_> {
     /// Stop the service
     pub async fn stop(&self) -> anyhow::Result<()> {
         self.registry

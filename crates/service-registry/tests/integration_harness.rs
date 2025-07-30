@@ -6,15 +6,12 @@ use command_executor::{
 use service_registry::{
     Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,
     models::{EventType, ServiceState, WsMessage},
-    package::{PackageBuilder, PackageInstaller},
+    package::PackageBuilder,
 };
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
-use std::time::Duration;
 use tempfile::TempDir;
 
 mod common;
-use common::test_services;
 
 /// Integration test that deploys a real service through the registry
 #[smol_potat::test]
@@ -234,7 +231,7 @@ async fn test_event_subscription_integration() {
         .expect("Failed to subscribe");
 
     // Create and register a service
-    let mut service = ServiceEntry::new(
+    let service = ServiceEntry::new(
         "event-test-service".to_string(),
         "1.0.0".to_string(),
         ExecutionInfo::ManagedProcess {

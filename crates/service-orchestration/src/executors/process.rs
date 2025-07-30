@@ -106,7 +106,7 @@ impl ServiceExecutor for ProcessExecutor {
 
                         // Try force kill
                         let mut force_kill_cmd = Command::new("kill");
-                        force_kill_cmd.args(&["-9", &pid.to_string()]);
+                        force_kill_cmd.args(["-9", &pid.to_string()]);
                         self.executor
                             .execute(&Target::Command, force_kill_cmd)
                             .await?;
@@ -128,7 +128,7 @@ impl ServiceExecutor for ProcessExecutor {
         // Check if process is still running first
         if let Some(pid) = service.pid {
             let mut check_cmd = Command::new("kill");
-            check_cmd.args(&["-0", &pid.to_string()]);
+            check_cmd.args(["-0", &pid.to_string()]);
             match self.executor.execute(&Target::Command, check_cmd).await {
                 Ok(result) => {
                     if !result.success() {

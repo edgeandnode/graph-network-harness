@@ -37,7 +37,7 @@ fn test_attach_to_running_service() {
         let mut collected = Vec::new();
         while let Some(event) = events.next().await {
             collected.push(event);
-            if collected.len() >= 1 {
+            if !collected.is_empty() {
                 break; // Just get the first event for this test
             }
         }

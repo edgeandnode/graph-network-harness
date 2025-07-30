@@ -69,7 +69,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
         || args
             .features
             .as_ref()
-            .map_or(false, |f| f.contains("docker") || f.contains("ssh"))
+            .is_some_and(|f| f.contains("docker") || f.contains("ssh"))
     {
         crate::docker::ensure_test_images().await?;
     }

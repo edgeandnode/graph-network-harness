@@ -168,8 +168,10 @@ impl Default for HealthCheck {
 
 /// Current status of a service
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ServiceStatus {
     /// Service is not running
+    #[default]
     Stopped,
     /// Service is starting up
     Starting,
@@ -181,11 +183,6 @@ pub enum ServiceStatus {
     Failed(String),
 }
 
-impl Default for ServiceStatus {
-    fn default() -> Self {
-        ServiceStatus::Stopped
-    }
-}
 
 #[cfg(test)]
 mod tests {

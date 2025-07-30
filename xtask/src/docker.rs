@@ -93,7 +93,7 @@ async fn clean_test_images() -> Result<()> {
 async fn docker_image_exists(image: &str) -> Result<bool> {
     let launcher = LocalLauncher;
     let cmd = Command::builder("docker")
-        .args(&["images", "-q", image])
+        .args(["images", "-q", image])
         .build();
 
     let (mut events, mut handle) = launcher.launch(&Target::Command, cmd).await?;
@@ -101,15 +101,12 @@ async fn docker_image_exists(image: &str) -> Result<bool> {
     let mut has_output = false;
 
     while let Some(event) = events.next().await {
-        match &event.event_type {
-            ProcessEventType::Stdout => {
-                if let Some(data) = &event.data {
-                    if !data.trim().is_empty() {
-                        has_output = true;
-                    }
+        if event.event_type == ProcessEventType::Stdout {
+            if let Some(data) = &event.data {
+                if !data.trim().is_empty() {
+                    has_output = true;
                 }
             }
-            _ => {}
         }
     }
 
@@ -155,7 +152,7 @@ async fn build_docker_image(image_name: &str, context_dir: &str, dockerfile: &st
 
 async fn remove_docker_image(image: &str) -> Result<()> {
     let launcher = LocalLauncher;
-    let cmd = Command::builder("docker").args(&["rmi", image]).build();
+    let cmd = Command::builder("docker").args(["rmi", image]).build();
 
     let (mut events, mut handle) = launcher.launch(&Target::Command, cmd).await?;
 

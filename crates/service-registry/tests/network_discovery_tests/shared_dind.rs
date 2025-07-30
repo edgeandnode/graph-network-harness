@@ -3,7 +3,7 @@
 //! This module provides a shared DinD container that is started once before all tests
 //! and cleaned up after all tests complete.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use command_executor::{Command, Executor, Target, backends::local::LocalLauncher};
 use std::panic;
 use std::path::Path;
@@ -40,7 +40,7 @@ impl DindContainerGuard {
         eprintln!("Cleaning up DinD test container: {}", self.container_name);
         // We need to do synchronous cleanup
         std::process::Command::new("docker")
-            .args(&["rm", "-f", &self.container_name])
+            .args(["rm", "-f", &self.container_name])
             .output()
             .ok();
     }
@@ -69,7 +69,7 @@ fn install_signal_handlers() {
         use std::thread;
 
         let mut signals =
-            Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
 
         thread::spawn(move || {
             for sig in signals.forever() {
@@ -308,7 +308,7 @@ pub async fn cleanup_dind_container() {
     } else {
         // Even if guard doesn't exist, try to clean up the container
         std::process::Command::new("docker")
-            .args(&["rm", "-f", DIND_CONTAINER_NAME])
+            .args(["rm", "-f", DIND_CONTAINER_NAME])
             .output()
             .ok();
     }

@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 // Store the container name globally so we can clean it up
 static CONTAINER_NAME: &str = "command-executor-systemd-ssh-harness-test";
@@ -36,7 +36,7 @@ impl ContainerCleanupGuard {
         eprintln!("Cleaning up test container: {}", self.container_name);
         // We need to do synchronous cleanup
         std::process::Command::new("docker")
-            .args(&["rm", "-f", &self.container_name])
+            .args(["rm", "-f", &self.container_name])
             .output()
             .ok();
     }
@@ -65,7 +65,7 @@ fn install_signal_handlers() {
         use std::thread;
 
         let mut signals =
-            Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
 
         thread::spawn(move || {
             for sig in signals.forever() {
@@ -329,7 +329,7 @@ pub async fn cleanup_test_container() {
     } else {
         // Even if guard doesn't exist, try to clean up the container
         std::process::Command::new("docker")
-            .args(&["rm", "-f", CONTAINER_NAME])
+            .args(["rm", "-f", CONTAINER_NAME])
             .output()
             .ok();
     }

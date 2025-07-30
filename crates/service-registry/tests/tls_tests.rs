@@ -2,11 +2,11 @@
 
 #[cfg(all(test, feature = "integration-tests"))]
 mod tls_tests {
-    use async_fs;
+    
     use rcgen::generate_simple_self_signed;
     use service_registry::{Registry, TlsClientConfig, TlsServerConfig, WsClient, WsServer};
     use std::time::Duration;
-    use tempfile;
+    
 
     /// Helper to create test certificates
     async fn create_test_certificates()
@@ -334,5 +334,3 @@ mod tls_tests {
 }
 
 // Export test module when integration tests are enabled
-#[cfg(feature = "integration-tests")]
-pub use tls_tests::*;

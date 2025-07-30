@@ -38,7 +38,12 @@ pub enum Error {
     /// SSH connection failed
     #[cfg(feature = "ssh")]
     #[error("SSH connection failed to {host}: {reason}")]
-    SshConnectionFailed { host: String, reason: String },
+    SshConnectionFailed {
+        /// The hostname or IP address that failed to connect
+        host: String,
+        /// The detailed reason for the connection failure
+        reason: String,
+    },
 
     /// SSH authentication failed
     #[cfg(feature = "ssh")]
@@ -48,12 +53,18 @@ pub enum Error {
     /// SSH key not found
     #[cfg(feature = "ssh")]
     #[error("SSH key not found: {path}")]
-    SshKeyNotFound { path: String },
+    SshKeyNotFound {
+        /// The path where the SSH key was expected to be found
+        path: String,
+    },
 
     /// Container not found
     #[cfg(feature = "docker")]
     #[error("container not found: {id}")]
-    ContainerNotFound { id: String },
+    ContainerNotFound {
+        /// The container ID or name that was not found
+        id: String,
+    },
 
     /// Docker daemon not accessible
     #[cfg(feature = "docker")]
@@ -63,7 +74,10 @@ pub enum Error {
     /// Container operation failed
     #[cfg(feature = "docker")]
     #[error("container operation failed: {reason}")]
-    DockerOperationFailed { reason: String },
+    DockerOperationFailed {
+        /// The detailed reason for the Docker operation failure
+        reason: String,
+    },
 
     /// I/O error
     #[error(transparent)]

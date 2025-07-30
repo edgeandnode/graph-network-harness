@@ -1,7 +1,6 @@
 //! WebSocket integration tests
 
 use service_registry::{EventType, Registry, ServiceState, WsServer};
-use std::sync::Arc;
 use std::time::Duration;
 
 mod common;
@@ -238,7 +237,7 @@ async fn test_concurrent_websocket_connections() {
     for i in 0..5 {
         let client = WebSocketTestClient::connect(server_addr)
             .await
-            .expect(&format!("Failed to connect client {}", i));
+            .unwrap_or_else(|_| panic!("Failed to connect client {}", i));
         clients.push(client);
     }
 
@@ -247,7 +246,7 @@ async fn test_concurrent_websocket_connections() {
         let services = client
             .list_services()
             .await
-            .expect(&format!("Client {} failed to list services", i));
+            .unwrap_or_else(|_| panic!("Client {} failed to list services", i));
         assert_eq!(services.as_array().unwrap().len(), 0);
     }
 

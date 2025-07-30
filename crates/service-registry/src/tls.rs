@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::pki_types::PrivateKeyDer;
 use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server

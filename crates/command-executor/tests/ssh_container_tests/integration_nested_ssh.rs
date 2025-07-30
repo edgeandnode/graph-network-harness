@@ -4,7 +4,6 @@ use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 use command_executor::{
     Command, Executor, Target,
     backends::{local::LocalLauncher, ssh::SshLauncher},
-    target::DockerContainer,
 };
 
 #[test]

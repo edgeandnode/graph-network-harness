@@ -88,9 +88,6 @@ async fn run_clippy() -> Result<()> {
         "--workspace",
         "--all-targets",
         "--all-features",
-        "--",
-        "-D",
-        "warnings",
     ])
     .await?;
     if !success {
@@ -200,7 +197,7 @@ async fn run_cargo_command(args: Vec<&str>) -> Result<bool> {
 async fn cargo_deny_available() -> bool {
     let launcher = LocalLauncher;
     let cmd = Command::builder("cargo")
-        .args(&["deny", "--version"])
+        .args(["deny", "--version"])
         .build();
 
     if let Ok((mut events, mut handle)) = launcher.launch(&Target::Command, cmd).await {

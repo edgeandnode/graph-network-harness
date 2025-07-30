@@ -55,11 +55,11 @@ impl ServiceManager {
             state_dir
         );
 
-        std::fs::create_dir_all(&state_dir).map_err(|e| crate::Error::Io(e))?;
+        std::fs::create_dir_all(&state_dir).map_err(crate::Error::Io)?;
 
         // Create registry with persistence
         let registry_db_path = state_dir.join("registry_db");
-        std::fs::create_dir_all(&registry_db_path).map_err(|e| crate::Error::Io(e))?;
+        std::fs::create_dir_all(&registry_db_path).map_err(crate::Error::Io)?;
 
         let registry = Registry::with_persistence(registry_db_path.to_string_lossy()).await;
 
@@ -85,7 +85,7 @@ impl ServiceManager {
     /// Create a new service manager for tests with a temporary directory
     #[cfg(any(test, feature = "test-utils"))]
     pub async fn new_for_tests() -> Result<Self> {
-        let temp_dir = tempfile::tempdir().map_err(|e| crate::Error::Io(e))?;
+        let temp_dir = tempfile::tempdir().map_err(crate::Error::Io)?;
         let state_dir = temp_dir.path().to_path_buf();
 
         // Keep the temp_dir alive by leaking it - it will be cleaned up when process exits

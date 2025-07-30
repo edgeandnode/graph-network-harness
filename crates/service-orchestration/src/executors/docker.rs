@@ -41,7 +41,7 @@ impl DockerExecutor {
 
         // Check if container exists
         let mut ps_cmd = Command::new("docker");
-        ps_cmd.args(&[
+        ps_cmd.args([
             "ps",
             "-a",
             "--filter",
@@ -104,7 +104,7 @@ impl DockerExecutor {
     async fn get_container_network_info(&self, container_id: &str) -> Result<NetworkInfo> {
         // Get container IP address
         let mut inspect_cmd = Command::new("docker");
-        inspect_cmd.args(&[
+        inspect_cmd.args([
             "inspect",
             "--format",
             "{{.NetworkSettings.IPAddress}}",
@@ -123,7 +123,7 @@ impl DockerExecutor {
 
         // Get exposed ports
         let mut port_cmd = Command::new("docker");
-        port_cmd.args(&["port", container_id]);
+        port_cmd.args(["port", container_id]);
 
         let port_result = self.executor.execute(&Target::Command, port_cmd).await?;
         let mut ports = Vec::new();
@@ -192,7 +192,7 @@ impl ServiceExecutor for DockerExecutor {
                     );
 
                     let mut rm_cmd = Command::new("docker");
-                    rm_cmd.args(&["rm", "-f", &existing.id]);
+                    rm_cmd.args(["rm", "-f", &existing.id]);
                     let result = self.executor.execute(&Target::Command, rm_cmd).await?;
 
                     if !result.success() {
@@ -267,7 +267,7 @@ impl ServiceExecutor for DockerExecutor {
         if let Some(container_id) = &service.container_id {
             // First check if container exists
             let mut inspect_cmd = Command::new("docker");
-            inspect_cmd.args(&["inspect", "--format", "{{.State.Status}}", container_id]);
+            inspect_cmd.args(["inspect", "--format", "{{.State.Status}}", container_id]);
             let inspect_result = self.executor.execute(&Target::Command, inspect_cmd).await?;
 
             if !inspect_result.success() {
@@ -287,20 +287,20 @@ impl ServiceExecutor for DockerExecutor {
                 );
                 // Just remove it
                 let mut rm_cmd = Command::new("docker");
-                rm_cmd.args(&["rm", "-f", container_id]);
+                rm_cmd.args(["rm", "-f", container_id]);
                 self.executor.execute(&Target::Command, rm_cmd).await?;
                 return Ok(());
             }
 
             // Container is running, stop it
             let mut stop_cmd = Command::new("docker");
-            stop_cmd.args(&["stop", container_id]);
+            stop_cmd.args(["stop", container_id]);
             let result = self.executor.execute(&Target::Command, stop_cmd).await?;
 
             if result.success() {
                 // Remove the container after stopping
                 let mut rm_cmd = Command::new("docker");
-                rm_cmd.args(&["rm", container_id]);
+                rm_cmd.args(["rm", container_id]);
                 self.executor.execute(&Target::Command, rm_cmd).await?;
 
                 info!(
@@ -319,7 +319,7 @@ impl ServiceExecutor for DockerExecutor {
         if let Some(container_id) = &service.container_id {
             // Check container status
             let mut inspect_cmd = Command::new("docker");
-            inspect_cmd.args(&["inspect", "--format", "{{.State.Running}}", container_id]);
+            inspect_cmd.args(["inspect", "--format", "{{.State.Running}}", container_id]);
 
             let result = self.executor.execute(&Target::Command, inspect_cmd).await?;
 

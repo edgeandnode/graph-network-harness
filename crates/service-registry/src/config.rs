@@ -77,6 +77,19 @@ fn default_package_dir() -> PathBuf {
     PathBuf::from("/opt")
 }
 
+impl Default for RegistryConfig {
+    fn default() -> Self {
+        Self {
+            server: ServerConfig {
+                listen_addr: "127.0.0.1:8080".to_string(),
+                tls: None,
+            },
+            client: None,
+            packages: PackageConfig::default(),
+        }
+    }
+}
+
 impl RegistryConfig {
     /// Load configuration from file
     pub async fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
@@ -97,16 +110,9 @@ impl RegistryConfig {
         }
     }
 
-    /// Create a default configuration
-    pub fn default() -> Self {
-        Self {
-            server: ServerConfig {
-                listen_addr: "127.0.0.1:8080".to_string(),
-                tls: None,
-            },
-            client: None,
-            packages: PackageConfig::default(),
-        }
+    /// Create a new configuration with defaults
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Create a configuration with TLS enabled

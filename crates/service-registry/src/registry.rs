@@ -85,7 +85,7 @@ impl Registry {
     /// Register a new service
     pub async fn register(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>> {
         // Check if service already exists
-        if let Some(_) = self.backend.get_service(&entry.name).await? {
+        if self.backend.get_service(&entry.name).await?.is_some() {
             return Err(Error::ServiceExists(entry.name.clone()));
         }
 

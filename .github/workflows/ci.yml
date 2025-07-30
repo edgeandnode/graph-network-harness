@@ -52,7 +52,7 @@ jobs:
   # Unit tests - fast, no external dependencies
   unit-tests:
     name: Unit Tests
-    needs: [fmt, clippy]
+    needs: [fmt, clippy, deny]
     runs-on: ubuntu-latest
     strategy:
       matrix:

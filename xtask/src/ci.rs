@@ -88,6 +88,9 @@ async fn run_clippy() -> Result<()> {
         "--workspace",
         "--all-targets",
         "--all-features",
+        "--",
+        "-D",
+        "warnings",
     ])
     .await?;
     if !success {

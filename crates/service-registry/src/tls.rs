@@ -10,12 +10,14 @@ use rustls::{ClientConfig, ServerConfig};
 /// TLS configuration for server
 #[derive(Clone)]
 pub struct TlsServerConfig {
+    /// The underlying rustls server configuration
     pub config: Arc<ServerConfig>,
 }
 
 /// TLS configuration for client
 #[derive(Clone)]
 pub struct TlsClientConfig {
+    /// The underlying rustls client configuration
     pub config: Arc<ClientConfig>,
 }
 

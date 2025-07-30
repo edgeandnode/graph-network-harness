@@ -22,16 +22,22 @@ use crate::tls::TlsConnector;
 pub enum WsClient {
     /// Plain TCP connection
     Plain {
+        /// The WebSocket stream over plain TCP
         ws: WebSocketStream<TcpStream>,
+        /// The server address
         addr: SocketAddr,
+        /// Map of pending request IDs to response channels
         pending_requests: Arc<
             Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>,
         >,
     },
     /// TLS connection
     Tls {
+        /// The WebSocket stream over TLS
         ws: WebSocketStream<futures_rustls::client::TlsStream<TcpStream>>,
+        /// The server address
         addr: SocketAddr,
+        /// Map of pending request IDs to response channels
         pending_requests: Arc<
             Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>,
         >,

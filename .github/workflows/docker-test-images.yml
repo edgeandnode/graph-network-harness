@@ -1,0 +1,44 @@
+name: Build Test Docker Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/command-executor/tests/systemd-container/**'
+      - '.github/workflows/docker-test-images.yml'
+  pull_request:
+    paths:
+      - 'crates/command-executor/tests/systemd-container/**'
+      - '.github/workflows/docker-test-images.yml'
+
+jobs:
+  build-test-images:
+    name: Build Test Container Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build systemd SSH test container
+        uses: docker/build-push-action@v5
+        with:
+          context: crates/command-executor/tests
+          file: crates/command-executor/tests/systemd-container/Dockerfile
+          tags: command-executor-test-systemd:latest
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export systemd container
+        run: |
+          docker save command-executor-test-systemd:latest | gzip > systemd-test-container.tar.gz
+
+      - name: Upload container artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-container-images
+          path: systemd-test-container.tar.gz
+          retention-days: 7

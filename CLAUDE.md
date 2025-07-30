@@ -66,6 +66,15 @@ cargo clippy --workspace --all-targets
 cargo doc --workspace --no-deps
 ```
 
+### CI and Testing
+For CI commands and testing practices, see [CI.md](CI.md).
+
+When working on tests:
+- Run `cargo xtask ci fmt-check` before committing
+- Use `cargo xtask test` for targeted test runs
+- Integration tests require Docker
+- All CI commands work the same locally and in GitHub Actions
+
 ## High-Level Architecture
 
 ### Project Structure

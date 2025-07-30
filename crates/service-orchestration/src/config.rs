@@ -167,8 +167,7 @@ impl Default for HealthCheck {
 }
 
 /// Current status of a service
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ServiceStatus {
     /// Service is not running
     #[default]
@@ -182,7 +181,6 @@ pub enum ServiceStatus {
     /// Service has failed
     Failed(String),
 }
-
 
 #[cfg(test)]
 mod tests {

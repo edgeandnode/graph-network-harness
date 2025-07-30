@@ -7,7 +7,6 @@ use command_executor::command::Command;
 mod ssh_tests {
     use super::*;
     use command_executor::backends::ssh::{SshConfig, SshLauncher};
-    
 
     #[test]
     fn test_ssh_launcher_type_composition() {

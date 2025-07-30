@@ -119,7 +119,9 @@ impl NetworkManager {
     /// Register a service with its network information
     pub async fn register_service(&mut self, service: ServiceNetwork) -> Result<()> {
         // Allocate WireGuard IP if needed
-        if matches!(service.location, NetworkLocation::WireGuard { .. }) && service.wireguard_ip.is_none() {
+        if matches!(service.location, NetworkLocation::WireGuard { .. })
+            && service.wireguard_ip.is_none()
+        {
             let ip = self.ip_allocator.allocate(&service.service_name)?;
             // Would update service here in real implementation
         }

@@ -2,11 +2,10 @@
 
 #[cfg(all(test, feature = "integration-tests"))]
 mod tls_tests {
-    
+
     use rcgen::generate_simple_self_signed;
     use service_registry::{Registry, TlsClientConfig, TlsServerConfig, WsClient, WsServer};
     use std::time::Duration;
-    
 
     /// Helper to create test certificates
     async fn create_test_certificates()

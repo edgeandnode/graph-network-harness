@@ -31,7 +31,7 @@ pub async fn ensure_test_images() -> Result<()> {
     println!("Checking Docker test images...");
 
     let images = vec![
-        ("command-executor-test-systemd:latest", "crates/command-executor/tests", "systemd-container/Dockerfile"),
+        ("command-executor-test-systemd:latest", "crates/command-executor/tests/systemd-container", "Dockerfile"),
     ];
 
     for (image_name, context_dir, dockerfile) in images {
@@ -60,7 +60,7 @@ async fn build_test_images() -> Result<()> {
     println!("Building test container images...\n");
 
     let images = vec![
-        ("command-executor-test-systemd:latest", "crates/command-executor/tests", "systemd-container/Dockerfile"),
+        ("command-executor-test-systemd:latest", "crates/command-executor/tests/systemd-container", "Dockerfile"),
     ];
 
     for (image_name, context_dir, dockerfile) in images {

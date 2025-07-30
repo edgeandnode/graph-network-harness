@@ -25,7 +25,7 @@ jobs:
       - name: Build systemd SSH test container
         uses: docker/build-push-action@v5
         with:
-          context: crates/command-executor/tests
+          context: crates/command-executor/tests/systemd-container
           file: crates/command-executor/tests/systemd-container/Dockerfile
           tags: command-executor-test-systemd:latest
           push: false

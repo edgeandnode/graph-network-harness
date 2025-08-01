@@ -2,11 +2,11 @@
 
 #[cfg(all(feature = "ssh", feature = "docker-tests"))]
 mod tests {
+    use command_executor::Target;
     use command_executor::backends::local::LocalLauncher;
     use command_executor::backends::ssh::{SshConfig, SshLauncher};
     use command_executor::command::Command;
     use command_executor::target::{ComposeService, DockerContainer};
-    use command_executor::Target;
 
     #[test]
     fn test_ssh_docker_container_type_composition() {

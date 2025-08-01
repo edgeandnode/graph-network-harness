@@ -7,7 +7,7 @@ use crate::{
     tls::TlsServerConfig,
 };
 use async_net::{TcpListener, TcpStream};
-use async_tungstenite::{accept_async, WebSocketStream};
+use async_tungstenite::{WebSocketStream, accept_async};
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::net::SocketAddr;

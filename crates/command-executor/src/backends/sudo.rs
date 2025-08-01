@@ -51,7 +51,7 @@
 //! # }
 //! ```
 
-use crate::{error::Result, launcher::Launcher, Command};
+use crate::{Command, error::Result, launcher::Launcher};
 use async_trait::async_trait;
 
 /// Launcher that wraps another launcher to execute commands with sudo

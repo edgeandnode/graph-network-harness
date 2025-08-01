@@ -1,6 +1,6 @@
 use crate::commands::dependencies;
 use anyhow::{Context, Result};
-use harness_config::{parser, resolver, HealthCheckType, ServiceType};
+use harness_config::{HealthCheckType, ServiceType, parser, resolver};
 use std::collections::HashMap;
 use std::path::Path;
 

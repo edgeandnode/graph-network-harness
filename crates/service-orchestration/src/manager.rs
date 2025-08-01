@@ -4,11 +4,11 @@
 //! service lifecycle across different execution environments.
 
 use crate::{
+    Result,
     config::{HealthCheck, ServiceConfig, ServiceStatus},
     executors::{DockerExecutor, ProcessExecutor, RemoteExecutor, RunningService, ServiceExecutor},
     health::{HealthChecker, HealthMonitor, HealthStatus},
     package::{DeployedPackage, PackageDeployer, RemoteTarget},
-    Result,
 };
 use service_registry::{
     network::{NetworkConfig, NetworkManager},
@@ -43,21 +43,24 @@ impl ServiceManager {
         let state_dir = dirs::data_local_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("harness");
-        
+
         Self::with_state_dir(state_dir).await
     }
-    
+
     /// Create a new service manager with a specific state directory
     pub async fn with_state_dir(state_dir: impl Into<std::path::PathBuf>) -> Result<Self> {
         let state_dir = state_dir.into();
-        info!("Initializing ServiceManager with state dir: {:?}", state_dir);
-        
-        std::fs::create_dir_all(&state_dir).map_err(|e| crate::Error::Io(e))?;
+        info!(
+            "Initializing ServiceManager with state dir: {:?}",
+            state_dir
+        );
+
+        std::fs::create_dir_all(&state_dir).map_err(crate::Error::Io)?;
 
         // Create registry with persistence
         let registry_db_path = state_dir.join("registry_db");
-        std::fs::create_dir_all(&registry_db_path).map_err(|e| crate::Error::Io(e))?;
-        
+        std::fs::create_dir_all(&registry_db_path).map_err(crate::Error::Io)?;
+
         let registry = Registry::with_persistence(registry_db_path.to_string_lossy()).await;
 
         let network_config = NetworkConfig::default();
@@ -78,16 +81,16 @@ impl ServiceManager {
             package_deployer: PackageDeployer::new(),
         })
     }
-    
+
     /// Create a new service manager for tests with a temporary directory
     #[cfg(any(test, feature = "test-utils"))]
     pub async fn new_for_tests() -> Result<Self> {
-        let temp_dir = tempfile::tempdir().map_err(|e| crate::Error::Io(e))?;
+        let temp_dir = tempfile::tempdir().map_err(crate::Error::Io)?;
         let state_dir = temp_dir.path().to_path_buf();
-        
+
         // Keep the temp_dir alive by leaking it - it will be cleaned up when process exits
         std::mem::forget(temp_dir);
-        
+
         Self::with_state_dir(state_dir).await
     }
 

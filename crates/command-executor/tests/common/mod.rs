@@ -1,5 +1,8 @@
 //! Common test utilities
 
+// Test utilities may not all be used in every test configuration
+#![allow(dead_code)]
+
 pub mod shared_container;
 pub mod test_harness;
 
@@ -41,13 +44,13 @@ pub mod systemd {
     pub fn is_container_running() -> bool {
         // Check for either systemd-ssh-test or simple ssh-test container
         let systemd_check = std::process::Command::new("docker")
-            .args(&["ps", "-q", "-f", "name=command-executor-systemd-ssh-test"])
+            .args(["ps", "-q", "-f", "name=command-executor-systemd-ssh-test"])
             .output()
             .map(|output| !output.stdout.is_empty())
             .unwrap_or(false);
 
         let simple_check = std::process::Command::new("docker")
-            .args(&["ps", "-q", "-f", "name=command-executor-ssh-test"])
+            .args(["ps", "-q", "-f", "name=command-executor-ssh-test"])
             .output()
             .map(|output| !output.stdout.is_empty())
             .unwrap_or(false);
@@ -61,7 +64,7 @@ pub mod systemd {
         eprintln!("To start it:");
         eprintln!("  cd tests/systemd-container");
         eprintln!("  ./run-ssh-tests.sh start");
-        eprintln!("");
+        eprintln!();
         eprintln!("To run these tests:");
         eprintln!("  ./run-ssh-tests.sh test");
     }

@@ -1,8 +1,8 @@
 //! Tests for local service attachment
 
+use command_executor::ManagedService;
 use command_executor::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 use command_executor::backends::local::LocalAttacher;
-use command_executor::ManagedService;
 use command_executor::{Command, ProcessEventType};
 use futures::StreamExt;
 use std::time::Duration;
@@ -37,7 +37,7 @@ fn test_attach_to_running_service() {
         let mut collected = Vec::new();
         while let Some(event) = events.next().await {
             collected.push(event);
-            if collected.len() >= 1 {
+            if !collected.is_empty() {
                 break; // Just get the first event for this test
             }
         }
@@ -169,9 +169,11 @@ fn test_attach_config_options() {
             .build()
             .unwrap();
 
-        let mut config = AttachConfig::default();
-        config.history_lines = Some(50);
-        config.follow_from_start = true;
+        let config = AttachConfig {
+            history_lines: Some(50),
+            follow_from_start: true,
+            ..Default::default()
+        };
 
         // This will construct: tail -n 50 -f
         let result = attacher.attach(&service, config).await;

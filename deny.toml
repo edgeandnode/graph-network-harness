@@ -27,17 +27,25 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "OpenSSL",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
 ]
 
 # Confidence threshold for license detection
 confidence-threshold = 0.8
 
 [sources]
-# Lint level for what to happen when a crate from a git repository is used
-git = "allow"
 # Lint level for what to happen when an org is not in the allow list
 unknown-registry = "warn"
+# Allow git dependencies
+allow-git = []
 
 # A list of advisory IDs to ignore
 [advisories]
-ignore = []
+ignore = [
+    # instant is unmaintained but used by parking_lot in sled
+    # We can't easily upgrade without changing sled
+    "RUSTSEC-2024-0384",
+]

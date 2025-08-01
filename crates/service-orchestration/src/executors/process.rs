@@ -2,12 +2,12 @@
 
 use super::{LogStream, RunningService, ServiceExecutor};
 use crate::{
+    Result,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
-    Result,
 };
 use async_trait::async_trait;
-use command_executor::{backends::LocalLauncher, target::Target, Command, Executor, ProcessHandle};
+use command_executor::{Command, Executor, ProcessHandle, backends::LocalLauncher, target::Target};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
@@ -106,7 +106,7 @@ impl ServiceExecutor for ProcessExecutor {
 
                         // Try force kill
                         let mut force_kill_cmd = Command::new("kill");
-                        force_kill_cmd.args(&["-9", &pid.to_string()]);
+                        force_kill_cmd.args(["-9", &pid.to_string()]);
                         self.executor
                             .execute(&Target::Command, force_kill_cmd)
                             .await?;
@@ -128,7 +128,7 @@ impl ServiceExecutor for ProcessExecutor {
         // Check if process is still running first
         if let Some(pid) = service.pid {
             let mut check_cmd = Command::new("kill");
-            check_cmd.args(&["-0", &pid.to_string()]);
+            check_cmd.args(["-0", &pid.to_string()]);
             match self.executor.execute(&Target::Command, check_cmd).await {
                 Ok(result) => {
                     if !result.success() {

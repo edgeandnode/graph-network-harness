@@ -3,12 +3,12 @@
 //! This module provides a shared DinD container that is started once before all tests
 //! and cleaned up after all tests complete.
 
-use anyhow::{Context, Result};
-use command_executor::{backends::local::LocalLauncher, Command, Executor, Target};
-use std::path::Path;
-use std::sync::{Mutex, OnceLock};
-use std::sync::atomic::{AtomicBool, Ordering};
+use anyhow::Result;
+use command_executor::{Command, Executor, Target, backends::local::LocalLauncher};
 use std::panic;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 // Store the container name globally so we can clean it up
 pub static DIND_CONTAINER_NAME: &str = "graph-network-dind-test";
@@ -40,7 +40,7 @@ impl DindContainerGuard {
         eprintln!("Cleaning up DinD test container: {}", self.container_name);
         // We need to do synchronous cleanup
         std::process::Command::new("docker")
-            .args(&["rm", "-f", &self.container_name])
+            .args(["rm", "-f", &self.container_name])
             .output()
             .ok();
     }
@@ -62,11 +62,15 @@ fn install_signal_handlers() {
     // Install handlers for common termination signals
     #[cfg(unix)]
     {
-        use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
+        use signal_hook::{
+            consts::{SIGINT, SIGTERM},
+            iterator::Signals,
+        };
         use std::thread;
 
-        let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
-        
+        let mut signals =
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
+
         thread::spawn(move || {
             for sig in signals.forever() {
                 eprintln!("Received signal: {:?}", sig);
@@ -88,11 +92,11 @@ fn install_panic_handler() {
     }
 
     let original_hook = panic::take_hook();
-    
+
     panic::set_hook(Box::new(move |panic_info| {
         // Call the original panic handler first
         original_hook(panic_info);
-        
+
         // Then cleanup our container
         eprintln!("Panic detected, cleaning up DinD test container...");
         if let Some(guard) = CONTAINER_GUARD.get() {
@@ -128,10 +132,10 @@ pub async fn ensure_dind_container_running() -> Result<()> {
 
     // Install signal handlers for cleanup
     install_signal_handlers();
-    
+
     // Install panic handler for cleanup
     install_panic_handler();
-    
+
     // Install atexit handler for cleanup on normal exit
     install_atexit_handler();
 
@@ -174,7 +178,10 @@ pub async fn ensure_dind_container_running() -> Result<()> {
 
     let result = executor.execute(&Target::Command, docker_cmd).await?;
     if !result.success() {
-        anyhow::bail!("Failed to start Docker-in-Docker container: {}", result.output);
+        anyhow::bail!(
+            "Failed to start Docker-in-Docker container: {}",
+            result.output
+        );
     }
 
     // Wait for Docker daemon to be ready with retries
@@ -194,10 +201,10 @@ pub async fn ensure_dind_container_running() -> Result<()> {
 
 async fn wait_for_docker_daemon_ready(executor: &Executor<LocalLauncher>) -> Result<()> {
     use std::time::Duration;
-    
+
     let max_attempts = 60;
     eprintln!("Waiting for Docker daemon to be ready in DinD container...");
-    
+
     for i in 1..=max_attempts {
         let cmd = Command::builder("docker")
             .arg("exec")
@@ -205,41 +212,44 @@ async fn wait_for_docker_daemon_ready(executor: &Executor<LocalLauncher>) -> Res
             .arg("docker")
             .arg("info")
             .build();
-        
+
         if let Ok(result) = executor.execute(&Target::Command, cmd).await {
             if result.success() {
                 eprintln!("Docker daemon is ready!");
                 return Ok(());
             }
         }
-        
+
         if i == max_attempts {
             anyhow::bail!("Timeout waiting for Docker daemon to be ready");
         }
-        
+
         eprintln!("Waiting for Docker daemon... ({}/{})", i, max_attempts);
         smol::Timer::after(Duration::from_secs(1)).await;
     }
-    
+
     Ok(())
 }
 
 async fn copy_compose_files_to_container(executor: &Executor<LocalLauncher>) -> Result<()> {
-    let compose_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/network_tests/docker-compose");
-    
+    let compose_dir =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/network_tests/docker-compose");
+
     let cmd = Command::builder("docker")
         .arg("cp")
         .arg(compose_dir.to_str().unwrap())
         .arg(format!("{}:/compose", DIND_CONTAINER_NAME))
         .build();
-        
+
     let result = executor.execute(&Target::Command, cmd).await?;
-    
+
     if !result.success() {
-        anyhow::bail!("Failed to copy compose files to container: {}", result.output);
+        anyhow::bail!(
+            "Failed to copy compose files to container: {}",
+            result.output
+        );
     }
-    
+
     Ok(())
 }
 
@@ -280,9 +290,9 @@ pub async fn dind_compose_command(
 pub async fn check_docker() -> bool {
     let launcher = LocalLauncher;
     let executor = Executor::new("docker-check".to_string(), launcher);
-    
+
     let cmd = Command::builder("docker").arg("ps").build();
-    
+
     executor
         .execute(&Target::Command, cmd)
         .await
@@ -298,7 +308,7 @@ pub async fn cleanup_dind_container() {
     } else {
         // Even if guard doesn't exist, try to clean up the container
         std::process::Command::new("docker")
-            .args(&["rm", "-f", DIND_CONTAINER_NAME])
+            .args(["rm", "-f", DIND_CONTAINER_NAME])
             .output()
             .ok();
     }

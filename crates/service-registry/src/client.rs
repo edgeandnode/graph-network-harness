@@ -6,9 +6,9 @@ use crate::{
     tls::TlsClientConfig,
 };
 use async_net::TcpStream;
-use async_tungstenite::{client_async, WebSocketStream};
-use futures::lock::Mutex;
+use async_tungstenite::{WebSocketStream, client_async};
 use futures::StreamExt;
+use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,23 +18,28 @@ use uuid::Uuid;
 
 use crate::tls::TlsConnector;
 
+/// Type alias for the pending requests map
+type PendingRequests = Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>;
+
 /// WebSocket client for service registry
 pub enum WsClient {
     /// Plain TCP connection
     Plain {
+        /// The WebSocket stream over plain TCP
         ws: WebSocketStream<TcpStream>,
+        /// The server address
         addr: SocketAddr,
-        pending_requests: Arc<
-            Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>,
-        >,
+        /// Map of pending request IDs to response channels
+        pending_requests: PendingRequests,
     },
     /// TLS connection
     Tls {
+        /// The WebSocket stream over TLS
         ws: WebSocketStream<futures_rustls::client::TlsStream<TcpStream>>,
+        /// The server address
         addr: SocketAddr,
-        pending_requests: Arc<
-            Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>,
-        >,
+        /// Map of pending request IDs to response channels
+        pending_requests: PendingRequests,
     },
 }
 
@@ -91,7 +96,7 @@ impl WsClient {
         match self {
             Self::Plain {
                 mut ws,
-                addr,
+                addr: _,
                 pending_requests,
             } => {
                 let pending_requests_clone = pending_requests.clone();
@@ -152,7 +157,7 @@ impl WsClient {
             }
             Self::Tls {
                 mut ws,
-                addr,
+                addr: _,
                 pending_requests,
             } => {
                 let pending_requests_clone = pending_requests.clone();
@@ -217,9 +222,7 @@ impl WsClient {
     /// Handle incoming message (static to be used by both variants)
     async fn handle_message(
         text: &str,
-        pending: &Arc<
-            Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>,
-        >,
+        pending: &PendingRequests,
     ) -> Result<()> {
         let msg: WsMessage = serde_json::from_str(text)?;
 

@@ -1,11 +1,11 @@
 //! WebSocket client for communicating with the daemon
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_net::TcpStream;
-use futures_rustls::{client::TlsStream, TlsConnector};
 use async_tungstenite::tungstenite::Message;
-use async_tungstenite::{client_async, WebSocketStream};
+use async_tungstenite::{WebSocketStream, client_async};
 use futures::StreamExt;
+use futures_rustls::{TlsConnector, client::TlsStream};
 use rustls::{ClientConfig, RootCertStore};
 use std::net::SocketAddr;
 use std::sync::Arc;

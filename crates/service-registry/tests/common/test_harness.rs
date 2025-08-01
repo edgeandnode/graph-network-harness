@@ -1,6 +1,6 @@
 //! Test harness utilities for integration testing
 
-use command_executor::{backends::local::LocalLauncher, Command, Executor, Target};
+use command_executor::{Command, Executor, Target, backends::local::LocalLauncher};
 use service_registry::{Registry, ServiceEntry};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +19,8 @@ impl TestHarness {
         let temp_dir = TempDir::new()?;
         let registry = Registry::with_persistence(
             temp_dir.path().join("test-registry.json").to_string_lossy(),
-        ).await;
+        )
+        .await;
         let executor = Executor::new("test-harness".to_string(), LocalLauncher);
 
         Ok(Self {
@@ -125,7 +126,7 @@ pub struct ServiceDeployment<'a> {
     pub events_received: usize,
 }
 
-impl<'a> ServiceDeployment<'a> {
+impl ServiceDeployment<'_> {
     /// Stop the service
     pub async fn stop(&self) -> anyhow::Result<()> {
         self.registry

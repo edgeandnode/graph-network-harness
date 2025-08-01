@@ -118,6 +118,21 @@ cargo test --workspace
 harness stop
 ```
 
+## Development
+
+### CI and Testing
+
+See our [CI and Testing Guide](CI.md) for detailed information on running tests and CI checks locally.
+
+Quick start:
+```bash
+# Run all CI checks
+cargo xtask ci all
+
+# Run specific test suite
+cargo xtask test --package service-registry
+```
+
 ## Architecture Overview
 
 The framework is built as a collection of Rust crates, each with a specific responsibility:

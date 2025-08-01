@@ -72,7 +72,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                 Err(e) => {
                     return Ok(Response::Error {
                         message: format!("Failed to list services: {}", e),
-                    })
+                    });
                 }
             };
 
@@ -104,7 +104,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                 Err(e) => {
                     return Ok(Response::Error {
                         message: format!("Failed to list services: {}", e),
-                    })
+                    });
                 }
             };
 

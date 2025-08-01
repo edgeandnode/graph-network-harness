@@ -4,18 +4,20 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use rustls::{ClientConfig, ServerConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
 #[derive(Clone)]
 pub struct TlsServerConfig {
+    /// The underlying rustls server configuration
     pub config: Arc<ServerConfig>,
 }
 
 /// TLS configuration for client
 #[derive(Clone)]
 pub struct TlsClientConfig {
+    /// The underlying rustls client configuration
     pub config: Arc<ClientConfig>,
 }
 
@@ -62,8 +64,7 @@ impl TlsServerConfig {
             .map_err(|e| Error::Package(format!("Failed to parse private key: {}", e)))?
             .ok_or_else(|| Error::Package("No private key found in file".to_string()))?;
 
-        let key = PrivateKeyDer::try_from(key_der)
-            .map_err(|e| Error::Package(format!("Failed to convert private key: {:?}", e)))?;
+        let key = key_der;
 
         // Build server config
         let config = ServerConfig::builder()
@@ -107,7 +108,7 @@ impl TlsServerConfig {
 
 impl TlsClientConfig {
     /// Create TLS client configuration with default settings (uses system root certificates)
-    pub fn default() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
@@ -123,10 +124,12 @@ impl TlsClientConfig {
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
     #[cfg(test)]
     pub fn dangerous_accept_any_cert() -> Result<Self> {
-        use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-        use rustls::pki_types::UnixTime;
         use rustls::DigitallySignedStruct;
-        
+        use rustls::client::danger::{
+            HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
+        };
+        use rustls::pki_types::UnixTime;
+
         #[derive(Debug)]
         struct DangerousAcceptAnyVerifier;
 

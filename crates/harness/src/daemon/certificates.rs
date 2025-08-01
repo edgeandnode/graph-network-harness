@@ -1,6 +1,6 @@
 //! TLS certificate management for the daemon
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
 use std::fs;
 use std::path::Path;

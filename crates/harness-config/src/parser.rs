@@ -1,8 +1,8 @@
 //! Configuration parser with environment variable substitution
 
 use crate::{
-    resolver::{resolve_service_env, validate_references, ResolutionContext},
     Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Result, Service, ServiceType,
+    resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
 use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
@@ -294,7 +294,8 @@ mod tests {
     #[test]
     fn test_env_var_with_default() {
         // Test with a variable that's unlikely to exist
-        let result = substitute_env_vars("${MISSING_VAR_UNLIKELY_TO_EXIST:-default_value}").unwrap();
+        let result =
+            substitute_env_vars("${MISSING_VAR_UNLIKELY_TO_EXIST:-default_value}").unwrap();
         assert_eq!(result, "default_value");
 
         // Test with an existing variable (use one that's likely to be set)

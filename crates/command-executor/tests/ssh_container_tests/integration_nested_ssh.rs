@@ -2,9 +2,8 @@
 
 use crate::common::shared_container::{ensure_container_running, get_ssh_config};
 use command_executor::{
-    backends::{local::LocalLauncher, ssh::SshLauncher},
-    target::DockerContainer,
     Command, Executor, Target,
+    backends::{local::LocalLauncher, ssh::SshLauncher},
 };
 
 #[test]
@@ -46,7 +45,9 @@ fn test_ssh_docker_execution() {
         let docker_target = DockerContainer::new("alpine");
         let target = Target::DockerContainer(docker_target);
 
-        let cmd = Command::builder("echo").arg("Hello from Docker via SSH").build();
+        let cmd = Command::builder("echo")
+            .arg("Hello from Docker via SSH")
+            .build();
 
         match executor.execute(&target, cmd).await {
             Ok(result) => {

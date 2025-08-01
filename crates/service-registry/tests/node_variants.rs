@@ -1,8 +1,8 @@
 //! Integration tests for different node execution variants
 
-use command_executor::{target::DockerContainer, Command, Target};
-use service_registry::models::{EventType, ServiceState};
+use command_executor::{Command, Target, target::DockerContainer};
 use service_registry::ServiceEntry;
+use service_registry::models::{EventType, ServiceState};
 
 mod common;
 use common::{test_harness::*, test_services::*};
@@ -11,109 +11,109 @@ use common::{test_harness::*, test_services::*};
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
 async fn test_local_process_variant() {
-        let harness = TestHarness::new()
-            .await
-            .expect("Failed to create test harness");
+    let harness = TestHarness::new()
+        .await
+        .expect("Failed to create test harness");
 
-        // Create and deploy echo service
-        let service = create_echo_service().expect("Failed to create echo service");
-        let deployment = harness
-            .deploy_service(service)
-            .await
-            .expect("Failed to deploy service");
+    // Create and deploy echo service
+    let service = create_echo_service().expect("Failed to create echo service");
+    let deployment = harness
+        .deploy_service(service)
+        .await
+        .expect("Failed to deploy service");
 
-        // Execute command locally
-        let cmd = Command::builder("echo").arg("Local process test").build();
-        harness
-            .execute_and_track(&deployment.name, cmd, &Target::Command)
-            .await
-            .expect("Failed to execute command");
+    // Execute command locally
+    let cmd = Command::builder("echo").arg("Local process test").build();
+    harness
+        .execute_and_track(&deployment.name, cmd, &Target::Command)
+        .await
+        .expect("Failed to execute command");
 
-        // Wait for service to be running
-        harness
-            .wait_for_service_state(
-                &deployment.name,
-                ServiceState::Running,
-                std::time::Duration::from_secs(5),
-            )
-            .await
-            .expect("Service did not reach running state");
+    // Wait for service to be running
+    harness
+        .wait_for_service_state(
+            &deployment.name,
+            ServiceState::Running,
+            std::time::Duration::from_secs(5),
+        )
+        .await
+        .expect("Service did not reach running state");
 
-        // Verify service state
-        assert_eq!(deployment.state().await.unwrap(), ServiceState::Running);
+    // Verify service state
+    assert_eq!(deployment.state().await.unwrap(), ServiceState::Running);
 }
 
 /// Test Docker container execution variant
 #[smol_potat::test]
 #[cfg(all(feature = "integration-tests", feature = "docker-tests"))]
 async fn test_docker_container_variant() {
-        let harness = TestHarness::new()
-            .await
-            .expect("Failed to create test harness");
+    let harness = TestHarness::new()
+        .await
+        .expect("Failed to create test harness");
 
-        // Create Docker service
-        let service = create_docker_service().expect("Failed to create Docker service");
-        let deployment = harness
-            .deploy_service(service)
-            .await
-            .expect("Failed to deploy service");
+    // Create Docker service
+    let service = create_docker_service().expect("Failed to create Docker service");
+    let deployment = harness
+        .deploy_service(service)
+        .await
+        .expect("Failed to deploy service");
 
-        // Execute via Docker container
-        let container = DockerContainer::new("alpine:latest")
-            .with_name("test-container")
-            .with_remove_on_exit(true);
+    // Execute via Docker container
+    let container = DockerContainer::new("alpine:latest")
+        .with_name("test-container")
+        .with_remove_on_exit(true);
 
-        let cmd = Command::builder("echo")
-            .arg("Docker container test")
-            .build();
+    let cmd = Command::builder("echo")
+        .arg("Docker container test")
+        .build();
 
-        match harness
-            .execute_and_track(&deployment.name, cmd, &Target::DockerContainer(container))
-            .await
-        {
-            Ok(_) => {
-                // Docker execution succeeded
-                assert_eq!(deployment.state().await.unwrap(), ServiceState::Running);
-            }
-            Err(_) => {
-                // Docker might not be available in test environment
-                println!("Docker not available, marking as failed (expected)");
-                assert_eq!(deployment.state().await.unwrap(), ServiceState::Failed);
-            }
+    match harness
+        .execute_and_track(&deployment.name, cmd, &Target::DockerContainer(container))
+        .await
+    {
+        Ok(_) => {
+            // Docker execution succeeded
+            assert_eq!(deployment.state().await.unwrap(), ServiceState::Running);
         }
+        Err(_) => {
+            // Docker might not be available in test environment
+            println!("Docker not available, marking as failed (expected)");
+            assert_eq!(deployment.state().await.unwrap(), ServiceState::Failed);
+        }
+    }
 }
 
 /// Test systemd service execution variant
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
 async fn test_systemd_service_variant() {
-        let harness = TestHarness::new()
-            .await
-            .expect("Failed to create test harness");
+    let harness = TestHarness::new()
+        .await
+        .expect("Failed to create test harness");
 
-        // Create systemd service
-        let service = create_systemd_service().expect("Failed to create systemd service");
-        let deployment = harness
-            .deploy_service(service)
-            .await
-            .expect("Failed to deploy service");
+    // Create systemd service
+    let service = create_systemd_service().expect("Failed to create systemd service");
+    let deployment = harness
+        .deploy_service(service)
+        .await
+        .expect("Failed to deploy service");
 
-        // Try to check systemd status (will likely fail in test environment)
-        let cmd = Command::builder("systemctl")
-            .args(["status", "test-daemon.service"])
-            .build();
+    // Try to check systemd status (will likely fail in test environment)
+    let cmd = Command::builder("systemctl")
+        .args(["status", "test-daemon.service"])
+        .build();
 
-        // This will likely fail, but we test the flow
-        let _ = harness
-            .execute_and_track(&deployment.name, cmd, &Target::Command)
-            .await;
+    // This will likely fail, but we test the flow
+    let _ = harness
+        .execute_and_track(&deployment.name, cmd, &Target::Command)
+        .await;
 
-        // In test environment, systemd services will fail
-        let final_state = deployment.state().await.unwrap();
-        assert!(matches!(
-            final_state,
-            ServiceState::Failed | ServiceState::Running
-        ));
+    // In test environment, systemd services will fail
+    let final_state = deployment.state().await.unwrap();
+    assert!(matches!(
+        final_state,
+        ServiceState::Failed | ServiceState::Running
+    ));
 }
 
 /// Test systemd portable execution variant
@@ -257,8 +257,8 @@ async fn test_service_dependency_graph() {
         .expect("Failed to create test harness");
 
     // Create web application stack
-    let stack = ServiceDependencyGraph::web_application_stack()
-        .expect("Failed to create service stack");
+    let stack =
+        ServiceDependencyGraph::web_application_stack().expect("Failed to create service stack");
 
     // Deploy services in dependency order
     for service in stack.services {
@@ -368,7 +368,8 @@ async fn test_persistence_across_restarts() {
     {
         let registry = service_registry::Registry::with_persistence(
             persist_path.to_string_lossy().to_string(),
-        ).await;
+        )
+        .await;
 
         let service = create_echo_service().expect("Failed to create service");
         registry

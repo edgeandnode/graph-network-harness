@@ -1,8 +1,8 @@
 //! Core service registry implementation
 
 use crate::{
-    backend::sled::SledBackend,
     backend::RegistryBackend,
+    backend::sled::SledBackend,
     error::{Error, Result},
     models::*,
 };
@@ -85,7 +85,7 @@ impl Registry {
     /// Register a new service
     pub async fn register(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>> {
         // Check if service already exists
-        if let Some(_) = self.backend.get_service(&entry.name).await? {
+        if self.backend.get_service(&entry.name).await?.is_some() {
             return Err(Error::ServiceExists(entry.name.clone()));
         }
 
@@ -411,10 +411,12 @@ mod tests {
             .unwrap();
 
         // Invalid transition
-        assert!(registry
-            .update_state("test-service", ServiceState::Starting)
-            .await
-            .is_err());
+        assert!(
+            registry
+                .update_state("test-service", ServiceState::Starting)
+                .await
+                .is_err()
+        );
 
         // Deregister
         let (_entry, _events) = registry.deregister("test-service").await.unwrap();

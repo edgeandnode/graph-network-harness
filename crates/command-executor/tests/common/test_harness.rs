@@ -1,11 +1,12 @@
 //! Test harness that uses command-executor to orchestrate its own tests
 
-use anyhow::{bail, Context, Result};
-use command_executor::{backends::local::LocalLauncher, Command, Executor, ProcessHandle, Target};
+use anyhow::{Context, Result, bail};
+use command_executor::{Command, Executor, ProcessHandle, Target, backends::local::LocalLauncher};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Test harness that manages test infrastructure using command-executor itself
+#[allow(dead_code)]
 pub struct TestHarness {
     pub executor: Executor<LocalLauncher>,
     pub container_name: String,

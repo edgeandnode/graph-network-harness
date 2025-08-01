@@ -3,11 +3,16 @@
 //! This module provides a shared container that is started once before all tests
 //! and cleaned up after all tests complete.
 
+// We use unsafe to register atexit handlers for proper cleanup
+#![allow(unsafe_code)]
+// These items are used but clippy doesn't detect their usage correctly
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use command_executor::{Command, Executor, Target};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::panic;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 // Store the container name globally so we can clean it up
 static CONTAINER_NAME: &str = "command-executor-systemd-ssh-harness-test";
@@ -36,7 +41,7 @@ impl ContainerCleanupGuard {
         eprintln!("Cleaning up test container: {}", self.container_name);
         // We need to do synchronous cleanup
         std::process::Command::new("docker")
-            .args(&["rm", "-f", &self.container_name])
+            .args(["rm", "-f", &self.container_name])
             .output()
             .ok();
     }
@@ -58,12 +63,17 @@ fn install_signal_handlers() {
     // Install handlers for common termination signals
     #[cfg(unix)]
     {
-        use signal_hook::{consts::{SIGINT, SIGTERM}, iterator::Signals};
+        use signal_hook::{
+            consts::{SIGINT, SIGTERM},
+            iterator::Signals,
+        };
         use std::thread;
 
-        let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to register signal handler");
-        
+        let mut signals =
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
+
         thread::spawn(move || {
+            #[allow(clippy::never_loop)]
             for sig in signals.forever() {
                 eprintln!("Received signal: {:?}", sig);
                 // Cleanup containers before exiting
@@ -84,11 +94,11 @@ fn install_panic_handler() {
     }
 
     let original_hook = panic::take_hook();
-    
+
     panic::set_hook(Box::new(move |panic_info| {
         // Call the original panic handler first
         original_hook(panic_info);
-        
+
         // Then cleanup our container
         eprintln!("Panic detected, cleaning up test container...");
         if let Some(guard) = CONTAINER_GUARD.get() {
@@ -111,6 +121,12 @@ fn install_atexit_handler() {
         }
     }
 
+    // SAFETY: cleanup_on_exit is a static extern "C" function that doesn't access
+    // any invalid memory. The atexit function is a standard C library function
+    // that safely registers our cleanup function to be called at process exit.
+    // This is necessary because Rust's Drop trait doesn't guarantee execution
+    // on process termination (e.g., when killed by signals or panics).
+    #[allow(clippy::undocumented_unsafe_blocks)]
     unsafe {
         libc::atexit(cleanup_on_exit);
     }
@@ -118,16 +134,18 @@ fn install_atexit_handler() {
 
 /// Setup function that ensures the container is running
 /// This can be called by multiple tests safely - it will only start the container once
+#[allow(clippy::await_holding_lock)]
 pub async fn ensure_container_running() -> Result<()> {
     // Lock to prevent concurrent initialization
+    // We need to hold this lock throughout the entire process to prevent race conditions
     let _lock = INIT_MUTEX.lock().unwrap();
 
     // Install signal handlers for cleanup
     install_signal_handlers();
-    
+
     // Install panic handler for cleanup
     install_panic_handler();
-    
+
     // Install atexit handler for cleanup on normal exit
     install_atexit_handler();
 
@@ -170,12 +188,12 @@ pub async fn ensure_container_running() -> Result<()> {
                 break current_dir;
             }
         }
-        
+
         if !current_dir.pop() {
             anyhow::bail!("Could not find workspace root");
         }
     };
-    
+
     let test_dir = workspace_root.join("crates/command-executor/tests/systemd-container");
 
     // Build the Docker image
@@ -298,12 +316,12 @@ pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
                 }
             }
         }
-        
+
         if !current_dir.pop() {
             panic!("Could not find workspace root");
         }
     };
-    
+
     let ssh_key_path = workspace_root
         .join("crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519");
 
@@ -325,7 +343,7 @@ pub async fn cleanup_test_container() {
     } else {
         // Even if guard doesn't exist, try to clean up the container
         std::process::Command::new("docker")
-            .args(&["rm", "-f", CONTAINER_NAME])
+            .args(["rm", "-f", CONTAINER_NAME])
             .output()
             .ok();
     }

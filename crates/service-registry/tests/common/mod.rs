@@ -4,8 +4,8 @@ pub mod test_harness;
 pub mod test_services;
 pub mod websocket_client;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 /// Test timeout for async operations

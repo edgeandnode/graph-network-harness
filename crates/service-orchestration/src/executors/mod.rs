@@ -13,6 +13,7 @@ pub use remote::RemoteExecutor;
 
 use crate::{Result, config::ServiceConfig, health::HealthStatus};
 use async_trait::async_trait;
+use command_executor::event::ProcessEvent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -97,8 +98,8 @@ impl RunningService {
     }
 }
 
-/// Log stream from a running service
-pub type LogStream = futures::stream::BoxStream<'static, Result<String>>;
+/// Event stream from a running service
+pub type EventStream = futures::stream::BoxStream<'static, ProcessEvent>;
 
 /// Service executor trait for managing service lifecycle
 #[async_trait]
@@ -112,8 +113,8 @@ pub trait ServiceExecutor: Send + Sync {
     /// Check the health of a running service
     async fn health_check(&self, service: &RunningService) -> Result<HealthStatus>;
 
-    /// Get log stream from a running service
-    async fn get_logs(&self, service: &RunningService) -> Result<LogStream>;
+    /// Stream events from a running service
+    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream>;
 
     /// Check if the executor can handle the given service configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

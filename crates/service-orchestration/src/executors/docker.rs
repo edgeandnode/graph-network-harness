@@ -1,6 +1,6 @@
 //! Docker executor for containerized service execution.
 
-use super::{LogStream, NetworkInfo, RunningService, ServiceExecutor};
+use super::{EventStream, NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
     Result,
     config::{ServiceConfig, ServiceTarget},
@@ -359,8 +359,8 @@ impl ServiceExecutor for DockerExecutor {
         }
     }
 
-    async fn get_logs(&self, service: &RunningService) -> Result<LogStream> {
         if let Some(container_id) = &service.container_id {
+    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream> {
             // TODO: Implement proper log streaming with docker logs -f
             // For now, return empty stream
             let stream = stream::empty().boxed();

@@ -359,8 +359,8 @@ impl ServiceExecutor for DockerExecutor {
         }
     }
 
+    async fn stream_events(&self, service: &RunningService) -> Result<EventStream> {
         if let Some(container_id) = &service.container_id {
-    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream> {
             // TODO: Implement proper log streaming with docker logs -f
             // For now, return empty stream
             let stream = stream::empty().boxed();

@@ -212,7 +212,7 @@ impl ServiceExecutor for ProcessExecutor {
         }
     }
 
-    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream> {
+    async fn stream_events(&self, service: &RunningService) -> Result<EventStream> {
         // Get the event stream for this service
         let processes = self.running_processes.lock().await;
         let process_info = processes.get(&service.id.to_string())
@@ -449,7 +449,7 @@ mod tests {
         let service = executor.start(config).await.unwrap();
         
         // Get event stream
-        let mut event_stream = executor.stream_logs(&service).await.unwrap();
+        let mut event_stream = executor.stream_events(&service).await.unwrap();
         
         // Collect some events
         let mut events = Vec::new();
@@ -507,8 +507,8 @@ mod tests {
         let service2 = executor.start(config2).await.unwrap();
         
         // Get event streams for both
-        let mut stream1 = executor.stream_logs(&service1).await.unwrap();
-        let mut stream2 = executor.stream_logs(&service2).await.unwrap();
+        let mut stream1 = executor.stream_events(&service1).await.unwrap();
+        let mut stream2 = executor.stream_events(&service2).await.unwrap();
         
         // Verify we can get events from both services
         let timeout = std::time::Duration::from_millis(500);

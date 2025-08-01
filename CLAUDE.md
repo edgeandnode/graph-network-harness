@@ -119,6 +119,11 @@ The harness manages services through:
 
 ## Important Patterns and Conventions
 
+### Handling Unused Variables
+- DO NOT prefix unused variables with underscore to suppress warnings
+- Leave unused variables as-is - they often indicate unimplemented functionality
+- The user will address these warnings when implementing the missing features
+
 ### Async Code
 ```rust
 // Always use runtime-agnostic libraries

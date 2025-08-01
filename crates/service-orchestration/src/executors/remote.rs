@@ -282,7 +282,7 @@ impl ServiceExecutor for RemoteExecutor {
         }
     }
 
-    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream> {
+    async fn stream_events(&self, service: &RunningService) -> Result<EventStream> {
         // Get the event stream for this service
         let processes = self.running_processes.lock().await;
         let process_info = processes.get(&service.id.to_string())

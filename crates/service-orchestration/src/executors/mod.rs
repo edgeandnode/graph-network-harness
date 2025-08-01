@@ -114,7 +114,7 @@ pub trait ServiceExecutor: Send + Sync {
     async fn health_check(&self, service: &RunningService) -> Result<HealthStatus>;
 
     /// Stream events from a running service
-    async fn stream_logs(&self, service: &RunningService) -> Result<EventStream>;
+    async fn stream_events(&self, service: &RunningService) -> Result<EventStream>;
 
     /// Check if the executor can handle the given service configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

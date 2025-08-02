@@ -1,6 +1,6 @@
 # command-executor
 
-A runtime-agnostic command execution library for Rust that provides a unified interface for running commands across different execution contexts.
+Runtime-agnostic command execution library providing a unified interface for running commands across different execution contexts (local, SSH, Docker, systemd).
 
 ## Features
 

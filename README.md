@@ -8,7 +8,13 @@ This framework orchestrates services across different execution environments - l
 
 ## Architecture
 
-The framework consists of several layered crates:
+The framework uses a layered architecture with clear separation of concerns. For detailed information see:
+
+- **[Architecture Overview](docs/ARCHITECTURE.md)**: Complete system design and component relationships
+- **[Current Status](docs/CURRENT-STATUS.md)**: Implementation progress and known issues
+- **[Developer Guide](docs/DEVELOPER-GUIDE.md)**: How to contribute and extend the framework
+
+### Core Components
 
 - **[command-executor](crates/command-executor)**: Runtime-agnostic command execution across different backends
 - **[service-registry](crates/service-registry)**: Service discovery and network topology management
@@ -77,6 +83,14 @@ The `graph-test-daemon` provides specialized services for Graph Protocol develop
 
 graph-test-daemon --endpoint 127.0.0.1:9443
 ```
+
+## Documentation
+
+- **[Architecture Overview](docs/ARCHITECTURE.md)**: System design, component relationships, and extension points
+- **[Developer Guide](docs/DEVELOPER-GUIDE.md)**: Setup, common tasks, and contribution guidelines
+- **[Current Status](docs/CURRENT-STATUS.md)**: What's implemented, what's missing, known issues
+- **[Code Policy](docs/CODE-POLICY.md)**: Coding standards and architectural principles
+- **[ADRs](ADRs/)**: Architecture Decision Records documenting key design choices
 
 ## Development
 

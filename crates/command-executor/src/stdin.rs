@@ -3,9 +3,9 @@
 //! This module provides the `StdinHandle` type for writing to a process's stdin.
 //! It supports both direct writing and channel-based forwarding of input.
 
+use crate::error::Result;
 use async_channel::Receiver;
 use futures::io::AsyncWriteExt;
-use crate::error::Result;
 
 /// Handle for writing to a process's stdin
 pub struct StdinHandle {
@@ -18,19 +18,25 @@ pub struct StdinHandle {
 impl StdinHandle {
     /// Create a new stdin handle
     pub fn new(stdin: async_process::ChildStdin, channel: Option<Receiver<String>>) -> Self {
-        Self { stdin: Some(stdin), channel }
+        Self {
+            stdin: Some(stdin),
+            channel,
+        }
     }
-    
+
     /// Create from optional stdin
-    pub fn from_optional(stdin: Option<async_process::ChildStdin>, channel: Option<Receiver<String>>) -> Option<Self> {
+    pub fn from_optional(
+        stdin: Option<async_process::ChildStdin>,
+        channel: Option<Receiver<String>>,
+    ) -> Option<Self> {
         stdin.map(|s| Self::new(s, channel))
     }
-    
+
     /// Take the stdin writer, leaving None in its place
     pub fn take_stdin(&mut self) -> Option<async_process::ChildStdin> {
         self.stdin.take()
     }
-    
+
     /// Write a line to stdin (adds newline)
     pub async fn write_line(&mut self, line: &str) -> Result<()> {
         if let Some(stdin) = &mut self.stdin {
@@ -40,7 +46,7 @@ impl StdinHandle {
         }
         Ok(())
     }
-    
+
     /// Write raw bytes to stdin
     pub async fn write(&mut self, data: &[u8]) -> Result<()> {
         if let Some(stdin) = &mut self.stdin {
@@ -49,7 +55,7 @@ impl StdinHandle {
         }
         Ok(())
     }
-    
+
     /// Start forwarding from the channel to stdin
     /// This consumes self and runs until the channel is closed
     pub async fn forward_channel(mut self) -> Result<()> {
@@ -60,17 +66,17 @@ impl StdinHandle {
         }
         Ok(())
     }
-    
+
     /// Take the channel, leaving None in its place
     pub fn take_channel(&mut self) -> Option<Receiver<String>> {
         self.channel.take()
     }
-    
+
     /// Check if this handle has a channel configured
     pub fn has_channel(&self) -> bool {
         self.channel.is_some()
     }
-    
+
     /// Close stdin by dropping the writer
     pub fn close(&mut self) {
         self.stdin.take();

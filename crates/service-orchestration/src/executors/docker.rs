@@ -36,7 +36,10 @@ impl DockerExecutor {
     }
 
     /// Detect existing container by name
-    async fn detect_existing_container(&self, name: &str) -> std::result::Result<Option<ContainerState>, Error> {
+    async fn detect_existing_container(
+        &self,
+        name: &str,
+    ) -> std::result::Result<Option<ContainerState>, Error> {
         let container_name = format!("orchestrator-{}-harness-test", name);
 
         // Check if container exists
@@ -101,7 +104,10 @@ impl DockerExecutor {
     }
 
     /// Get network information for a container
-    async fn get_container_network_info(&self, container_id: &str) -> std::result::Result<NetworkInfo, Error> {
+    async fn get_container_network_info(
+        &self,
+        container_id: &str,
+    ) -> std::result::Result<NetworkInfo, Error> {
         // Get container IP address
         let mut inspect_cmd = Command::new("docker");
         inspect_cmd.args([
@@ -315,7 +321,10 @@ impl ServiceExecutor for DockerExecutor {
         Ok(())
     }
 
-    async fn health_check(&self, service: &RunningService) -> std::result::Result<HealthStatus, Error> {
+    async fn health_check(
+        &self,
+        service: &RunningService,
+    ) -> std::result::Result<HealthStatus, Error> {
         if let Some(container_id) = &service.container_id {
             // Check container status
             let mut inspect_cmd = Command::new("docker");
@@ -359,7 +368,10 @@ impl ServiceExecutor for DockerExecutor {
         }
     }
 
-    async fn stream_events(&self, service: &RunningService) -> std::result::Result<EventStream, Error> {
+    async fn stream_events(
+        &self,
+        service: &RunningService,
+    ) -> std::result::Result<EventStream, Error> {
         if let Some(container_id) = &service.container_id {
             // TODO: Implement proper log streaming with docker logs -f
             // For now, return empty stream

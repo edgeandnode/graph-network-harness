@@ -54,14 +54,14 @@ impl Launcher for LocalLauncher {
             Target::Command | Target::ManagedProcess(_) => {
                 // Take stdin channel if provided
                 let stdin_channel = command.take_stdin_channel();
-                
+
                 // Prepare the command for execution
                 let mut async_cmd = command.prepare();
 
                 // Configure stdio for streaming
                 async_cmd.stdout(Stdio::piped());
                 async_cmd.stderr(Stdio::piped());
-                
+
                 // Always configure stdin as piped so we can write to it
                 async_cmd.stdin(Stdio::piped());
 
@@ -100,7 +100,9 @@ impl Launcher for LocalLauncher {
 
             _ => {
                 // Other target types not implemented yet
-                Err(Error::spawn_failed("Target type not yet implemented for LocalLauncher"))
+                Err(Error::spawn_failed(
+                    "Target type not yet implemented for LocalLauncher",
+                ))
             }
         }
     }
@@ -217,12 +219,12 @@ impl LocalProcessHandle {
     pub fn stdin_mut(&mut self) -> Option<&mut StdinHandle> {
         self.stdin.as_mut()
     }
-    
+
     /// Take the stdin handle, leaving None in its place
     pub fn take_stdin(&mut self) -> Option<StdinHandle> {
         self.stdin.take()
     }
-    
+
     /// Take the stdin handle if it has a channel configured for forwarding
     pub fn take_stdin_for_forwarding(&mut self) -> Option<StdinHandle> {
         if let Some(stdin_handle) = self.stdin.as_ref() {

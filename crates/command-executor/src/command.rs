@@ -1,10 +1,10 @@
 //! Command type for building executable commands
 
+use async_channel::Receiver;
 use async_process::Command as AsyncCommand;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
-use async_channel::Receiver;
 
 /// A command to be executed
 ///
@@ -92,7 +92,7 @@ impl Command {
         self.current_dir = Some(dir.as_ref().to_owned());
         self
     }
-    
+
     /// Set a channel to receive stdin input line by line
     pub fn stdin_channel(&mut self, receiver: Receiver<String>) -> &mut Self {
         self.stdin_channel = Some(receiver);
@@ -118,12 +118,12 @@ impl Command {
     pub fn get_current_dir(&self) -> Option<&std::path::Path> {
         self.current_dir.as_deref()
     }
-    
+
     /// Check if this command has a stdin channel configured
     pub fn has_stdin_channel(&self) -> bool {
         self.stdin_channel.is_some()
     }
-    
+
     /// Take the stdin channel (consumes it since channels can't be cloned)
     pub fn take_stdin_channel(&mut self) -> Option<Receiver<String>> {
         self.stdin_channel.take()

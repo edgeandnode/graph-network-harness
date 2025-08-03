@@ -35,7 +35,10 @@ impl HealthChecker {
     }
 
     /// Run a single health check
-    pub async fn check_health(&self, config: &HealthCheck) -> std::result::Result<HealthStatus, Error> {
+    pub async fn check_health(
+        &self,
+        config: &HealthCheck,
+    ) -> std::result::Result<HealthStatus, Error> {
         let start = Instant::now();
 
         let mut cmd = Command::new(&config.command);

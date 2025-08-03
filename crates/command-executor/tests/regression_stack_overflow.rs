@@ -45,7 +45,7 @@ async fn test_simple_ssh_localhost_command() {
 }
 */
 
-// TODO: SSH functionality moved to layered system - this test needs rewriting  
+// TODO: SSH functionality moved to layered system - this test needs rewriting
 /*
 #[cfg(feature = "ssh")]
 #[smol_potat::test]

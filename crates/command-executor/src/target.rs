@@ -421,7 +421,7 @@ impl AttachedService {
     pub fn builder(name: impl Into<String>) -> AttachedServiceBuilder {
         AttachedServiceBuilder::new(name)
     }
-    
+
     /// Get the service name
     pub fn name(&self) -> &str {
         &self.name
@@ -444,19 +444,19 @@ impl AttachedServiceBuilder {
             log_command: None,
         }
     }
-    
+
     /// Set the status command
     pub fn status_command(mut self, command: Command) -> Self {
         self.status_command = Some(command);
         self
     }
-    
+
     /// Set the log command
     pub fn log_command(mut self, command: Command) -> Self {
         self.log_command = Some(command);
         self
     }
-    
+
     /// Build the AttachedService
     pub fn build(self) -> Result<AttachedService> {
         use crate::error::Error;
@@ -471,4 +471,3 @@ impl AttachedServiceBuilder {
         })
     }
 }
-

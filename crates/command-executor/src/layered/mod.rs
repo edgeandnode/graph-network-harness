@@ -22,19 +22,18 @@
 //! # }
 //! ```
 
-mod layers;
-mod executor;
 mod attacher;
+mod executor;
 #[cfg(test)]
 mod integration_tests;
+mod layers;
 
-pub use layers::{ExecutionLayer, SshLayer, DockerLayer, LocalLayer};
-pub use executor::LayeredExecutor;
 pub use attacher::{
-    LayeredAttacher, AttachmentLayer, 
-    SshAttachmentLayer, DockerAttachmentLayer, LocalAttachmentLayer
+    AttachmentLayer, DockerAttachmentLayer, LayeredAttacher, LocalAttachmentLayer,
+    SshAttachmentLayer,
 };
-
+pub use executor::LayeredExecutor;
+pub use layers::{DockerLayer, ExecutionLayer, LocalLayer, SshLayer};
 
 /// Context passed through the execution pipeline
 #[derive(Debug, Clone, Default)]
@@ -52,19 +51,19 @@ impl ExecutionContext {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Add an environment variable
     pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(key.into(), value.into());
         self
     }
-    
+
     /// Set the working directory
     pub fn with_working_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
         self.working_dir = Some(dir.into());
         self
     }
-    
+
     /// Add metadata
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key.into(), value.into());

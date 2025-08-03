@@ -3,9 +3,9 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, PackageHealthCheck,
-    PackageManifest, PackageService, ProcessExecutor, RemoteTarget, ServiceConfig,
-    ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
+    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, PackageHealthCheck, PackageManifest,
+    PackageService, ProcessExecutor, RemoteTarget, ServiceConfig, ServiceExecutor, ServiceManager,
+    ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 

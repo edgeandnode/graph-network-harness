@@ -9,11 +9,11 @@ pub mod process;
 pub mod stream_utils;
 pub mod traits;
 
-pub use attached::{SystemdAttachedExecutor, DockerAttachedExecutor, LocalProcessAttachedExecutor};
+pub use attached::{DockerAttachedExecutor, LocalProcessAttachedExecutor, SystemdAttachedExecutor};
 pub use docker::DockerExecutor;
 pub use process::ProcessExecutor;
 pub use traits::{
-    EventStreamable, ManagedService, AttachedService, EventStream as TraitEventStream
+    AttachedService, EventStream as TraitEventStream, EventStreamable, ManagedService,
 };
 
 use crate::{Error, config::ServiceConfig, health::HealthStatus};
@@ -116,10 +116,16 @@ pub trait ServiceExecutor: Send + Sync {
     async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error>;
 
     /// Check the health of a running service
-    async fn health_check(&self, service: &RunningService) -> std::result::Result<HealthStatus, Error>;
+    async fn health_check(
+        &self,
+        service: &RunningService,
+    ) -> std::result::Result<HealthStatus, Error>;
 
     /// Stream events from a running service
-    async fn stream_events(&self, service: &RunningService) -> std::result::Result<EventStream, Error>;
+    async fn stream_events(
+        &self,
+        service: &RunningService,
+    ) -> std::result::Result<EventStream, Error>;
 
     /// Check if the executor can handle the given service configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

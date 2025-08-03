@@ -26,13 +26,13 @@ pub use error::{Error, Result};
 pub use event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 pub use executor::Executor;
 pub use launcher::Launcher;
+pub use layered::{
+    AttachmentLayer, DockerAttachmentLayer, DockerLayer, ExecutionLayer, LayeredAttacher,
+    LayeredExecutor, LocalAttachmentLayer, LocalLayer, SshAttachmentLayer, SshLayer,
+};
 pub use process::{ExitResult, ExitStatus, ProcessHandle};
 pub use target::{
-    ComposeService, DockerContainer, ManagedProcess, ManagedProcessBuilder, ManagedService,
-    ManagedServiceBuilder, SystemdPortable, SystemdService, Target, AttachedService,
-    AttachedServiceBuilder,
-};
-pub use layered::{
-    LayeredExecutor, ExecutionLayer, SshLayer, DockerLayer, LocalLayer,
-    LayeredAttacher, AttachmentLayer, SshAttachmentLayer, DockerAttachmentLayer, LocalAttachmentLayer,
+    AttachedService, AttachedServiceBuilder, ComposeService, DockerContainer, ManagedProcess,
+    ManagedProcessBuilder, ManagedService, ManagedServiceBuilder, SystemdPortable, SystemdService,
+    Target,
 };

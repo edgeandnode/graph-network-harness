@@ -87,7 +87,6 @@ pub enum Error {
     #[cfg(unix)]
     #[error(transparent)]
     Nix(#[from] nix::Error),
-
 }
 
 // For convenience, re-export specific error constructors
@@ -106,14 +105,19 @@ impl Error {
             reason: reason.into(),
         }
     }
-    
+
     /// Add layer context to an error message (for backwards compatibility)
     pub fn with_layer_context(self, layer: impl Into<String>) -> Self {
         match self {
             Error::SpawnFailed { reason } => Error::SpawnFailed {
-                reason: format!("{} in {} layer: {}", 
-                    if reason.starts_with("Failed") { "Error" } else { "Failed" },
-                    layer.into(), 
+                reason: format!(
+                    "{} in {} layer: {}",
+                    if reason.starts_with("Failed") {
+                        "Error"
+                    } else {
+                        "Failed"
+                    },
+                    layer.into(),
                     reason
                 ),
             },

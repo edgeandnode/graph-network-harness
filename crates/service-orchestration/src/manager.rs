@@ -48,7 +48,9 @@ impl ServiceManager {
     }
 
     /// Create a new service manager with a specific state directory
-    pub async fn with_state_dir(state_dir: impl Into<std::path::PathBuf>) -> std::result::Result<Self, Error> {
+    pub async fn with_state_dir(
+        state_dir: impl Into<std::path::PathBuf>,
+    ) -> std::result::Result<Self, Error> {
         let state_dir = state_dir.into();
         info!(
             "Initializing ServiceManager with state dir: {:?}",
@@ -94,7 +96,11 @@ impl ServiceManager {
     }
 
     /// Start a service with the given configuration
-    pub async fn start_service(&self, name: &str, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    pub async fn start_service(
+        &self,
+        name: &str,
+        config: ServiceConfig,
+    ) -> std::result::Result<RunningService, Error> {
         info!("Starting service: {}", name);
 
         // Check if service is already running
@@ -219,7 +225,10 @@ impl ServiceManager {
     }
 
     /// Get the status of a service
-    pub async fn get_service_status(&self, name: &str) -> std::result::Result<ServiceStatus, Error> {
+    pub async fn get_service_status(
+        &self,
+        name: &str,
+    ) -> std::result::Result<ServiceStatus, Error> {
         // First check if service exists in registry
         if let Ok(service_info) = self.registry.get(name).await {
             // Check if we have it in active services
@@ -271,13 +280,18 @@ impl ServiceManager {
     }
 
     /// Get detailed information about a running service
-    pub async fn get_service_info(&self, name: &str) -> std::result::Result<Option<RunningService>, Error> {
+    pub async fn get_service_info(
+        &self,
+        name: &str,
+    ) -> std::result::Result<Option<RunningService>, Error> {
         let active = self.active_services.read().unwrap();
         Ok(active.get(name).cloned())
     }
 
     /// Run health checks for all monitored services
-    pub async fn run_health_checks(&self) -> std::result::Result<HashMap<String, HealthStatus>, Error> {
+    pub async fn run_health_checks(
+        &self,
+    ) -> std::result::Result<HashMap<String, HealthStatus>, Error> {
         let mut results = HashMap::new();
 
         // Get all service names to check
@@ -349,7 +363,10 @@ impl ServiceManager {
     }
 
     /// Inject network configuration into service config
-    async fn inject_network_config(&self, config: &ServiceConfig) -> std::result::Result<ServiceConfig, Error> {
+    async fn inject_network_config(
+        &self,
+        config: &ServiceConfig,
+    ) -> std::result::Result<ServiceConfig, Error> {
         debug!("Injecting network config for service: {}", config.name);
 
         // TODO: Implement network injection:
@@ -362,7 +379,10 @@ impl ServiceManager {
     }
 
     /// Find the appropriate executor for a service configuration
-    fn find_executor(&self, config: &ServiceConfig) -> std::result::Result<Arc<dyn ServiceExecutor>, Error> {
+    fn find_executor(
+        &self,
+        config: &ServiceConfig,
+    ) -> std::result::Result<Arc<dyn ServiceExecutor>, Error> {
         for executor in self.executors.values() {
             if executor.can_handle(config) {
                 return Ok(executor.clone());

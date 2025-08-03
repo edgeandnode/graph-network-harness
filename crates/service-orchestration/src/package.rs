@@ -132,7 +132,10 @@ impl PackageDeployer {
     }
 
     /// Start a deployed service
-    pub async fn start_service(&self, deployed: &DeployedPackage) -> std::result::Result<(), Error> {
+    pub async fn start_service(
+        &self,
+        deployed: &DeployedPackage,
+    ) -> std::result::Result<(), Error> {
         info!("Starting deployed service: {}", deployed.manifest.name);
 
         // TODO: Implement remote service start via SSH
@@ -161,7 +164,10 @@ impl PackageDeployer {
     }
 
     /// Validate package format and extract manifest
-    async fn validate_package(&self, package_path: &str) -> std::result::Result<PackageManifest, Error> {
+    async fn validate_package(
+        &self,
+        package_path: &str,
+    ) -> std::result::Result<PackageManifest, Error> {
         debug!("Validating package: {}", package_path);
 
         let path = Path::new(package_path);
@@ -198,7 +204,11 @@ impl PackageDeployer {
     }
 
     /// Transfer package to remote host
-    async fn transfer_package(&self, package_path: &str, target: &RemoteTarget) -> std::result::Result<(), Error> {
+    async fn transfer_package(
+        &self,
+        package_path: &str,
+        target: &RemoteTarget,
+    ) -> std::result::Result<(), Error> {
         debug!(
             "Transferring package {} to {}@{}",
             package_path, target.user, target.host

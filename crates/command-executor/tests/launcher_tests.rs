@@ -35,8 +35,6 @@ async fn test_local_launcher_basic_command() {
     assert!(output.contains("hello world"));
 }
 
-// TODO: Re-enable this test once stdin forwarding task is implemented
-#[ignore = "Stdin forwarding task not yet implemented"]
 #[smol_potat::test]
 async fn test_local_launcher_with_stdin() {
     let launcher = LocalLauncher;
@@ -50,6 +48,13 @@ async fn test_local_launcher_with_stdin() {
     assert!(result.is_ok());
     
     let (mut events, mut handle) = result.unwrap();
+    
+    // Start stdin forwarding task
+    if let Some(stdin_handle) = handle.take_stdin_for_forwarding() {
+        smol::spawn(async move {
+            let _ = stdin_handle.forward_channel().await;
+        }).detach();
+    }
     
     // Send data through stdin
     tx.send("test input".to_string()).await.unwrap();

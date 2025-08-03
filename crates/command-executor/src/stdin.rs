@@ -21,6 +21,16 @@ impl StdinHandle {
         Self { stdin: Some(stdin), channel }
     }
     
+    /// Create from optional stdin
+    pub fn from_optional(stdin: Option<async_process::ChildStdin>, channel: Option<Receiver<String>>) -> Option<Self> {
+        stdin.map(|s| Self::new(s, channel))
+    }
+    
+    /// Take the stdin writer, leaving None in its place
+    pub fn take_stdin(&mut self) -> Option<async_process::ChildStdin> {
+        self.stdin.take()
+    }
+    
     /// Write a line to stdin (adds newline)
     pub async fn write_line(&mut self, line: &str) -> Result<()> {
         if let Some(stdin) = &mut self.stdin {
@@ -54,6 +64,11 @@ impl StdinHandle {
     /// Take the channel, leaving None in its place
     pub fn take_channel(&mut self) -> Option<Receiver<String>> {
         self.channel.take()
+    }
+    
+    /// Check if this handle has a channel configured
+    pub fn has_channel(&self) -> bool {
+        self.channel.is_some()
     }
     
     /// Close stdin by dropping the writer

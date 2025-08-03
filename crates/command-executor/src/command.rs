@@ -119,6 +119,11 @@ impl Command {
         self.current_dir.as_deref()
     }
     
+    /// Check if this command has a stdin channel configured
+    pub fn has_stdin_channel(&self) -> bool {
+        self.stdin_channel.is_some()
+    }
+    
     /// Take the stdin channel (consumes it since channels can't be cloned)
     pub fn take_stdin_channel(&mut self) -> Option<Receiver<String>> {
         self.stdin_channel.take()

@@ -222,6 +222,16 @@ impl LocalProcessHandle {
     pub fn take_stdin(&mut self) -> Option<StdinHandle> {
         self.stdin.take()
     }
+    
+    /// Take the stdin handle if it has a channel configured for forwarding
+    pub fn take_stdin_for_forwarding(&mut self) -> Option<StdinHandle> {
+        if let Some(stdin_handle) = self.stdin.as_ref() {
+            if stdin_handle.has_channel() {
+                return self.stdin.take();
+            }
+        }
+        None
+    }
 }
 
 impl Drop for LocalProcessHandle {

@@ -9,8 +9,8 @@ use crate::{Error, config::{ServiceConfig, ServiceTarget}};
 use async_trait::async_trait;
 use command_executor::{
     attacher::{Attacher, AttachConfig, AttachedHandle, ServiceStatus as AttacherStatus},
-    backends::local::{LocalAttacher, LocalLauncher},
-    target::{ManagedService as ManagedServiceTarget, Target},
+    backends::{LocalAttacher, LocalLauncher},
+    target::Target,
     Command,
 };
 use std::collections::HashMap;
@@ -81,13 +81,9 @@ impl AttachedService for SystemdAttachedExecutor {
             
         info!("Attaching to systemd service: {}", service_name);
         
-        // Create managed service target for systemd
-        let target = ManagedServiceTarget::builder(service_name)
-            .start_command(Command::new("systemctl").arg("start").arg(service_name).clone())
-            .stop_command(Command::new("systemctl").arg("stop").arg(service_name).clone())
+        // Create attached service target for systemd
+        let target = command_executor::target::AttachedService::builder(service_name)
             .status_command(Command::new("systemctl").arg("is-active").arg(service_name).clone())
-            .restart_command(Command::new("systemctl").arg("restart").arg(service_name).clone())
-            .reload_command(Command::new("systemctl").arg("reload").arg(service_name).clone())
             .log_command(Command::new("journalctl").arg("-u").arg(service_name).arg("-f").clone())
             .build()?;
         

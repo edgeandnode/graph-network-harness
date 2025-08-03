@@ -30,7 +30,10 @@ mod integration_tests;
 
 pub use layers::{ExecutionLayer, SshLayer, DockerLayer, LocalLayer};
 pub use executor::LayeredExecutor;
-pub use attacher::{LayeredAttacher, AttachmentLayer, SshAttachmentLayer};
+pub use attacher::{
+    LayeredAttacher, AttachmentLayer, 
+    SshAttachmentLayer, DockerAttachmentLayer, LocalAttachmentLayer
+};
 
 
 /// Context passed through the execution pipeline

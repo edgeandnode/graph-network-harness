@@ -368,7 +368,7 @@ mod tests {
         
         // Wait for all to complete
         let services: Vec<_> = join_all(handles).await.into_iter()
-            .collect::<Result<Vec<_>>>().unwrap();
+            .collect::<Result<Vec<_>, _>>().unwrap();
         
         // Verify all processes are tracked
         assert_eq!(executor.running_process_count().await, 5);

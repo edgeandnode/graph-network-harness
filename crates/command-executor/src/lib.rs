@@ -34,5 +34,5 @@ pub use target::{
 };
 pub use layered::{
     LayeredExecutor, ExecutionLayer, SshLayer, DockerLayer, LocalLayer,
-    LayeredAttacher, AttachmentLayer, SshAttachmentLayer,
+    LayeredAttacher, AttachmentLayer, SshAttachmentLayer, DockerAttachmentLayer, LocalAttachmentLayer,
 };

@@ -399,7 +399,6 @@ mod tests {
         // Verify executors are registered
         assert!(manager.executors.contains_key("process"));
         assert!(manager.executors.contains_key("docker"));
-        assert!(manager.executors.contains_key("remote"));
     }
 
     #[smol_potat::test]

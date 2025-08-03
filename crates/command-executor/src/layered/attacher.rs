@@ -122,9 +122,19 @@ where
     }
 }
 
-/// Example SSH attachment layer
+/// SSH attachment layer for attaching to services over SSH
 pub struct SshAttachmentLayer {
     ssh_target: String,
+}
+
+/// Docker attachment layer for attaching to existing containers
+pub struct DockerAttachmentLayer {
+    container_id: String,
+}
+
+/// Local attachment layer for local services
+pub struct LocalAttachmentLayer {
+    service_prefix: Option<String>,
 }
 
 impl SshAttachmentLayer {
@@ -207,6 +217,128 @@ impl AttachedHandle for SshWrappedHandle {
     }
 }
 
+impl DockerAttachmentLayer {
+    /// Create a new Docker attachment layer
+    pub fn new(container_id: impl Into<String>) -> Self {
+        Self {
+            container_id: container_id.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl AttachmentLayer for DockerAttachmentLayer {
+    fn description(&self) -> String {
+        format!("Docker({})", self.container_id)
+    }
+    
+    fn transform_target(
+        &self,
+        mut target: ManagedService,
+        _context: &ExecutionContext,
+    ) -> Result<ManagedService> {
+        use crate::Command;
+        
+        // Transform commands to use docker exec
+        let _docker_prefix = vec!["docker".to_string(), "exec".to_string(), self.container_id.clone()];
+        
+        // Transform status command - check if container is running
+        target.status_command = Command::new("docker")
+            .arg("inspect")
+            .arg("-f")
+            .arg("{{.State.Running}}")
+            .arg(&self.container_id)
+            .clone();
+        
+        // Transform log command
+        target.log_command = Command::new("docker")
+            .arg("logs")
+            .arg("-f")
+            .arg(&self.container_id)
+            .clone();
+        
+        Ok(target)
+    }
+    
+    fn wrap_handle(
+        &self,
+        handle: Box<dyn AttachedHandle>,
+        _context: &ExecutionContext,
+    ) -> Result<Box<dyn AttachedHandle>> {
+        Ok(Box::new(DockerWrappedHandle {
+            inner: handle,
+            container_id: self.container_id.clone(),
+        }))
+    }
+}
+
+/// Handle wrapper for Docker layer
+struct DockerWrappedHandle {
+    inner: Box<dyn AttachedHandle>,
+    container_id: String,
+}
+
+#[async_trait]
+impl AttachedHandle for DockerWrappedHandle {
+    fn id(&self) -> String {
+        format!("docker:{}/{}", self.container_id, self.inner.id())
+    }
+    
+    async fn status(&self) -> Result<ServiceStatus> {
+        self.inner.status().await
+    }
+    
+    async fn disconnect(&mut self) -> Result<()> {
+        self.inner.disconnect().await
+    }
+}
+
+impl LocalAttachmentLayer {
+    /// Create a new local attachment layer
+    pub fn new() -> Self {
+        Self {
+            service_prefix: None,
+        }
+    }
+    
+    /// Create with a service prefix
+    pub fn with_prefix(prefix: impl Into<String>) -> Self {
+        Self {
+            service_prefix: Some(prefix.into()),
+        }
+    }
+}
+
+#[async_trait]
+impl AttachmentLayer for LocalAttachmentLayer {
+    fn description(&self) -> String {
+        match &self.service_prefix {
+            Some(prefix) => format!("Local({})", prefix),
+            None => "Local".to_string(),
+        }
+    }
+    
+    fn transform_target(
+        &self,
+        target: ManagedService,
+        _context: &ExecutionContext,
+    ) -> Result<ManagedService> {
+        // For local attachment, we typically don't need to transform the target
+        // The prefix is more for identification in wrapped handles
+        
+        Ok(target)
+    }
+    
+    fn wrap_handle(
+        &self,
+        handle: Box<dyn AttachedHandle>,
+        _context: &ExecutionContext,
+    ) -> Result<Box<dyn AttachedHandle>> {
+        // For local, we don't need to wrap much
+        Ok(handle)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,5 +390,71 @@ mod tests {
         let log_args: Vec<_> = transformed.log_command.get_args().iter().collect();
         assert_eq!(log_args[0], "user@remote");
         assert_eq!(log_args[1], "journalctl");
+    }
+    
+    #[test]
+    fn test_docker_layer_transform() {
+        let layer = DockerAttachmentLayer::new("my-container");
+        let context = ExecutionContext::new();
+        
+        let target = ManagedService::builder("test-service")
+            .status_command(Command::new("ps").arg("aux").clone())
+            .start_command(Command::new("unused").clone())
+            .stop_command(Command::new("unused").clone())
+            .log_command(Command::new("tail").arg("-f").arg("/var/log/app.log").clone())
+            .build()
+            .unwrap();
+        
+        let transformed = layer.transform_target(target, &context).unwrap();
+        
+        // Check that status command uses docker inspect
+        assert_eq!(transformed.status_command.get_program(), "docker");
+        let status_args: Vec<_> = transformed.status_command.get_args().iter().collect();
+        assert_eq!(status_args[0], "inspect");
+        assert_eq!(status_args[1], "-f");
+        assert_eq!(status_args[2], "{{.State.Running}}");
+        assert_eq!(status_args[3], "my-container");
+        
+        // Check that log command uses docker logs
+        assert_eq!(transformed.log_command.get_program(), "docker");
+        let log_args: Vec<_> = transformed.log_command.get_args().iter().collect();
+        assert_eq!(log_args[0], "logs");
+        assert_eq!(log_args[1], "-f");
+        assert_eq!(log_args[2], "my-container");
+    }
+    
+    #[test]
+    fn test_local_layer_transform() {
+        let layer = LocalAttachmentLayer::with_prefix("test-");
+        let context = ExecutionContext::new();
+        
+        let target = ManagedService::builder("service")
+            .status_command(Command::new("systemctl").arg("is-active").arg("nginx").clone())
+            .start_command(Command::new("systemctl").arg("start").arg("nginx").clone())
+            .stop_command(Command::new("systemctl").arg("stop").arg("nginx").clone())
+            .log_command(Command::new("journalctl").arg("-u").arg("nginx").clone())
+            .build()
+            .unwrap();
+        
+        let transformed = layer.transform_target(target.clone(), &context).unwrap();
+        
+        // Local layer doesn't transform commands, just passes through
+        assert_eq!(transformed.status_command.get_program(), target.status_command.get_program());
+        assert_eq!(transformed.log_command.get_program(), target.log_command.get_program());
+    }
+    
+    #[test]
+    fn test_layer_descriptions() {
+        let ssh_layer = SshAttachmentLayer::new("user@host");
+        assert_eq!(ssh_layer.description(), "SSH(user@host)");
+        
+        let docker_layer = DockerAttachmentLayer::new("container-123");
+        assert_eq!(docker_layer.description(), "Docker(container-123)");
+        
+        let local_layer = LocalAttachmentLayer::new();
+        assert_eq!(local_layer.description(), "Local");
+        
+        let local_with_prefix = LocalAttachmentLayer::with_prefix("prod-");
+        assert_eq!(local_with_prefix.description(), "Local(prod-)");
     }
 }

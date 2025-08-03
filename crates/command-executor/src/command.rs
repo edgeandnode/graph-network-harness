@@ -4,6 +4,7 @@ use async_process::Command as AsyncCommand;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
+use async_channel::Receiver;
 
 /// A command to be executed
 ///
@@ -21,6 +22,8 @@ pub struct Command {
     current_dir: Option<PathBuf>,
     /// Whether to clear the environment before setting our vars
     env_clear: bool,
+    /// Channel to receive stdin input line by line
+    stdin_channel: Option<Receiver<String>>,
 }
 
 impl Command {
@@ -32,6 +35,7 @@ impl Command {
             env: HashMap::new(),
             current_dir: None,
             env_clear: false,
+            stdin_channel: None,
         }
     }
 
@@ -88,6 +92,12 @@ impl Command {
         self.current_dir = Some(dir.as_ref().to_owned());
         self
     }
+    
+    /// Set a channel to receive stdin input line by line
+    pub fn stdin_channel(&mut self, receiver: Receiver<String>) -> &mut Self {
+        self.stdin_channel = Some(receiver);
+        self
+    }
 
     /// Get the program name
     pub fn get_program(&self) -> &OsStr {
@@ -107,6 +117,11 @@ impl Command {
     /// Get the current directory
     pub fn get_current_dir(&self) -> Option<&std::path::Path> {
         self.current_dir.as_deref()
+    }
+    
+    /// Take the stdin channel (consumes it since channels can't be cloned)
+    pub fn take_stdin_channel(&mut self) -> Option<Receiver<String>> {
+        self.stdin_channel.take()
     }
 
     /// Prepare this command for execution by converting to an `async_process::Command`

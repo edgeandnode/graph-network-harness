@@ -4,9 +4,9 @@
 //! service lifecycle across different execution environments.
 
 use crate::{
-    Result,
+    Error,
     config::{HealthCheck, ServiceConfig, ServiceStatus},
-    executors::{DockerExecutor, ProcessExecutor, RemoteExecutor, RunningService, ServiceExecutor},
+    executors::{DockerExecutor, ProcessExecutor, RunningService, ServiceExecutor},
     health::{HealthChecker, HealthMonitor, HealthStatus},
     package::{DeployedPackage, PackageDeployer, RemoteTarget},
 };
@@ -36,7 +36,7 @@ pub struct ServiceManager {
 
 impl ServiceManager {
     /// Create a new service manager
-    pub async fn new() -> Result<Self> {
+    pub async fn new() -> std::result::Result<Self, Error> {
         info!("Initializing ServiceManager");
 
         // Create harness directory if it doesn't exist
@@ -48,7 +48,7 @@ impl ServiceManager {
     }
 
     /// Create a new service manager with a specific state directory
-    pub async fn with_state_dir(state_dir: impl Into<std::path::PathBuf>) -> Result<Self> {
+    pub async fn with_state_dir(state_dir: impl Into<std::path::PathBuf>) -> std::result::Result<Self, Error> {
         let state_dir = state_dir.into();
         info!(
             "Initializing ServiceManager with state dir: {:?}",
@@ -70,7 +70,6 @@ impl ServiceManager {
         let mut executors: HashMap<String, Arc<dyn ServiceExecutor>> = HashMap::new();
         executors.insert("process".to_string(), Arc::new(ProcessExecutor::new()));
         executors.insert("docker".to_string(), Arc::new(DockerExecutor::new()));
-        executors.insert("remote".to_string(), Arc::new(RemoteExecutor::new()));
 
         Ok(Self {
             registry,
@@ -84,7 +83,7 @@ impl ServiceManager {
 
     /// Create a new service manager for tests with a temporary directory
     #[cfg(any(test, feature = "test-utils"))]
-    pub async fn new_for_tests() -> Result<Self> {
+    pub async fn new_for_tests() -> std::result::Result<Self, Error> {
         let temp_dir = tempfile::tempdir().map_err(crate::Error::Io)?;
         let state_dir = temp_dir.path().to_path_buf();
 
@@ -95,7 +94,7 @@ impl ServiceManager {
     }
 
     /// Start a service with the given configuration
-    pub async fn start_service(&self, name: &str, config: ServiceConfig) -> Result<RunningService> {
+    pub async fn start_service(&self, name: &str, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
         info!("Starting service: {}", name);
 
         // Check if service is already running
@@ -173,7 +172,7 @@ impl ServiceManager {
     }
 
     /// Stop a running service
-    pub async fn stop_service(&self, name: &str) -> Result<()> {
+    pub async fn stop_service(&self, name: &str) -> std::result::Result<(), Error> {
         info!("Stopping service: {}", name);
 
         let service = {
@@ -210,7 +209,7 @@ impl ServiceManager {
         &self,
         target: RemoteTarget,
         package_path: &str,
-    ) -> Result<DeployedPackage> {
+    ) -> std::result::Result<DeployedPackage, Error> {
         info!("Deploying package {} to {}", package_path, target.host);
 
         let deployed = self.package_deployer.deploy(package_path, target).await?;
@@ -220,7 +219,7 @@ impl ServiceManager {
     }
 
     /// Get the status of a service
-    pub async fn get_service_status(&self, name: &str) -> Result<ServiceStatus> {
+    pub async fn get_service_status(&self, name: &str) -> std::result::Result<ServiceStatus, Error> {
         // First check if service exists in registry
         if let Ok(service_info) = self.registry.get(name).await {
             // Check if we have it in active services
@@ -266,19 +265,19 @@ impl ServiceManager {
     }
 
     /// List all active services
-    pub async fn list_services(&self) -> Result<Vec<String>> {
+    pub async fn list_services(&self) -> std::result::Result<Vec<String>, Error> {
         let active = self.active_services.read().unwrap();
         Ok(active.keys().cloned().collect())
     }
 
     /// Get detailed information about a running service
-    pub async fn get_service_info(&self, name: &str) -> Result<Option<RunningService>> {
+    pub async fn get_service_info(&self, name: &str) -> std::result::Result<Option<RunningService>, Error> {
         let active = self.active_services.read().unwrap();
         Ok(active.get(name).cloned())
     }
 
     /// Run health checks for all monitored services
-    pub async fn run_health_checks(&self) -> Result<HashMap<String, HealthStatus>> {
+    pub async fn run_health_checks(&self) -> std::result::Result<HashMap<String, HealthStatus>, Error> {
         let mut results = HashMap::new();
 
         // Get all service names to check
@@ -350,7 +349,7 @@ impl ServiceManager {
     }
 
     /// Inject network configuration into service config
-    async fn inject_network_config(&self, config: &ServiceConfig) -> Result<ServiceConfig> {
+    async fn inject_network_config(&self, config: &ServiceConfig) -> std::result::Result<ServiceConfig, Error> {
         debug!("Injecting network config for service: {}", config.name);
 
         // TODO: Implement network injection:
@@ -363,7 +362,7 @@ impl ServiceManager {
     }
 
     /// Find the appropriate executor for a service configuration
-    fn find_executor(&self, config: &ServiceConfig) -> Result<Arc<dyn ServiceExecutor>> {
+    fn find_executor(&self, config: &ServiceConfig) -> std::result::Result<Arc<dyn ServiceExecutor>, Error> {
         for executor in self.executors.values() {
             if executor.can_handle(config) {
                 return Ok(executor.clone());

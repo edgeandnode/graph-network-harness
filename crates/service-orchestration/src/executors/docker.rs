@@ -2,7 +2,7 @@
 
 use super::{EventStream, NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
-    Result,
+    Error,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
 };
@@ -36,7 +36,7 @@ impl DockerExecutor {
     }
 
     /// Detect existing container by name
-    async fn detect_existing_container(&self, name: &str) -> Result<Option<ContainerState>> {
+    async fn detect_existing_container(&self, name: &str) -> std::result::Result<Option<ContainerState>, Error> {
         let container_name = format!("orchestrator-{}-harness-test", name);
 
         // Check if container exists
@@ -80,7 +80,7 @@ impl DockerExecutor {
         &self,
         container_state: &ContainerState,
         config: ServiceConfig,
-    ) -> Result<RunningService> {
+    ) -> std::result::Result<RunningService, Error> {
         info!(
             "Adopting existing container '{}' for service '{}'",
             &container_state.id[..12],
@@ -101,7 +101,7 @@ impl DockerExecutor {
     }
 
     /// Get network information for a container
-    async fn get_container_network_info(&self, container_id: &str) -> Result<NetworkInfo> {
+    async fn get_container_network_info(&self, container_id: &str) -> std::result::Result<NetworkInfo, Error> {
         // Get container IP address
         let mut inspect_cmd = Command::new("docker");
         inspect_cmd.args([
@@ -158,7 +158,7 @@ impl Default for DockerExecutor {
 
 #[async_trait]
 impl ServiceExecutor for DockerExecutor {
-    async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
+    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Docker {
             image,
             env,
@@ -261,7 +261,7 @@ impl ServiceExecutor for DockerExecutor {
         Ok(running_service)
     }
 
-    async fn stop(&self, service: &RunningService) -> Result<()> {
+    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error> {
         info!("Stopping Docker service: {}", service.name);
 
         if let Some(container_id) = &service.container_id {
@@ -315,7 +315,7 @@ impl ServiceExecutor for DockerExecutor {
         Ok(())
     }
 
-    async fn health_check(&self, service: &RunningService) -> Result<HealthStatus> {
+    async fn health_check(&self, service: &RunningService) -> std::result::Result<HealthStatus, Error> {
         if let Some(container_id) = &service.container_id {
             // Check container status
             let mut inspect_cmd = Command::new("docker");
@@ -359,7 +359,7 @@ impl ServiceExecutor for DockerExecutor {
         }
     }
 
-    async fn stream_events(&self, service: &RunningService) -> Result<EventStream> {
+    async fn stream_events(&self, service: &RunningService) -> std::result::Result<EventStream, Error> {
         if let Some(container_id) = &service.container_id {
             // TODO: Implement proper log streaming with docker logs -f
             // For now, return empty stream

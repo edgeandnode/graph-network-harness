@@ -1,8 +1,8 @@
 //! Process executor for local service execution.
 
-use super::{EventStream, RunningService, ServiceExecutor};
+use super::{EventStream, RunningService, ServiceExecutor, stream_utils::{SharedEventStream, create_forwarding_stream}};
 use crate::{
-    Result,
+    Error,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
 };
@@ -14,12 +14,10 @@ use std::sync::Arc;
 use futures::lock::Mutex;
 use tracing::{debug, info, warn};
 
-type LocalEventStream = Box<dyn Stream<Item = ProcessEvent> + Send + Unpin>;
-
 /// Information about a running process
 struct ProcessInfo {
     handle: Box<dyn ProcessHandle>,
-    event_stream: Arc<Mutex<LocalEventStream>>,
+    event_stream: SharedEventStream,
 }
 
 /// Executor for local process services
@@ -63,7 +61,7 @@ impl Default for ProcessExecutor {
 
 #[async_trait]
 impl ServiceExecutor for ProcessExecutor {
-    async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
+    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Process {
             binary,
             args,
@@ -117,7 +115,7 @@ impl ServiceExecutor for ProcessExecutor {
                 running_service.id.to_string(), 
                 ProcessInfo {
                     handle: Box::new(handle) as Box<dyn ProcessHandle>,
-                    event_stream: Arc::new(Mutex::new(Box::new(event_stream) as LocalEventStream)),
+                    event_stream: Arc::new(Mutex::new(Box::new(event_stream))),
                 }
             );
         }
@@ -125,7 +123,7 @@ impl ServiceExecutor for ProcessExecutor {
         Ok(running_service)
     }
 
-    async fn stop(&self, service: &RunningService) -> Result<()> {
+    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error> {
         info!("Stopping service: {}", service.name);
 
         // Remove and get the process info
@@ -184,7 +182,7 @@ impl ServiceExecutor for ProcessExecutor {
         Ok(())
     }
 
-    async fn health_check(&self, service: &RunningService) -> Result<HealthStatus> {
+    async fn health_check(&self, service: &RunningService) -> std::result::Result<HealthStatus, Error> {
         // Check if process is still running first
         if let Some(pid) = service.pid {
             let mut check_cmd = Command::new("kill");
@@ -212,7 +210,7 @@ impl ServiceExecutor for ProcessExecutor {
         }
     }
 
-    async fn stream_events(&self, service: &RunningService) -> Result<EventStream> {
+    async fn stream_events(&self, service: &RunningService) -> std::result::Result<EventStream, Error> {
         // Get the event stream for this service
         let processes = self.running_processes.lock().await;
         let process_info = processes.get(&service.id.to_string())
@@ -221,19 +219,7 @@ impl ServiceExecutor for ProcessExecutor {
         let event_stream = process_info.event_stream.clone();
         drop(processes); // Release the lock early
         
-        // Create a stream that forwards events from the stored stream
-        let log_stream = stream::unfold(event_stream, |event_stream| async {
-            let next_event = {
-                let mut stream = event_stream.lock().await;
-                stream.next().await
-            };
-            match next_event {
-                Some(event) => Some((event, event_stream)),
-                None => None,
-            }
-        });
-        
-        Ok(log_stream.boxed())
+        Ok(create_forwarding_stream(event_stream))
     }
 
     fn can_handle(&self, config: &ServiceConfig) -> bool {

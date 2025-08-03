@@ -3,15 +3,20 @@
 //! This module provides abstractions over command-executor for different
 //! service execution environments.
 
+pub mod attached;
 pub mod docker;
 pub mod process;
-pub mod remote;
+pub mod stream_utils;
+pub mod traits;
 
+pub use attached::{SystemdAttachedExecutor, DockerAttachedExecutor, LocalProcessAttachedExecutor};
 pub use docker::DockerExecutor;
 pub use process::ProcessExecutor;
-pub use remote::RemoteExecutor;
+pub use traits::{
+    EventStreamable, ManagedService, AttachedService, EventStream as TraitEventStream
+};
 
-use crate::{Result, config::ServiceConfig, health::HealthStatus};
+use crate::{Error, config::ServiceConfig, health::HealthStatus};
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
 use serde::{Deserialize, Serialize};
@@ -105,16 +110,16 @@ pub type EventStream = futures::stream::BoxStream<'static, ProcessEvent>;
 #[async_trait]
 pub trait ServiceExecutor: Send + Sync {
     /// Start a service with the given configuration
-    async fn start(&self, config: ServiceConfig) -> Result<RunningService>;
+    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error>;
 
     /// Stop a running service
-    async fn stop(&self, service: &RunningService) -> Result<()>;
+    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error>;
 
     /// Check the health of a running service
-    async fn health_check(&self, service: &RunningService) -> Result<HealthStatus>;
+    async fn health_check(&self, service: &RunningService) -> std::result::Result<HealthStatus, Error>;
 
     /// Stream events from a running service
-    async fn stream_events(&self, service: &RunningService) -> Result<EventStream>;
+    async fn stream_events(&self, service: &RunningService) -> std::result::Result<EventStream, Error>;
 
     /// Check if the executor can handle the given service configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

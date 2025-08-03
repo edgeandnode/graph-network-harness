@@ -243,6 +243,11 @@ error_set! {
 - Whenever we use Mutex, Arc, or RefCell in the codebase, we should ALWAYS note in the struct doc comments what we're intending with internal or external mutability
 - When making notes about internal mutability, refer to that not what primitive we are using for it.
 
+### Error Handling Guidelines
+- NEVER use type aliases for Result types (e.g., `type Result<T> = std::result::Result<T, Error>`)
+- Always use the full `std::result::Result<T, Error>` type in function signatures
+- This makes the error type explicit and improves code clarity
+
 ## Development Practices
 
 - ALWAYS use cargo to build, don't revert to using rustc directly for testing.
@@ -259,3 +264,7 @@ error_set! {
 ## Async Testing Practices
 
 - When writing async unit tests, use smol_potat::test annotation
+
+## Warnings and Variable Handling
+
+- Stop fixing warnings by _ prefixing variables. It indicates things are going unimplemented

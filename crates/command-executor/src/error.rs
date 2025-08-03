@@ -88,15 +88,6 @@ pub enum Error {
     #[error(transparent)]
     Nix(#[from] nix::Error),
 
-    /// Nested launcher error with context
-    #[error("Error in {layer} launcher: {source}")]
-    NestedLauncherError {
-        /// The layer where the error occurred (e.g., "SSH", "Docker", "Local")
-        layer: String,
-        /// The underlying error
-        #[source]
-        source: Box<Error>,
-    },
 }
 
 // For convenience, re-export specific error constructors
@@ -115,12 +106,18 @@ impl Error {
             reason: reason.into(),
         }
     }
-
-    /// Wrap an error with nested launcher context
+    
+    /// Add layer context to an error message (for backwards compatibility)
     pub fn with_layer_context(self, layer: impl Into<String>) -> Self {
-        Self::NestedLauncherError {
-            layer: layer.into(),
-            source: Box::new(self),
+        match self {
+            Error::SpawnFailed { reason } => Error::SpawnFailed {
+                reason: format!("{} in {} layer: {}", 
+                    if reason.starts_with("Failed") { "Error" } else { "Failed" },
+                    layer.into(), 
+                    reason
+                ),
+            },
+            other => other,
         }
     }
 }

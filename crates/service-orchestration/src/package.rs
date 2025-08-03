@@ -3,7 +3,7 @@
 //! This module handles the deployment of service packages to remote hosts
 //! following the ADR-007 package format specification.
 
-use crate::Result;
+use crate::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -97,7 +97,7 @@ impl PackageDeployer {
         &self,
         package_path: &str,
         target: RemoteTarget,
-    ) -> Result<DeployedPackage> {
+    ) -> std::result::Result<DeployedPackage, Error> {
         info!(
             "Deploying package {} to {}@{}:{}",
             package_path,
@@ -132,7 +132,7 @@ impl PackageDeployer {
     }
 
     /// Start a deployed service
-    pub async fn start_service(&self, deployed: &DeployedPackage) -> Result<()> {
+    pub async fn start_service(&self, deployed: &DeployedPackage) -> std::result::Result<(), Error> {
         info!("Starting deployed service: {}", deployed.manifest.name);
 
         // TODO: Implement remote service start via SSH
@@ -142,7 +142,7 @@ impl PackageDeployer {
     }
 
     /// Stop a deployed service
-    pub async fn stop_service(&self, deployed: &DeployedPackage) -> Result<()> {
+    pub async fn stop_service(&self, deployed: &DeployedPackage) -> std::result::Result<(), Error> {
         info!("Stopping deployed service: {}", deployed.manifest.name);
 
         // TODO: Implement remote service stop via SSH
@@ -152,7 +152,7 @@ impl PackageDeployer {
     }
 
     /// Remove a deployed package
-    pub async fn undeploy(&self, deployed: &DeployedPackage) -> Result<()> {
+    pub async fn undeploy(&self, deployed: &DeployedPackage) -> std::result::Result<(), Error> {
         info!("Undeploying package: {}", deployed.manifest.name);
 
         // TODO: Implement package removal via SSH
@@ -161,7 +161,7 @@ impl PackageDeployer {
     }
 
     /// Validate package format and extract manifest
-    async fn validate_package(&self, package_path: &str) -> Result<PackageManifest> {
+    async fn validate_package(&self, package_path: &str) -> std::result::Result<PackageManifest, Error> {
         debug!("Validating package: {}", package_path);
 
         let path = Path::new(package_path);
@@ -198,7 +198,7 @@ impl PackageDeployer {
     }
 
     /// Transfer package to remote host
-    async fn transfer_package(&self, package_path: &str, target: &RemoteTarget) -> Result<()> {
+    async fn transfer_package(&self, package_path: &str, target: &RemoteTarget) -> std::result::Result<(), Error> {
         debug!(
             "Transferring package {} to {}@{}",
             package_path, target.user, target.host
@@ -210,7 +210,7 @@ impl PackageDeployer {
     }
 
     /// Extract package on remote host
-    async fn extract_package(&self, target: &RemoteTarget) -> Result<()> {
+    async fn extract_package(&self, target: &RemoteTarget) -> std::result::Result<(), Error> {
         debug!("Extracting package on {}@{}", target.user, target.host);
 
         // TODO: Implement remote extraction:
@@ -224,9 +224,9 @@ impl PackageDeployer {
     /// Generate environment file with dependency IPs
     async fn generate_env_file(
         &self,
-        target: &RemoteTarget,
+        _target: &RemoteTarget,
         manifest: &PackageManifest,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), Error> {
         debug!("Generating environment file for {}", manifest.name);
 
         // TODO: Implement environment file generation:
@@ -238,7 +238,7 @@ impl PackageDeployer {
     }
 
     /// Setup proper file permissions
-    async fn setup_permissions(&self, target: &RemoteTarget) -> Result<()> {
+    async fn setup_permissions(&self, target: &RemoteTarget) -> std::result::Result<(), Error> {
         debug!("Setting up permissions for {}", target.service_name);
 
         // TODO: Implement permission setup:
@@ -273,9 +273,9 @@ impl PackageBuilder {
     pub async fn create_package<P: AsRef<Path>>(
         &self,
         source_dir: P,
-        manifest: PackageManifest,
-        output_path: P,
-    ) -> Result<()> {
+        _manifest: PackageManifest,
+        _output_path: P,
+    ) -> std::result::Result<(), Error> {
         info!("Creating package from {:?}", source_dir.as_ref());
 
         // TODO: Implement package creation:

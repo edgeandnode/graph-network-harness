@@ -2,7 +2,7 @@
 
 use command_executor::ManagedService;
 use command_executor::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
-use command_executor::backends::local::LocalAttacher;
+use command_executor::backends::LocalAttacher;
 use command_executor::{Command, ProcessEventType};
 use futures::StreamExt;
 use std::time::Duration;

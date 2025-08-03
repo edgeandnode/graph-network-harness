@@ -19,7 +19,8 @@ use uuid::Uuid;
 use crate::tls::TlsConnector;
 
 /// Type alias for the pending requests map
-type PendingRequests = Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>;
+type PendingRequests =
+    Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>;
 
 /// WebSocket client for service registry
 pub enum WsClient {
@@ -220,10 +221,7 @@ impl WsClient {
     }
 
     /// Handle incoming message (static to be used by both variants)
-    async fn handle_message(
-        text: &str,
-        pending: &PendingRequests,
-    ) -> Result<()> {
+    async fn handle_message(text: &str, pending: &PendingRequests) -> Result<()> {
         let msg: WsMessage = serde_json::from_str(text)?;
 
         match msg {

@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::Args;
 use command_executor::{
-    backends::local::LocalLauncher, Command, Launcher, ProcessEventType, ProcessHandle, Target,
+    backends::LocalLauncher, Command, Launcher, ProcessEventType, ProcessHandle, Target,
 };
 use futures::StreamExt;
 

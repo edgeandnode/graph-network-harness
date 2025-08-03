@@ -3,7 +3,7 @@
 //! This module provides health checking functionality to monitor
 //! service status and detect failures.
 
-use crate::{Result, config::HealthCheck};
+use crate::{Error, config::HealthCheck};
 use async_trait::async_trait;
 use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,10 @@ impl HealthChecker {
     }
 
     /// Run a single health check
-    pub async fn check_health(&self, config: &HealthCheck) -> Result<HealthStatus> {
+    pub async fn check_health(
+        &self,
+        config: &HealthCheck,
+    ) -> std::result::Result<HealthStatus, Error> {
         let start = Instant::now();
 
         let mut cmd = Command::new(&config.command);
@@ -82,7 +85,7 @@ impl Default for HealthChecker {
 #[async_trait]
 pub trait HealthCheckable {
     /// Check the health of this object
-    async fn health_check(&self) -> Result<HealthStatus>;
+    async fn health_check(&self) -> std::result::Result<HealthStatus, Error>;
 }
 
 /// Continuous health monitoring for a service
@@ -105,7 +108,7 @@ impl HealthMonitor {
     }
 
     /// Run a health check and update internal state
-    pub async fn check(&mut self) -> Result<HealthStatus> {
+    pub async fn check(&mut self) -> std::result::Result<HealthStatus, Error> {
         let status = self.checker.check_health(&self.config).await?;
 
         match &status {

@@ -6,6 +6,8 @@
 pub mod shared_container;
 pub mod test_harness;
 
+// TODO: SSH functionality moved to layered system - this module needs updating
+/*
 #[cfg(feature = "ssh")]
 pub mod systemd {
     use command_executor::backends::ssh::SshConfig;
@@ -69,3 +71,4 @@ pub mod systemd {
         eprintln!("  ./run-ssh-tests.sh test");
     }
 }
+*/

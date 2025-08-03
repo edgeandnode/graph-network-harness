@@ -405,26 +405,69 @@ impl ComposeService {
     }
 }
 
-// SSH support for ManagedService
-#[cfg(feature = "ssh")]
-impl crate::backends::ssh::SshTransformable for ManagedService {
-    fn transform_for_ssh(&self, ssh_config: &crate::backends::ssh::SshConfig) -> Self {
-        use crate::backends::ssh::wrap_command_with_ssh;
+/// A service that can be observed but not controlled
+#[derive(Debug, Clone)]
+pub struct AttachedService {
+    /// Service identifier
+    name: String,
+    /// How to check if service is running
+    pub(crate) status_command: Command,
+    /// How to tail the logs
+    pub(crate) log_command: Command,
+}
 
+impl AttachedService {
+    /// Create a builder for an attached service
+    pub fn builder(name: impl Into<String>) -> AttachedServiceBuilder {
+        AttachedServiceBuilder::new(name)
+    }
+
+    /// Get the service name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// Builder for AttachedService
+pub struct AttachedServiceBuilder {
+    name: String,
+    status_command: Option<Command>,
+    log_command: Option<Command>,
+}
+
+impl AttachedServiceBuilder {
+    /// Create a new builder
+    fn new(name: impl Into<String>) -> Self {
         Self {
-            name: self.name.clone(),
-            status_command: wrap_command_with_ssh(&self.status_command, ssh_config),
-            start_command: wrap_command_with_ssh(&self.start_command, ssh_config),
-            stop_command: wrap_command_with_ssh(&self.stop_command, ssh_config),
-            restart_command: self
-                .restart_command
-                .as_ref()
-                .map(|cmd| wrap_command_with_ssh(cmd, ssh_config)),
-            reload_command: self
-                .reload_command
-                .as_ref()
-                .map(|cmd| wrap_command_with_ssh(cmd, ssh_config)),
-            log_command: wrap_command_with_ssh(&self.log_command, ssh_config),
+            name: name.into(),
+            status_command: None,
+            log_command: None,
         }
+    }
+
+    /// Set the status command
+    pub fn status_command(mut self, command: Command) -> Self {
+        self.status_command = Some(command);
+        self
+    }
+
+    /// Set the log command
+    pub fn log_command(mut self, command: Command) -> Self {
+        self.log_command = Some(command);
+        self
+    }
+
+    /// Build the AttachedService
+    pub fn build(self) -> Result<AttachedService> {
+        use crate::error::Error;
+        Ok(AttachedService {
+            name: self.name,
+            status_command: self
+                .status_command
+                .ok_or_else(|| Error::spawn_failed("status_command is required"))?,
+            log_command: self
+                .log_command
+                .ok_or_else(|| Error::spawn_failed("log_command is required"))?,
+        })
     }
 }

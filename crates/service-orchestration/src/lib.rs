@@ -42,7 +42,8 @@ mod package;
 
 pub use config::{HealthCheck, ServiceConfig, ServiceStatus, ServiceTarget};
 pub use executors::{
-    DockerExecutor, ProcessExecutor, RemoteExecutor, RunningService, ServiceExecutor,
+    AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
+    ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 pub use manager::ServiceManager;
@@ -50,9 +51,6 @@ pub use package::{
     DeployedPackage, PackageBuilder, PackageDeployer, PackageHealthCheck, PackageManifest,
     PackageService, RemoteTarget,
 };
-
-/// Result type used throughout the orchestrator
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error types for orchestration operations
 #[derive(thiserror::Error, Debug)]
@@ -92,6 +90,10 @@ pub enum Error {
     /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Not implemented error
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 
     /// Other error
     #[error("Other error: {0}")]

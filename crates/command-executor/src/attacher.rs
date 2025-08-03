@@ -1,4 +1,7 @@
-//! Attacher trait for connecting to existing services
+//! Attacher trait for connecting to and controlling existing services
+//!
+//! This module provides traits for attaching to services that we can control,
+//! such as systemd services, docker containers we didn't create, etc.
 
 use crate::error::Result;
 use crate::event::ProcessEvent;
@@ -26,7 +29,7 @@ impl Default for AttachConfig {
     }
 }
 
-/// A handle for controlling an attached service
+/// A handle for monitoring an attached service
 #[async_trait]
 pub trait AttachedHandle: Send + Sync {
     /// Get the service identifier (name, ID, etc.)
@@ -34,18 +37,6 @@ pub trait AttachedHandle: Send + Sync {
 
     /// Check the current status of the service
     async fn status(&self) -> Result<ServiceStatus>;
-
-    /// Start the service (if stopped)
-    async fn start(&mut self) -> Result<()>;
-
-    /// Stop the service
-    async fn stop(&mut self) -> Result<()>;
-
-    /// Restart the service
-    async fn restart(&mut self) -> Result<()>;
-
-    /// Reload the service configuration
-    async fn reload(&mut self) -> Result<()>;
 
     /// Disconnect from the service (stop monitoring)
     async fn disconnect(&mut self) -> Result<()>;

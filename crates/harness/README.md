@@ -1,6 +1,6 @@
-# Harness CLI
+# harness
 
-The harness CLI provides a simple interface for managing services defined in YAML configuration files.
+Command-line interface for managing services defined in YAML configuration files.
 
 ## Installation
 
@@ -91,7 +91,6 @@ services:
 - `${service.port}` - Reference another service's port
 - `${service.host}` - Reference another service's hostname
 
-See [VARIABLE-SUBSTITUTION.md](../../VARIABLE-SUBSTITUTION.md) for complete documentation.
 
 ### Service Types
 
@@ -113,19 +112,6 @@ health_check:
   timeout: 10     # seconds per check
 ```
 
-## Phase 5 MVP Status
+## Current Status
 
-This is the MVP implementation for Phase 5. It includes:
-
-- ✅ YAML configuration parsing
-- ✅ Environment variable substitution
-- ✅ Basic CLI commands (validate, start, stop, status)
-- ✅ Service dependency resolution
-- ✅ Integration with the orchestrator library
-
-Coming in Phase 6:
-- Progress indicators and better UI
-- Additional commands (logs, exec, restart)
-- Shell completions
-- Interactive error recovery
-- Network management commands
+The CLI provides basic service management functionality. Advanced features like logs streaming, interactive debugging, and network management are planned for future releases.

@@ -10,6 +10,7 @@ repository.workspace = true
 # Runtime-agnostic async primitives
 async-process = "2.0"
 async-trait = { workspace = true }
+async-channel = { workspace = true }
 futures = "0.3"
 futures-util = { workspace = true }
 futures-lite = "2.0"

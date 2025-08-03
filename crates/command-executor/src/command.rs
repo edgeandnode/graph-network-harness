@@ -1,5 +1,6 @@
 //! Command type for building executable commands
 
+use async_channel::Receiver;
 use async_process::Command as AsyncCommand;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -21,6 +22,8 @@ pub struct Command {
     current_dir: Option<PathBuf>,
     /// Whether to clear the environment before setting our vars
     env_clear: bool,
+    /// Channel to receive stdin input line by line
+    stdin_channel: Option<Receiver<String>>,
 }
 
 impl Command {
@@ -32,6 +35,7 @@ impl Command {
             env: HashMap::new(),
             current_dir: None,
             env_clear: false,
+            stdin_channel: None,
         }
     }
 
@@ -89,6 +93,12 @@ impl Command {
         self
     }
 
+    /// Set a channel to receive stdin input line by line
+    pub fn stdin_channel(&mut self, receiver: Receiver<String>) -> &mut Self {
+        self.stdin_channel = Some(receiver);
+        self
+    }
+
     /// Get the program name
     pub fn get_program(&self) -> &OsStr {
         &self.program
@@ -107,6 +117,16 @@ impl Command {
     /// Get the current directory
     pub fn get_current_dir(&self) -> Option<&std::path::Path> {
         self.current_dir.as_deref()
+    }
+
+    /// Check if this command has a stdin channel configured
+    pub fn has_stdin_channel(&self) -> bool {
+        self.stdin_channel.is_some()
+    }
+
+    /// Take the stdin channel (consumes it since channels can't be cloned)
+    pub fn take_stdin_channel(&mut self) -> Option<Receiver<String>> {
+        self.stdin_channel.take()
     }
 
     /// Prepare this command for execution by converting to an `async_process::Command`

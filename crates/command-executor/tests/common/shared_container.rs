@@ -302,6 +302,8 @@ async fn wait_for_container_ready() -> Result<()> {
     Ok(())
 }
 
+// TODO: SSH functionality moved to layered system - this function needs updating
+/*
 /// Get SSH configuration for the shared container
 #[cfg(feature = "ssh")]
 pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
@@ -334,6 +336,7 @@ pub fn get_ssh_config() -> command_executor::backends::ssh::SshConfig {
         .with_extra_arg("-o")
         .with_extra_arg("UserKnownHostsFile=/dev/null")
 }
+*/
 
 /// Manually cleanup the test container
 pub async fn cleanup_test_container() {

@@ -1,7 +1,7 @@
 //! Test harness that uses command-executor to orchestrate its own tests
 
 use anyhow::{Context, Result, bail};
-use command_executor::{Command, Executor, ProcessHandle, Target, backends::local::LocalLauncher};
+use command_executor::{Command, Executor, ProcessHandle, Target, backends::LocalLauncher};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -214,6 +214,8 @@ impl TestHarness {
     }
 
     /// Get SSH configuration for connecting to the test container
+    // TODO: SSH functionality moved to layered system - this needs updating
+    /*
     #[cfg(feature = "ssh")]
     pub fn ssh_config(&self) -> command_executor::backends::ssh::SshConfig {
         command_executor::backends::ssh::SshConfig::new("localhost")
@@ -225,6 +227,7 @@ impl TestHarness {
             .with_extra_arg("-o")
             .with_extra_arg("UserKnownHostsFile=/dev/null")
     }
+    */
 
     /// Check if the container is running
     pub async fn is_running(&self) -> bool {

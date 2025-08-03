@@ -2,7 +2,7 @@
 
 ## Overview
 
-The service orchestration system integrates several crates to provide heterogeneous service management through a daemon architecture:
+The service orchestration system provides heterogeneous service management through a layered architecture that separates execution mechanisms from lifecycle management:
 
 ```
 ┌─────────────────────┐
@@ -17,23 +17,29 @@ The service orchestration system integrates several crates to provide heterogene
 └──────────┬──────────┘       └─────────────────────┘
            │
            ▼
-┌─────────────────────┐
-│service-orchestration│
-│  (ServiceManager)   │
-└──────────┬──────────┘
-           │
-    ┌──────┴──────┬──────────┬────────────┐
-    ▼             ▼          ▼            ▼
-┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐
-│Process │  │Docker  │  │  SSH   │  │Package │
-│Executor│  │Executor│  │Executor│  │Deployer│
-└────┬───┘  └────┬───┘  └────┬───┘  └────────┘
-     │           │           │
-     ▼           ▼           ▼
-┌─────────────────────────────┐
-│    command-executor         │
-│  (Layered Execution)        │
-└─────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│            service-orchestration                 │
+│  ┌─────────────────┐    ┌──────────────────┐   │
+│  │ ServiceManager  │───►│ ServiceExecutors │   │
+│  └─────────────────┘    └──────────────────┘   │
+│                                │                 │
+│  ProcessExecutor    DockerExecutor    (SSH*)    │
+│         │                  │                     │
+└─────────┼──────────────────┼────────────────────┘
+          │                  │
+          ▼                  ▼
+┌─────────────────────────────────────────────────┐
+│            command-executor                      │
+│  ┌──────────────┐    ┌─────────────────────┐   │
+│  │   Backends   │    │  Execution Layers   │   │
+│  ├──────────────┤    ├─────────────────────┤   │
+│  │ LocalLauncher│    │ LocalLayer          │   │
+│  │ LocalAttacher│    │ SshLayer            │   │
+│  └──────────────┘    │ DockerLayer         │   │
+│                      └─────────────────────┘   │
+└─────────────────────────────────────────────────┘
+
+* SshExecutor planned but not yet implemented
 ```
 
 ## Component Responsibilities
@@ -53,18 +59,28 @@ The service orchestration system integrates several crates to provide heterogene
 ### 3. service-orchestration (`crates/service-orchestration/`)
 - **ServiceManager**: Central orchestrator for service lifecycle
 - **Service Executors**: Different backends for service execution
-  - `ProcessExecutor`: Local process management
-  - `DockerExecutor`: Docker container management
-  - `SshExecutor`: Remote SSH execution
-  - `PackageDeployer`: Deploy packages to remote targets
-- **Health Monitoring**: Service health checks and status tracking
-- **Event Streaming**: Real-time service output and events
+  - `ProcessExecutor`: Local process management using command-executor
+  - `DockerExecutor`: Docker container management using docker CLI
+  - `SshExecutor`: Remote SSH execution (planned, not implemented)
+  - `SystemdExecutor`: Systemd service management (planned)
+  - `PackageDeployer`: Deploy packages to remote targets (planned)
+- **Health Monitoring**: Configurable health checks with retry logic
+- **Event Streaming**: Real-time service output via `stream_events` API
+- **State Management**: Persistent service state with RwLock synchronization
 
 ### 4. command-executor (`crates/command-executor/`)
-- **Layered Execution**: Composable command execution layers
-- **Backends**: LocalLauncher, with SSH/Docker via layers
-- **Process Management**: Lifecycle control, stdin/stdout/stderr handling
-- **Event Streaming**: Process events and output streaming
+- **Dual Backend System**:
+  - **Launchers**: Create new processes (`LocalLauncher`)
+  - **Attachers**: Connect to existing services (`LocalAttacher`)
+- **Layered Execution**: Composable command transformation
+  - `LocalLayer`: Direct execution with env vars
+  - `SshLayer`: SSH command wrapping with forwarding options
+  - `DockerLayer`: Docker exec wrapping with interactive mode
+- **Process Management**: 
+  - `ProcessHandle`: Full lifecycle control (start/stop/kill)
+  - `AttachedHandle`: Read-only status monitoring
+- **Stdin Support**: Channel-based stdin forwarding
+- **Event Streaming**: Typed process events with filtering
 
 ### 5. service-registry (`crates/service-registry/`)
 - **Service Discovery**: Track running services and their endpoints
@@ -119,28 +135,73 @@ The service orchestration system integrates several crates to provide heterogene
 5. **Executor Implementation**:
    ```rust
    // In service-orchestration/executors/process.rs
+   pub struct ProcessExecutor {
+       executor: Executor<LocalLauncher>,
+       health_checker: HealthChecker,
+       running_processes: Arc<Mutex<HashMap<String, ProcessInfo>>>,
+   }
+   
    impl ServiceExecutor for ProcessExecutor {
        async fn start(&self, config: ServiceConfig) -> Result<RunningService> {
+           // Extract process-specific config
+           let ServiceTarget::Process { binary, args, env, working_dir } = &config.target;
+           
            // Build command using command-executor
            let mut cmd = Command::new(binary);
-           cmd.args(args).envs(env);
+           cmd.args(args);
+           for (key, value) in env {
+               cmd.env(key, value);
+           }
            
-           // Launch via command-executor
+           // Launch using ManagedProcess target for lifecycle control
+           let target = Target::ManagedProcess(ManagedProcess::new());
            let (event_stream, handle) = self.executor.launch(&target, cmd).await?;
            
-           // Track process and return RunningService
-           Ok(RunningService { ... })
+           // Store handle for lifecycle management
+           let process_info = ProcessInfo {
+               handle: Box::new(handle),
+               event_stream: SharedEventStream::new(event_stream),
+           };
+           self.running_processes.lock().await.insert(service_id, process_info);
+           
+           // Return RunningService with network info
+           Ok(RunningService { 
+               id: service_id,
+               name: config.name,
+               pid: Some(pid),
+               network_info: Some(NetworkInfo { /* ... */ }),
+               start_time: Utc::now(),
+           })
        }
    }
    ```
 
 ### Key Design Patterns
 
-1. **Layered Architecture**: Each layer has clear responsibilities
-2. **Protocol-based Communication**: CLI and daemon communicate via well-defined protocol
-3. **Executor Pattern**: Different service types handled by specialized executors
-4. **Event Streaming**: Real-time service output via async streams
-5. **Runtime Agnostic**: Uses async-trait and runtime-agnostic libraries
+1. **Layered Architecture**: 
+   - Command execution separated from service lifecycle
+   - Layers transform commands without executing them
+   - Executors handle service-specific lifecycle concerns
+
+2. **Launcher/Attacher Separation**:
+   - Launchers create new processes with full control
+   - Attachers connect to existing services read-only
+   - Different handle types enforce access patterns
+
+3. **Interior Mutability**: 
+   - ServiceManager uses `Arc<RwLock<HashMap>>` for state
+   - Executors use `Arc<Mutex<HashMap>>` for process tracking
+   - Allows `&self` methods as required by traits
+
+4. **Event Streaming**: 
+   - Async streams for real-time output
+   - SharedEventStream for multiple consumers
+   - Typed events (stdout, stderr, exit, etc.)
+
+5. **Runtime Agnostic**: 
+   - Uses async-trait for all public APIs
+   - No tokio/async-std in library crates
+   - Binary uses smol runtime
 
 ### Service Lifecycle States
 
@@ -168,19 +229,81 @@ The service orchestration system integrates several crates to provide heterogene
 4. **Command Building** → command-executor Command type
 5. **Execution** → Process/Container/SSH execution
 
+## Current Implementation Details
+
+### ProcessExecutor Flow
+1. Receives `ServiceConfig` with `ServiceTarget::Process`
+2. Builds `Command` using command-executor
+3. Launches via `Executor<LocalLauncher>` with `ManagedProcess` target
+4. Stores process handle in `Arc<Mutex<HashMap>>`
+5. Returns `RunningService` with PID and network info
+
+### DockerExecutor Flow
+1. Receives `ServiceConfig` with `ServiceTarget::Docker`
+2. Uses Docker CLI directly (not command-executor layers)
+3. Manages container lifecycle with docker commands
+4. Streams logs via `docker logs --follow`
+5. Tracks container state and health
+
+### Health Monitoring
+- `HealthChecker` runs periodic health checks
+- Supports command-based and HTTP health checks
+- Configurable intervals, timeouts, and retries
+- Updates service status based on health
+
+### Event Streaming Architecture
+```rust
+ProcessExecutor ──► command-executor ──► ProcessEventStream
+                                              │
+                                              ▼
+                                        SharedEventStream
+                                              │
+                         ┌────────────────────┼────────────────────┐
+                         ▼                    ▼                    ▼
+                    Health Monitor      Service Manager      CLI Client
+```
+
 ## Benefits of This Architecture
 
-1. **Separation of Concerns**: Each crate has a focused responsibility
-2. **Daemon Stability**: Long-running services managed by persistent daemon
-3. **Flexible Execution**: Support for local, Docker, SSH, and package deployment
-4. **Real-time Monitoring**: Event streaming for service output
-5. **Extensibility**: Easy to add new executors or layers
-6. **Runtime Agnostic**: Works with any async runtime
+1. **Separation of Concerns**: 
+   - Execution mechanism (command-executor) separate from lifecycle (service-orchestration)
+   - Configuration (harness-config) separate from runtime management
+
+2. **Composability**:
+   - Layers can be stacked for complex execution scenarios
+   - Executors can be mixed (local + Docker + SSH)
+   - Services can depend on each other
+
+3. **Type Safety**:
+   - Strongly typed service configurations
+   - Compile-time verification of target types
+   - Type-safe handle operations
+
+4. **Flexibility**:
+   - Easy to add new executors
+   - Easy to add new layers
+   - Protocol allows extension without breaking changes
+
+5. **Observability**:
+   - Real-time event streaming
+   - Structured logging with tracing
+   - Persistent state for debugging
 
 ## Future Enhancements
 
-1. **Systemd Integration**: Add SystemdExecutor for production services
-2. **Multi-node Orchestration**: Coordinate services across multiple hosts
-3. **Service Mesh**: Advanced networking and service discovery
-4. **Metrics Collection**: Prometheus/OpenTelemetry integration
-5. **Web UI**: Browser-based management interface
+1. **Missing Executors**:
+   - `SshExecutor`: Direct SSH service management
+   - `SystemdExecutor`: Production service integration
+   - `KubernetesExecutor`: K8s pod management
+
+2. **Advanced Features**:
+   - Service mesh integration
+   - Distributed tracing
+   - Metrics collection
+   - Web UI dashboard
+
+3. **Improvements**:
+   - Better error recovery
+   - Service migration between hosts
+   - Rolling updates
+   - Canary deployments

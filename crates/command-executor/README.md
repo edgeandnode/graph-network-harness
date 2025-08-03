@@ -1,37 +1,63 @@
 # command-executor
 
-Runtime-agnostic command execution library providing a unified interface for running commands across different execution contexts (local, SSH, Docker, systemd).
+Runtime-agnostic command execution library providing layered execution and service attachment capabilities.
 
 ## Features
 
 - **Runtime Agnostic**: Works with any async runtime (Tokio, async-std, smol)
-- **Nested Launchers**: Compose launchers for complex scenarios (e.g., Docker on remote host via SSH)
-- **Multiple Targets**: Execute commands, manage processes, control systemd services, run Docker containers
-- **Type-Safe**: Zero-cost abstractions with compile-time guarantees
-- **Event Streaming**: Real-time stdout/stderr streaming with buffering
+- **Layered Execution**: Compose execution layers for complex scenarios (SSH + Docker)
+- **Dual Backend System**: Launchers for new processes, Attachers for existing services
+- **Stdin Support**: Channel-based stdin forwarding through all layers
+- **Type-Safe Handles**: Different handle types for managed vs attached services
+- **Event Streaming**: Real-time stdout/stderr streaming with typed events
 
 ## Overview
 
-The library is built around three core concepts:
+The library is built around these core concepts:
 
-1. **Launchers**: Define WHERE commands run (local, SSH, sudo)
-2. **Targets**: Define WHAT to run (command, process, container, service)
-3. **Executors**: Combine launchers and targets for execution
+1. **Launchers**: Create new processes with full lifecycle control
+2. **Attachers**: Connect to existing services with read-only access
+3. **Layers**: Transform commands for different execution contexts
+4. **Handles**: Type-safe process management interfaces
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│            Application                   │
+├─────────────────────────────────────────┤
+│         LayeredExecutor                  │
+│    ┌─────────────────────────┐         │
+│    │   Execution Layers      │         │
+│    ├─────────────────────────┤         │
+│    │ • SshLayer              │         │
+│    │ • DockerLayer           │         │
+│    │ • LocalLayer            │         │
+│    └───────────┬─────────────┘         │
+├────────────────┼───────────────────────┤
+│                ▼                        │
+│    ┌───────────────────────┐           │
+│    │      Backends         │           │
+│    ├───────────────────────┤           │
+│    │ • LocalLauncher       │           │
+│    │ • LocalAttacher       │           │
+│    └───────────────────────┘           │
+└─────────────────────────────────────────┘
+```
 
 ## Usage
 
 ### Basic Command Execution
 
 ```rust
-use command_executor::{Executor, Target, Command};
+use command_executor::{Command, backends::LocalLauncher, launcher::Launcher, target::Target};
 
-#[tokio::main]
+#[smol_potat::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create an executor for local execution
-    let executor = Executor::local("my-service");
+    let launcher = LocalLauncher;
     
-    // Run a simple command
-    let result = executor.execute(
+    // Simple command execution
+    let result = launcher.execute(
         &Target::Command,
         Command::new("echo").arg("Hello, World!")
     ).await?;
@@ -41,147 +67,177 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### SSH Remote Execution
+### Layered Execution (SSH + Docker)
 
 ```rust
 use command_executor::{
-    Executor, Target, Command,
-    backends::{local::LocalLauncher, ssh::{SshLauncher, SshConfig}},
+    layered::{LayeredExecutor, SshLayer, DockerLayer},
+    backends::LocalLauncher,
+    Command, Target,
 };
 
-#[tokio::main]
+#[smol_potat::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create SSH launcher wrapping local launcher
-    let ssh_config = SshConfig::new("example.com")
-        .with_user("deploy")
-        .with_identity_file("/home/user/.ssh/id_rsa");
+    // Create executor with stacked layers
+    let executor = LayeredExecutor::new(LocalLauncher)
+        .with_layer(SshLayer::new("user@remote-host"))
+        .with_layer(DockerLayer::new("my-container"));
     
-    let ssh_launcher = SshLauncher::new(LocalLauncher, ssh_config);
-    let executor = Executor::new("remote-service", ssh_launcher);
-    
-    // Execute command on remote host
-    let result = executor.execute(
-        &Target::Command,
-        Command::new("hostname")
+    // This will: SSH to remote-host, then docker exec in my-container
+    let (mut events, handle) = executor.execute(
+        Command::new("ls").arg("-la"),
+        &Target::Command
     ).await?;
     
-    println!("Remote hostname: {}", result.output);
-    Ok(())
-}
-```
-
-### Docker Container Execution
-
-```rust
-use command_executor::{Executor, Target, Command, target::DockerContainer};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let executor = Executor::local("docker-test");
-    
-    // Define a Docker container target
-    let container = DockerContainer::new("alpine:latest")
-        .with_remove_on_exit(true);
-    
-    // Run command in container
-    let result = executor.execute(
-        &Target::DockerContainer(container),
-        Command::new("cat").arg("/etc/os-release")
-    ).await?;
-    
-    println!("Container OS: {}", result.output);
-    Ok(())
-}
-```
-
-### Nested Launchers (Docker on Remote Host)
-
-```rust
-use command_executor::{
-    Executor, Target, Command,
-    backends::{local::LocalLauncher, ssh::{SshLauncher, SshConfig}},
-    target::DockerContainer,
-};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // SSH to remote host
-    let ssh_config = SshConfig::new("docker-host.example.com");
-    let remote_launcher = SshLauncher::new(LocalLauncher, ssh_config);
-    
-    // Docker container on the remote host
-    let container = DockerContainer::new("nginx:latest")
-        .with_name("remote-nginx");
-    
-    let executor = Executor::new("remote-docker", remote_launcher);
-    let result = executor.execute(
-        &Target::DockerContainer(container),
-        Command::new("nginx").arg("-v")
-    ).await?;
-    
-    Ok(())
-}
-```
-
-### Process Management with Event Streaming
-
-```rust
-use command_executor::{Executor, Target, Command, ProcessHandle};
-use futures::StreamExt;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let executor = Executor::local("streaming-demo");
-    
-    // Launch a long-running process
-    let (mut events, mut handle) = executor.launch(
-        &Target::Command,
-        Command::new("ping").arg("-c").arg("5").arg("localhost")
-    ).await?;
-    
-    // Stream output in real-time
+    // Stream output
+    use futures::StreamExt;
     while let Some(event) = events.next().await {
-        if let Some(data) = event.data {
-            print!("{}", data);
+        if let Some(data) = &event.data {
+            println!("{}", data);
         }
     }
     
-    // Wait for completion
-    let exit_status = handle.wait().await?;
-    println!("Process exited with: {:?}", exit_status);
+    Ok(())
+}
+```
+
+### Process Management with Stdin
+
+```rust
+use command_executor::{Command, backends::LocalLauncher, launcher::Launcher, target::{Target, ManagedProcess}};
+use futures::StreamExt;
+
+#[smol_potat::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let launcher = LocalLauncher;
+    
+    // Create command with stdin channel
+    let (tx, rx) = async_channel::bounded(10);
+    let mut command = Command::new("cat");
+    command.stdin_channel(rx);
+    
+    // Launch with process management
+    let (mut events, mut handle) = launcher.launch(
+        &Target::ManagedProcess(ManagedProcess::new()),
+        command
+    ).await?;
+    
+    // Start stdin forwarding
+    if let Some(stdin_handle) = handle.take_stdin_for_forwarding() {
+        smol::spawn(async move {
+            let _ = stdin_handle.forward_channel().await;
+        }).detach();
+    }
+    
+    // Send data through stdin
+    tx.send("Hello from stdin!".to_string()).await?;
+    drop(tx); // Close to signal EOF
+    
+    // Read output
+    while let Some(event) = events.next().await {
+        if let Some(data) = &event.data {
+            println!("Output: {}", data);
+        }
+    }
     
     Ok(())
 }
+```
+
+### Attaching to Existing Services
+
+```rust
+use command_executor::{backends::LocalAttacher, attacher::Attacher, target::AttachedService};
+
+#[smol_potat::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let attacher = LocalAttacher;
+    
+    // Attach to an existing service
+    let target = AttachedService {
+        name: "my-service".to_string(),
+        pid: Some(12345),
+    };
+    
+    let (mut events, handle) = attacher.attach(&target).await?;
+    
+    // Can only check status, not control lifecycle
+    let status = handle.status().await?;
+    println!("Service status: {:?}", status);
+    
+    Ok(())
+}
+```
+
+## Execution Layers
+
+Layers transform commands without executing them:
+
+```rust
+// SSH Layer - wraps command for SSH execution
+let ssh_layer = SshLayer::new("user@host")
+    .with_port(2222)
+    .with_identity_file("/path/to/key");
+
+// Docker Layer - wraps for docker exec
+let docker_layer = DockerLayer::new("container")
+    .with_interactive(true)
+    .with_user("app");
+
+// Local Layer - adds environment variables
+let local_layer = LocalLayer::new()
+    .with_env("DEBUG", "1");
 ```
 
 ## Target Types
 
 - **Command**: One-off command execution
 - **ManagedProcess**: Process with lifecycle management
-- **SystemdService**: Control systemd services
-- **SystemdPortable**: Manage systemd-portable services
-- **DockerContainer**: Run Docker containers
-- **ComposeService**: Manage Docker Compose services
-- **ManagedService**: Generic service with custom commands
+- **AttachedService**: Existing service (read-only access)
+- **ManagedService**: Service with start/stop/restart commands
 
-## Features
+## Handle Types
 
-- `ssh`: Enable SSH launcher support
-- `docker`: Enable Docker target types
+- **ProcessHandle**: Full lifecycle control (start, stop, kill, restart)
+- **AttachedHandle**: Read-only status monitoring
 
-## Architecture
+## Error Handling
 
-The library uses a composable launcher architecture where launchers can wrap other launchers, enabling complex execution scenarios while maintaining type safety and zero runtime overhead.
+The library uses `thiserror` with composable error types:
 
+```rust
+use command_executor::error::Error;
+
+match result {
+    Err(Error::SpawnFailed(msg)) => println!("Failed to spawn: {}", msg),
+    Err(Error::Timeout(duration)) => println!("Timed out after {:?}", duration),
+    Err(Error::Io(e)) => println!("IO error: {}", e),
+    _ => {}
+}
 ```
-Executor
-  └── Launcher (SSH)
-       └── Launcher (Local)
-            └── Target (DockerContainer)
-                 └── Command
-```
 
-This design allows for arbitrary nesting of execution contexts while keeping the API simple and consistent.
+## Runtime Agnostic Design
+
+The library uses only runtime-agnostic dependencies:
+- `async-process` for process management
+- `async-channel` for channels
+- `async-trait` for trait definitions
+- No direct tokio/async-std usage
+
+## Testing
+
+Run tests with various feature flags:
+
+```bash
+# Basic tests
+cargo test
+
+# With SSH tests (requires Docker)
+cargo test --features ssh-tests
+
+# With Docker tests
+cargo test --features docker-tests
+```
 
 ## License
 

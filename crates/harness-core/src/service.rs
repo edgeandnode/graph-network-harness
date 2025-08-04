@@ -21,16 +21,30 @@ use crate::{Error, Result};
 #[async_trait]
 pub trait Service: Send + Sync + 'static {
     /// The input type for actions this service can perform
-    type Action: DeserializeOwned + Send;
+    type Action: DeserializeOwned + Send + JsonSchema;
 
     /// The event type emitted during action execution
     type Event: Serialize + Send;
+
+    /// The service type identifier that links this implementation to YAML service definitions.
+    /// YAML services with matching `service_type` will use this implementation for actions.
+    fn service_type() -> &'static str
+    where
+        Self: Sized;
 
     /// Get the service name
     fn name(&self) -> &str;
 
     /// Get the service description
     fn description(&self) -> &str;
+    
+    /// Get the JSON schema for this service's actions
+    fn action_schema() -> serde_json::Value
+    where
+        Self: Sized,
+    {
+        serde_json::to_value(schemars::schema_for!(Self::Action)).unwrap_or(Value::Null)
+    }
 
     /// Execute an action, returning a stream of events
     async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>>;

@@ -12,6 +12,7 @@ use std::time::Duration;
 use tracing::info;
 
 /// Graph Node service that can deploy and manage subgraphs
+#[derive(Default)]
 pub struct GraphNodeService {
     endpoint: String,
 }
@@ -71,6 +72,10 @@ pub enum GraphNodeEvent {
 impl Service for GraphNodeService {
     type Action = GraphNodeAction;
     type Event = GraphNodeEvent;
+
+    fn service_type() -> &'static str {
+        "graph-node"
+    }
 
     fn name(&self) -> &str {
         "graph-node"
@@ -177,6 +182,15 @@ impl AnvilService {
     }
 }
 
+impl Default for AnvilService {
+    fn default() -> Self {
+        Self {
+            chain_id: 31337,
+            port: 8545,
+        }
+    }
+}
+
 /// Actions for Anvil blockchain
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
@@ -222,6 +236,10 @@ pub enum AnvilEvent {
 impl Service for AnvilService {
     type Action = AnvilAction;
     type Event = AnvilEvent;
+
+    fn service_type() -> &'static str {
+        "anvil"
+    }
 
     fn name(&self) -> &str {
         "anvil"
@@ -295,6 +313,15 @@ impl PostgresService {
     }
 }
 
+impl Default for PostgresService {
+    fn default() -> Self {
+        Self {
+            db_name: "graph-node".to_string(),
+            port: 5432,
+        }
+    }
+}
+
 /// Actions for PostgreSQL
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
@@ -325,6 +352,10 @@ pub enum PostgresEvent {
 impl Service for PostgresService {
     type Action = PostgresAction;
     type Event = PostgresEvent;
+
+    fn service_type() -> &'static str {
+        "postgres"
+    }
 
     fn name(&self) -> &str {
         "postgres"
@@ -387,6 +418,15 @@ impl IpfsService {
     }
 }
 
+impl Default for IpfsService {
+    fn default() -> Self {
+        Self {
+            api_port: 5001,
+            gateway_port: 8080,
+        }
+    }
+}
+
 /// Actions for IPFS
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
@@ -421,6 +461,10 @@ pub enum IpfsEvent {
 impl Service for IpfsService {
     type Action = IpfsAction;
     type Event = IpfsEvent;
+
+    fn service_type() -> &'static str {
+        "ipfs"
+    }
 
     fn name(&self) -> &str {
         "ipfs"

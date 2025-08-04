@@ -29,6 +29,14 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("WebSocket endpoint to bind to")
                 .default_value("127.0.0.1:9443"),
         )
+        .arg(
+            Arg::new("config")
+                .long("config")
+                .short('c')
+                .value_name("PATH")
+                .help("Path to YAML configuration file")
+                .required(true),
+        )
         .get_matches();
 
     let endpoint: SocketAddr = matches
@@ -40,7 +48,9 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting Graph Test Daemon on {}", endpoint);
 
     // Create and start the daemon
-    let daemon = GraphTestDaemon::new(endpoint).await?;
+    let config_path = matches.get_one::<String>("config").unwrap();
+    info!("Loading daemon configuration from: {}", config_path);
+    let daemon = GraphTestDaemon::from_config(endpoint, config_path).await?;
 
     info!("Graph Test Daemon created successfully");
 

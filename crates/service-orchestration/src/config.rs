@@ -14,6 +14,7 @@ pub struct ServiceConfig {
     /// Where and how to run the service
     pub target: ServiceTarget,
     /// Services this service depends on
+    #[serde(default)]
     pub dependencies: Vec<String>,
     /// Optional health check configuration
     pub health_check: Option<HealthCheck>,
@@ -43,6 +44,7 @@ pub enum ServiceTarget {
         /// Port mappings (host ports)
         ports: Vec<u16>,
         /// Volume mounts
+        #[serde(default)]
         volumes: Vec<String>,
     },
     /// Remote LAN execution via SSH

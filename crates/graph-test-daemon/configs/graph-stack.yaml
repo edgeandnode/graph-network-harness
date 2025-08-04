@@ -1,0 +1,109 @@
+# Graph Protocol Test Stack Configuration
+name: graph-test-stack
+description: Complete Graph Protocol test environment
+
+services:
+  # PostgreSQL database for Graph Node
+  postgres:
+    service_type: postgres  # Links to PostgresService for actions
+    name: postgres
+    target:
+      type: Docker
+      image: postgres:14
+      env:
+        POSTGRES_USER: graph-node
+        POSTGRES_PASSWORD: graph-password
+        POSTGRES_DB: graph-node
+      ports: [5432]
+    health_check:
+      command: pg_isready
+      args: ["-U", "graph-node"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  # IPFS for subgraph storage
+  ipfs:
+    service_type: ipfs  # Links to IpfsService for actions
+    name: ipfs
+    target:
+      type: Docker
+      image: ipfs/go-ipfs:latest
+      env: {}
+      ports: [5001, 8080]  # API and Gateway ports
+    health_check:
+      command: curl
+      args: ["http://localhost:5001/api/v0/id"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  # Anvil local blockchain
+  anvil:
+    service_type: anvil  # Links to AnvilService for actions
+    name: anvil
+    target:
+      type: Process
+      binary: anvil
+      args:
+        - --host
+        - "0.0.0.0"
+        - --port
+        - "8545"
+        - --chain-id
+        - "31337"
+        - --block-time
+        - "1"
+        - --accounts
+        - "10"
+        - --balance
+        - "10000"
+      env:
+        RUST_LOG: info
+        CHAIN_ID: "31337"
+      working_dir: null
+    health_check:
+      command: curl
+      args:
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+        - "http://localhost:8545"
+      interval: 2
+      timeout: 1
+      retries: 10
+
+  # Graph Node indexer
+  graph-node:
+    service_type: graph-node  # Links to GraphNodeService for actions
+    name: graph-node
+    target:
+      type: Docker
+      image: graphprotocol/graph-node:latest
+      env:
+        postgres_host: postgres
+        postgres_user: graph-node
+        postgres_pass: graph-password
+        postgres_db: graph-node
+        ipfs: ipfs:5001
+        ethereum: mainnet:http://anvil:8545
+        GRAPH_LOG: info
+        GRAPH_ENDPOINT: localhost
+      ports: [8000, 8001, 8020, 8030, 8040]
+    dependencies: ["postgres", "ipfs", "anvil"]
+    health_check:
+      command: curl
+      args:
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"query":"{ indexingStatuses { subgraph health } }"}'
+        - "http://localhost:8030/graphql"
+      interval: 10
+      timeout: 5
+      retries: 10

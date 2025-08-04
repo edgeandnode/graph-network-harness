@@ -43,11 +43,16 @@ schemars = { workspace = true }
 service-orchestration = { path = "../service-orchestration", features = ["test-utils"] }
 service-registry = { path = "../service-registry" }
 harness-config = { path = "../harness-config" }
+command-executor = { path = "../command-executor" }
+
+# Runtime compatibility
+async-runtime-compat = { path = "../async-runtime-compat" }
 
 [dev-dependencies]
 smol = { workspace = true }
 smol-potat = { workspace = true }
 tempfile = { workspace = true }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 [features]
 default = []

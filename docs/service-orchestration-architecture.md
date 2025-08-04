@@ -96,6 +96,14 @@ The service orchestration system provides heterogeneous service management throu
 - **Network Topology**: Manage service network relationships
 - **Persistence**: Store service state across daemon restarts
 
+### 6. harness-core (`crates/harness-core/`)
+- **BaseDaemon**: Foundation for building specialized daemons
+- **ServiceStack**: Registry for actionable services with JSON-RPC style actions
+- **TaskStack**: Registry for one-time deployment tasks
+- **Service Traits**: ServiceSetup, StatefulService for lifecycle management
+- **DeploymentTask**: One-time operations like contract deployment
+- **Runtime Validation**: Validates YAML configurations against registered implementations
+
 ## Integration Points
 
 ### Service Start Flow
@@ -215,20 +223,35 @@ The service orchestration system provides heterogeneous service management throu
 ### Service Lifecycle States
 
 ```
-┌─────────┐     start()      ┌──────────┐
-│ Stopped │─────────────────►│ Starting │
-└─────────┘                  └────┬─────┘
-     ▲                            │
-     │                            ▼
-     │ stop()                ┌─────────┐
-     └───────────────────────│ Running │
-                             └────┬────┘
-                                  │ health check
-                                  ▼
-                             ┌───────────┐
-                             │ Unhealthy │
-                             └───────────┘
+┌────────────┐     start()      ┌──────────┐
+│ NotStarted │─────────────────►│ Starting │
+└────────────┘                  └────┬─────┘
+      ▲                              │
+      │                              ▼
+      │ stop()                  ┌─────────┐
+      └─────────────────────────│ Running │◄──────┐
+                                └────┬────┘       │
+                                     │            │ validate_setup()
+                             health  │            │
+                             check   ▼            │
+                             ┌──────────────┐     │
+                             │ SetupRequired│─────┘
+                             └──────┬───────┘ perform_setup()
+                                    │
+                                    ▼
+                              ┌────────────┐
+                              │SettingUp   │
+                              └────────────┘
 ```
+
+### Service Setup Flow
+
+Services implementing `ServiceSetup` trait can perform one-time initialization:
+
+1. **Check Setup Status**: `is_setup_complete()` determines if setup is needed
+2. **Perform Setup**: `perform_setup()` executes idempotent setup operations  
+3. **Validate Setup**: `validate_setup()` ensures setup completed correctly
+4. **State Transitions**: SetupRequired → SettingUp → SetupComplete → Running
 
 ## Configuration Flow
 
@@ -253,17 +276,99 @@ services:
   postgres:
     service_type: postgres  # → PostgresService with database actions
     target:
-      type: Docker
+      type: docker      # Managed Docker container
       image: postgres:14
       env: { POSTGRES_DB: "graph-node" }
       ports: [5432]
   anvil:
     service_type: anvil     # → AnvilService with blockchain actions  
     target:
-      type: Process
+      type: process     # Local process
       binary: anvil
       args: ["--port", "8545"]
+  graph-node:
+    service_type: graph-node
+    target:
+      type: docker-attach  # Attach to existing container
+      container: graph-node-container
+      env: {}
+    dependencies:
+      - service: postgres
+      - service: ipfs
+      - task: deploy-contracts  # Depends on deployment task
+
+tasks:
+  deploy-contracts:
+    task_type: graph-contracts  # → GraphContractsTask
+    action:
+      type: DeployAll
+      ethereum_url: "${anvil.url}"
+      working_dir: "./contracts"
+    dependencies:
+      - service: anvil  # Needs blockchain running
+
+dependencies:
+  # Service dependencies use object syntax
+  - service: service-name
+  # Task dependencies use object syntax  
+  - task: task-name
 ```
+
+### Deployment Tasks
+
+Tasks are one-time operations that run to completion:
+
+```rust
+#[async_trait]
+pub trait DeploymentTask {
+    type Action: DeserializeOwned + JsonSchema;
+    type Event: Serialize;
+    
+    fn task_type() -> &'static str;
+    async fn is_completed(&self) -> Result<bool>;
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>>;
+    
+    // Optional: process command events into domain events
+    fn process_event(&self, event: &ProcessEvent) -> Option<Self::Event>;
+}
+```
+
+### Runtime Validation
+
+The BaseDaemon performs runtime validation when loading YAML configurations:
+
+1. **Service Type Validation**: All `service_type` values must have registered implementations
+2. **Task Type Validation**: All `task_type` values must have registered implementations  
+3. **Dependency Validation**: All dependencies must reference existing services or tasks
+
+```rust
+// In daemon builder
+let mut builder = BaseDaemon::builder();
+
+// Register services
+builder.service_stack_mut()
+    .register("postgres-1", PostgresService::new())?;
+
+// Register tasks  
+builder.task_stack_mut()
+    .register("contracts", GraphContractsTask::new())?;
+
+// Build with validation
+let daemon = builder
+    .with_config(yaml_config)  // Validates against registered types
+    .build()
+    .await?;
+```
+
+### Service Target Variants
+
+Services can be managed (we control lifecycle) or attached (connect to existing):
+
+- **process**: Launch and manage local process
+- **docker**: Create and manage Docker container
+- **docker-attach**: Connect to existing Docker container
+- **process-attach**: Connect to existing local process  
+- **remote**: Execute on remote host via SSH
 
 ## Current Implementation Details
 

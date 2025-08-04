@@ -19,15 +19,22 @@ These documents were updated to reflect the current architecture:
    - Accurate import paths (except one minor note about old imports)
    - Correct architectural patterns
 
-4. **docs/service-orchestration-architecture.md** ✅
+4. **docs/service-orchestration-architecture.md** ✅ **[UPDATED TODAY]**
    - Updated to show proper relationship with command-executor
-   - Correct executor implementations
-   - Accurate design patterns and interior mutability
+   - Added ServiceSetup and DeploymentTask documentation
+   - Added runtime validation and service target variants
+   - Updated with managed vs attached service modes
 
 5. **crates/command-executor/README.md** ✅
    - Completely rewritten to reflect layered architecture
    - Correct examples using LayeredExecutor
    - Proper launcher/attacher separation
+
+6. **docs/service-setup-and-tasks.md** ✅ **[NEW TODAY]**
+   - Comprehensive guide to ServiceSetup trait
+   - DeploymentTask documentation with examples
+   - YAML configuration for tasks and dependencies
+   - Implementation guide and best practices
 
 ## Documents That Are Still Current
 
@@ -56,6 +63,7 @@ These documents remain accurate:
 
 1. **crates/harness-core/README.md** ❌
    - No README exists for this important crate
+   - Should document BaseDaemon, ServiceStack, TaskStack
 
 2. **crates/harness/README.md** ❌
    - Missing user-facing documentation for the CLI
@@ -80,11 +88,15 @@ These documents remain accurate:
 
 ## Summary
 
-The documentation has been successfully updated to reflect the current architecture. The main updates were:
+The documentation has been successfully updated to reflect the current architecture including the new service setup and deployment task system. The main updates were:
 - Removing references to nested/generic launchers
 - Updating to show layered execution model
 - Correcting import paths (backends::local:: → backends::)
 - Showing launcher/attacher separation
 - Updating executor implementation details
+- **NEW**: Adding ServiceSetup trait documentation
+- **NEW**: Adding DeploymentTask system documentation
+- **NEW**: Documenting runtime validation
+- **NEW**: Explaining managed vs attached service modes
 
-All critical documentation now accurately represents the current codebase structure.
+All critical documentation now accurately represents the current codebase structure including the latest service lifecycle management features.

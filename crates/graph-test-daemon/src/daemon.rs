@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use harness_core::prelude::*;
 use harness_core::{Registry, ServiceManager};
 use serde::{Deserialize, Serialize};
-use service_orchestration::{ServiceConfig as OrchestrationServiceConfig, ServiceTarget, HealthCheck};
+use service_orchestration::{ServiceInstanceConfig, StackConfig, ServiceTarget, HealthCheck};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -16,29 +16,8 @@ use tracing::info;
 use crate::service_registry::ServiceRegistry;
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 
-/// Configuration for a service instance in the Graph Test Daemon
-/// 
-/// This extends the generic service-orchestration config with a service_type
-/// field that links the runtime configuration to action implementations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceInstanceConfig {
-    /// The service type that links to action implementations (e.g., "postgres", "anvil")
-    pub service_type: String,
-    /// Generic orchestration configuration from service-orchestration crate
-    #[serde(flatten)]
-    pub orchestration: OrchestrationServiceConfig,
-}
-
-/// Graph Protocol stack configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GraphStackConfig {
-    /// Stack name
-    pub name: String,
-    /// Stack description
-    pub description: Option<String>,
-    /// Service instances in this stack
-    pub services: HashMap<String, ServiceInstanceConfig>,
-}
+/// Type alias for Graph Protocol stack configuration
+pub type GraphStackConfig = StackConfig;
 
 /// Graph Protocol specialized testing daemon
 pub struct GraphTestDaemon {
@@ -62,8 +41,14 @@ impl GraphTestDaemon {
 
     /// Create a new Graph Test Daemon from a stack configuration
     pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self> {
+        // Convert config to Value for validation
+        let config_value = serde_json::to_value(&config)
+            .map_err(|e| Error::daemon(format!("Failed to convert config: {}", e)))?;
+
         // Build the base daemon with Graph-specific services
-        let mut builder = BaseDaemon::builder().with_endpoint(endpoint);
+        let mut builder = BaseDaemon::builder()
+            .with_endpoint(endpoint)
+            .with_config(config_value);
 
         // Create service registry for dynamic service creation
         let service_registry = ServiceRegistry::new();
@@ -157,6 +142,30 @@ impl GraphTestDaemon {
                     }
                 }
             }
+        }
+
+        // Register tasks
+        {
+            let tasks = builder.task_stack_mut();
+            
+            // Register deployment tasks
+            tasks.register(
+                "deploy-graph-contracts".to_string(),
+                crate::tasks::GraphContractsTask::new(
+                    "http://localhost:8545".to_string(),
+                    "./contracts/graph-contracts".to_string(),
+                ),
+            )?;
+            
+            tasks.register(
+                "deploy-tap-contracts".to_string(),
+                crate::tasks::TapContractsTask::new(
+                    "http://localhost:8545".to_string(),
+                    "./contracts/tap-contracts".to_string(),
+                ),
+            )?;
+            
+            info!("Registered {} deployment tasks", tasks.list().len());
         }
 
         // Register Graph-specific actions on the base daemon

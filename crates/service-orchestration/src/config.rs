@@ -6,6 +6,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Dependency specification for services and tasks
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Dependency {
+    /// Dependency on a service
+    Service { service: String },
+    /// Dependency on a task
+    Task { task: String },
+}
+
 /// Configuration for a service to be managed by the orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ServiceConfig {
@@ -13,18 +23,19 @@ pub struct ServiceConfig {
     pub name: String,
     /// Where and how to run the service
     pub target: ServiceTarget,
-    /// Services this service depends on
+    /// Services and tasks this service depends on
     #[serde(default)]
-    pub dependencies: Vec<String>,
+    pub dependencies: Vec<Dependency>,
     /// Optional health check configuration
     pub health_check: Option<HealthCheck>,
 }
 
 /// Service execution target specification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ServiceTarget {
-    /// Local process execution
+    /// Local process execution (managed)
+    #[serde(rename = "process")]
     Process {
         /// Binary to execute
         binary: String,
@@ -35,7 +46,8 @@ pub enum ServiceTarget {
         /// Working directory (optional)
         working_dir: Option<String>,
     },
-    /// Docker container execution
+    /// Docker container execution (managed)
+    #[serde(rename = "docker")]
     Docker {
         /// Container image
         image: String,
@@ -47,7 +59,39 @@ pub enum ServiceTarget {
         #[serde(default)]
         volumes: Vec<String>,
     },
-    /// Remote LAN execution via SSH
+    /// Attach to existing Docker container
+    #[serde(rename = "docker-attach")]
+    DockerAttach {
+        /// Container name or ID to attach to
+        container: String,
+        /// Environment variables
+        env: HashMap<String, String>,
+    },
+    /// Attach to existing local process
+    #[serde(rename = "process-attach")]
+    ProcessAttach {
+        /// Process ID to attach to
+        pid: Option<u32>,
+        /// Process name to search for
+        process_name: Option<String>,
+        /// Environment variables
+        env: HashMap<String, String>,
+    },
+    /// Remote execution via SSH (replaces RemoteLan/Wireguard)
+    #[serde(rename = "remote")]
+    Remote {
+        /// Remote host address
+        host: String,
+        /// SSH username
+        user: String,
+        /// Execution mode
+        #[serde(flatten)]
+        mode: RemoteMode,
+        /// Environment variables
+        env: HashMap<String, String>,
+    },
+    /// Remote LAN execution via SSH (deprecated, use Remote)
+    #[deprecated(note = "Use Remote variant instead")]
     RemoteLan {
         /// Remote host address
         host: String,
@@ -58,7 +102,8 @@ pub enum ServiceTarget {
         /// Command line arguments
         args: Vec<String>,
     },
-    /// WireGuard network execution with package deployment
+    /// WireGuard network execution with package deployment (deprecated, use Remote)
+    #[deprecated(note = "Use Remote variant instead")]
     Wireguard {
         /// WireGuard peer address
         host: String,
@@ -69,13 +114,36 @@ pub enum ServiceTarget {
     },
 }
 
+/// Remote execution mode
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum RemoteMode {
+    /// Execute a binary on the remote host
+    Process {
+        /// Binary to execute
+        binary: String,
+        /// Command line arguments
+        args: Vec<String>,
+    },
+    /// Deploy a package to the remote host
+    Package {
+        /// Path to package tarball
+        package: String,
+    },
+}
+
 impl ServiceTarget {
     /// Get environment variables from the target
     pub fn env(&self) -> HashMap<String, String> {
         match self {
             ServiceTarget::Process { env, .. } => env.clone(),
             ServiceTarget::Docker { env, .. } => env.clone(),
+            ServiceTarget::DockerAttach { env, .. } => env.clone(),
+            ServiceTarget::ProcessAttach { env, .. } => env.clone(),
+            ServiceTarget::Remote { env, .. } => env.clone(),
+            #[allow(deprecated)]
             ServiceTarget::RemoteLan { .. } => HashMap::new(),
+            #[allow(deprecated)]
             ServiceTarget::Wireguard { .. } => HashMap::new(),
         }
     }
@@ -105,6 +173,26 @@ impl ServiceTarget {
                 ports: ports.clone(),
                 volumes: volumes.clone(),
             },
+            ServiceTarget::DockerAttach { container, .. } => ServiceTarget::DockerAttach {
+                container: container.clone(),
+                env: new_env,
+            },
+            ServiceTarget::ProcessAttach {
+                pid, process_name, ..
+            } => ServiceTarget::ProcessAttach {
+                pid: *pid,
+                process_name: process_name.clone(),
+                env: new_env,
+            },
+            ServiceTarget::Remote {
+                host, user, mode, ..
+            } => ServiceTarget::Remote {
+                host: host.clone(),
+                user: user.clone(),
+                mode: mode.clone(),
+                env: new_env,
+            },
+            #[allow(deprecated)]
             ServiceTarget::RemoteLan {
                 host,
                 user,
@@ -116,6 +204,7 @@ impl ServiceTarget {
                 binary: binary.clone(),
                 args: args.clone(),
             },
+            #[allow(deprecated)]
             ServiceTarget::Wireguard {
                 host,
                 user,
@@ -198,7 +287,11 @@ mod tests {
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                 working_dir: Some("/tmp".to_string()),
             },
-            dependencies: vec!["database".to_string()],
+            dependencies: vec![
+                Dependency::Service {
+                    service: "database".to_string(),
+                },
+            ],
             health_check: Some(HealthCheck {
                 command: "curl".to_string(),
                 args: vec!["http://localhost:8080/health".to_string()],
@@ -243,5 +336,97 @@ mod tests {
         let deserialized: ServiceTarget =
             serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(target, deserialized);
+    }
+
+    #[test]
+    fn test_dependency_parsing() {
+        // Test service dependency
+        let service_dep = Dependency::Service {
+            service: "postgres".to_string(),
+        };
+        let yaml = serde_yaml::to_string(&service_dep).expect("Failed to serialize");
+        assert_eq!(yaml.trim(), "service: postgres");
+        
+        let deserialized: Dependency = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+        assert_eq!(service_dep, deserialized);
+
+        // Test task dependency
+        let task_dep = Dependency::Task {
+            task: "deploy-contracts".to_string(),
+        };
+        let yaml = serde_yaml::to_string(&task_dep).expect("Failed to serialize");
+        assert_eq!(yaml.trim(), "task: deploy-contracts");
+        
+        let deserialized: Dependency = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+        assert_eq!(task_dep, deserialized);
+    }
+
+    #[test]
+    fn test_dependencies_in_yaml() {
+        let yaml = r#"
+dependencies:
+  - service: postgres
+  - service: redis
+  - task: deploy-contracts
+  - task: migrate-database
+"#;
+        
+        #[derive(Deserialize)]
+        struct TestConfig {
+            dependencies: Vec<Dependency>,
+        }
+        
+        let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.dependencies.len(), 4);
+        
+        match &config.dependencies[0] {
+            Dependency::Service { service } => assert_eq!(service, "postgres"),
+            _ => panic!("Expected service dependency"),
+        }
+        
+        match &config.dependencies[2] {
+            Dependency::Task { task } => assert_eq!(task, "deploy-contracts"),
+            _ => panic!("Expected task dependency"),
+        }
+    }
+
+    #[test]
+    fn test_new_service_target_variants() {
+        // Test DockerAttach
+        let docker_attach = ServiceTarget::DockerAttach {
+            container: "existing-container".to_string(),
+            env: HashMap::from([("KEY".to_string(), "value".to_string())]),
+        };
+        
+        let yaml = serde_yaml::to_string(&docker_attach).expect("Failed to serialize");
+        assert!(yaml.contains("type: docker-attach"));
+        assert!(yaml.contains("container: existing-container"));
+        
+        // Test ProcessAttach
+        let process_attach = ServiceTarget::ProcessAttach {
+            pid: Some(1234),
+            process_name: None,
+            env: HashMap::new(),
+        };
+        
+        let yaml = serde_yaml::to_string(&process_attach).expect("Failed to serialize");
+        assert!(yaml.contains("type: process-attach"));
+        assert!(yaml.contains("pid: 1234"));
+        
+        // Test Remote with process mode
+        let remote = ServiceTarget::Remote {
+            host: "example.com".to_string(),
+            user: "ubuntu".to_string(),
+            mode: RemoteMode::Process {
+                binary: "myapp".to_string(),
+                args: vec!["--port".to_string(), "8080".to_string()],
+            },
+            env: HashMap::new(),
+        };
+        
+        let yaml = serde_yaml::to_string(&remote).expect("Failed to serialize");
+        assert!(yaml.contains("type: remote"));
+        assert!(yaml.contains("host: example.com"));
+        assert!(yaml.contains("binary: myapp"));
     }
 }

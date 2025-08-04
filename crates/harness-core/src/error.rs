@@ -53,6 +53,10 @@ pub enum Error {
     /// I/O error
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// Validation error
+    #[error("Validation error: {0}")]
+    Validation(String),
 }
 
 impl Error {
@@ -83,5 +87,10 @@ impl Error {
     /// Create a WebSocket error
     pub fn websocket(message: impl Into<String>) -> Self {
         Self::WebSocket(message.into())
+    }
+
+    /// Create a validation error
+    pub fn validation(message: impl Into<String>) -> Self {
+        Self::Validation(message.into())
     }
 }

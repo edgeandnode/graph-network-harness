@@ -26,6 +26,7 @@ clap = { workspace = true }
 harness-core = { path = "../harness-core" }
 service-orchestration = { path = "../service-orchestration" }
 service-registry = { path = "../service-registry" }
+command-executor = { path = "../command-executor" }
 
 # Graph Protocol specific dependencies
 reqwest = { workspace = true }

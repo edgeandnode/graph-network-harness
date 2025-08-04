@@ -7,6 +7,7 @@ members = [
     "crates/harness-core",
     "crates/harness",
     "crates/graph-test-daemon",
+    "crates/async-runtime-compat",
     "xtask",
 ]
 resolver = "2"

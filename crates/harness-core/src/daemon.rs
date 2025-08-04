@@ -6,12 +6,12 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::action::{Action, ActionRegistry};
 use crate::service::ServiceStack;
+use crate::task::TaskStack;
 use crate::{Error, Registry, Result, ServiceManager};
 
 /// Core daemon trait that all harness daemons must implement
@@ -47,6 +47,9 @@ pub struct BaseDaemon {
     /// Service stack for actionable services
     service_stack: ServiceStack,
 
+    /// Task stack for deployment tasks
+    task_stack: TaskStack,
+
     /// WebSocket server address
     endpoint: SocketAddr,
 
@@ -78,6 +81,11 @@ impl BaseDaemon {
     /// Get the service stack
     pub fn service_stack(&self) -> &ServiceStack {
         &self.service_stack
+    }
+
+    /// Get the task stack
+    pub fn task_stack(&self) -> &TaskStack {
+        &self.task_stack
     }
 }
 
@@ -143,6 +151,8 @@ pub struct DaemonBuilder {
     registry_path: Option<String>,
     action_registry: ActionRegistry,
     service_stack: ServiceStack,
+    task_stack: TaskStack,
+    config: Option<Value>,
     #[cfg(test)]
     test_mode: bool,
 }
@@ -155,6 +165,8 @@ impl DaemonBuilder {
             registry_path: None,
             action_registry: ActionRegistry::new(),
             service_stack: ServiceStack::new(),
+            task_stack: TaskStack::new(),
+            config: None,
             #[cfg(test)]
             test_mode: false,
         }
@@ -184,6 +196,17 @@ impl DaemonBuilder {
         &mut self.service_stack
     }
 
+    /// Get a mutable reference to the task stack for registration
+    pub fn task_stack_mut(&mut self) -> &mut TaskStack {
+        &mut self.task_stack
+    }
+
+    /// Set configuration for validation
+    pub fn with_config(mut self, config: Value) -> Self {
+        self.config = Some(config);
+        self
+    }
+
     /// Register an action
     pub fn register_action<F, Fut>(
         mut self,
@@ -203,6 +226,11 @@ impl DaemonBuilder {
     /// Build the daemon
     pub async fn build(self) -> Result<BaseDaemon> {
         info!("Building daemon with endpoint {}", self.endpoint);
+
+        // Validate configuration if provided
+        if let Some(config) = &self.config {
+            self.validate_config(config)?;
+        }
 
         // Create service manager
         #[cfg(test)]
@@ -234,9 +262,108 @@ impl DaemonBuilder {
             service_registry,
             action_registry: self.action_registry,
             service_stack: self.service_stack,
+            task_stack: self.task_stack,
             endpoint: self.endpoint,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })
+    }
+
+    /// Validate configuration against registered services and tasks
+    fn validate_config(&self, config: &Value) -> Result<()> {
+        let services = config.get("services").and_then(|s| s.as_object());
+        
+        // Validate services
+        if let Some(service_map) = services {
+            info!("Validating {} service configurations", service_map.len());
+            
+            for (name, service_config) in service_map {
+                // Validate service_type exists
+                if let Some(service_type) = service_config.get("service_type").and_then(|s| s.as_str()) {
+                    // Get registered service types from the service stack
+                    let registered_types = self.service_stack.list_types();
+                    
+                    if !registered_types.contains(&service_type) {
+                        return Err(Error::validation(format!(
+                            "Service '{}' references unknown service_type '{}'. Available types: {:?}",
+                            name, service_type, registered_types
+                        )));
+                    }
+                }
+                
+                // Validate dependencies
+                if let Some(deps) = service_config.get("dependencies").and_then(|d| d.as_array()) {
+                    for dep in deps {
+                        self.validate_dependency(dep, service_map, config)?;
+                    }
+                }
+            }
+        }
+
+        // Validate tasks
+        if let Some(tasks) = config.get("tasks").and_then(|t| t.as_object()) {
+            info!("Validating {} task configurations", tasks.len());
+            
+            for (name, task_config) in tasks {
+                // Validate task_type exists
+                if let Some(task_type) = task_config.get("task_type").and_then(|t| t.as_str()) {
+                    let registered_types = self.task_stack.list_types();
+                    
+                    if !registered_types.contains(&task_type) {
+                        return Err(Error::validation(format!(
+                            "Task '{}' references unknown task_type '{}'. Available types: {:?}",
+                            name, task_type, registered_types
+                        )));
+                    }
+                }
+                
+                // Validate dependencies
+                if let Some(deps) = task_config.get("dependencies").and_then(|d| d.as_array()) {
+                    let empty_services = serde_json::Map::new();
+                    let service_map = services.unwrap_or(&empty_services);
+                    for dep in deps {
+                        self.validate_dependency(dep, service_map, config)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate a single dependency
+    fn validate_dependency(
+        &self,
+        dep: &Value,
+        services: &serde_json::Map<String, Value>,
+        config: &Value,
+    ) -> Result<()> {
+        // Check if it's a service dependency
+        if let Some(service_name) = dep.get("service").and_then(|s| s.as_str()) {
+            if !services.contains_key(service_name) {
+                return Err(Error::validation(format!(
+                    "Dependency references unknown service '{}'",
+                    service_name
+                )));
+            }
+        }
+        // Check if it's a task dependency
+        else if let Some(task_name) = dep.get("task").and_then(|t| t.as_str()) {
+            if let Some(tasks) = config.get("tasks").and_then(|t| t.as_object()) {
+                if !tasks.contains_key(task_name) {
+                    return Err(Error::validation(format!(
+                        "Dependency references unknown task '{}'",
+                        task_name
+                    )));
+                }
+            } else {
+                return Err(Error::validation(format!(
+                    "Dependency references task '{}' but no tasks are defined",
+                    task_name
+                )));
+            }
+        }
+        
+        Ok(())
     }
 }
 
@@ -249,7 +376,75 @@ impl Default for DaemonBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::service::Service;
+    use crate::task::DeploymentTask;
     use serde_json::json;
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+
+    // Test service for validation
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct TestAction;
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct TestEvent;
+
+    struct TestService;
+
+    #[async_trait]
+    impl Service for TestService {
+        type Action = TestAction;
+        type Event = TestEvent;
+
+        fn service_type() -> &'static str {
+            "test-service"
+        }
+
+        fn name(&self) -> &str {
+            "test-service"
+        }
+
+        fn description(&self) -> &str {
+            "Test service"
+        }
+
+        async fn dispatch_action(&self, _action: Self::Action) -> Result<async_channel::Receiver<Self::Event>> {
+            let (tx, rx) = async_channel::bounded(1);
+            tx.send(TestEvent).await.unwrap();
+            Ok(rx)
+        }
+    }
+
+    // Test task for validation
+    struct TestTask;
+
+    #[async_trait]
+    impl DeploymentTask for TestTask {
+        type Action = TestAction;
+        type Event = TestEvent;
+
+        fn task_type() -> &'static str {
+            "test-task"
+        }
+
+        fn name(&self) -> &str {
+            "test-task"
+        }
+
+        fn description(&self) -> &str {
+            "Test task"
+        }
+
+        async fn is_completed(&self) -> Result<bool> {
+            Ok(true)
+        }
+
+        async fn execute(&self, _action: Self::Action) -> Result<async_channel::Receiver<Self::Event>> {
+            let (tx, rx) = async_channel::bounded(1);
+            tx.send(TestEvent).await.unwrap();
+            Ok(rx)
+        }
+    }
 
     #[smol_potat::test]
     async fn test_daemon_builder() {
@@ -286,5 +481,367 @@ mod tests {
             .unwrap();
 
         assert_eq!(result, json!({ "result": { "message": "hello" } }));
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_missing_service_type() {
+        let config = json!({
+            "services": {
+                "test-svc": {
+                    "service_type": "unknown-type",
+                    "dependencies": []
+                }
+            }
+        });
+
+        let result = BaseDaemon::builder()
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await;
+
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert!(err.to_string().contains("unknown service_type 'unknown-type'"));
+        }
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_with_valid_service() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("test-instance".to_string(), TestService).unwrap();
+
+        let config = json!({
+            "services": {
+                "test-svc": {
+                    "service_type": "test-service",
+                    "dependencies": []
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.service_stack().get("test-instance").is_some());
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_missing_task_type() {
+        let config = json!({
+            "tasks": {
+                "test-task": {
+                    "task_type": "unknown-task",
+                    "dependencies": []
+                }
+            }
+        });
+
+        let result = BaseDaemon::builder()
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await;
+
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert!(err.to_string().contains("unknown task_type 'unknown-task'"));
+        }
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_with_valid_task() {
+        let mut builder = BaseDaemon::builder();
+        builder.task_stack_mut().register("test-task-instance".to_string(), TestTask).unwrap();
+
+        let config = json!({
+            "tasks": {
+                "test-task-instance": {
+                    "task_type": "test-task",
+                    "dependencies": []
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.task_stack().list_types().contains(&"test-task"));
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_missing_service_dependency() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("test-instance".to_string(), TestService).unwrap();
+
+        let config = json!({
+            "services": {
+                "test-svc": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "missing-service" }
+                    ]
+                }
+            }
+        });
+
+        let result = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await;
+
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert!(err.to_string().contains("unknown service 'missing-service'"));
+        }
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_missing_task_dependency() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("test-instance".to_string(), TestService).unwrap();
+
+        let config = json!({
+            "services": {
+                "test-svc": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "task": "missing-task" }
+                    ]
+                }
+            }
+        });
+
+        let result = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await;
+
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert!(err.to_string().contains("no tasks are defined"));
+        }
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_valid_mixed_dependencies() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("svc1".to_string(), TestService).unwrap();
+        builder.service_stack_mut().register("svc2".to_string(), TestService).unwrap();
+        builder.task_stack_mut().register("task1".to_string(), TestTask).unwrap();
+
+        let config = json!({
+            "services": {
+                "svc1": {
+                    "service_type": "test-service",
+                    "dependencies": []
+                },
+                "svc2": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "svc1" },
+                        { "task": "task1" }
+                    ]
+                }
+            },
+            "tasks": {
+                "task1": {
+                    "task_type": "test-task",
+                    "dependencies": []
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.service_stack().get("svc1").is_some());
+        assert!(daemon.service_stack().get("svc2").is_some());
+    }
+
+    #[smol_potat::test]
+    async fn test_validation_task_with_service_dependency() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("test-svc".to_string(), TestService).unwrap();
+        builder.task_stack_mut().register("task1".to_string(), TestTask).unwrap();
+
+        let config = json!({
+            "services": {
+                "test-svc": {
+                    "service_type": "test-service",
+                    "dependencies": []
+                }
+            },
+            "tasks": {
+                "task1": {
+                    "task_type": "test-task",
+                    "dependencies": [
+                        { "service": "test-svc" }
+                    ]
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.task_stack().list_types().contains(&"test-task"));
+    }
+
+    // NEW: Integration tests for mixed dependencies
+    
+    #[smol_potat::test]
+    async fn test_circular_dependency_detection() {
+        let mut builder = BaseDaemon::builder();
+        builder.service_stack_mut().register("svc1".to_string(), TestService).unwrap();
+        builder.service_stack_mut().register("svc2".to_string(), TestService).unwrap();
+
+        // Service depends on itself indirectly through another service
+        let config = json!({
+            "services": {
+                "svc1": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "svc2" }
+                    ]
+                },
+                "svc2": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "svc1" }
+                    ]
+                }
+            }
+        });
+
+        // This should pass validation as we don't detect circular dependencies here
+        // That would be done at execution time by topological sort
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.service_stack().get("svc1").is_some());
+    }
+
+    #[smol_potat::test]
+    async fn test_complex_dependency_chain() {
+        let mut builder = BaseDaemon::builder();
+        
+        // Register multiple services
+        builder.service_stack_mut().register("db".to_string(), TestService).unwrap();
+        builder.service_stack_mut().register("cache".to_string(), TestService).unwrap();
+        builder.service_stack_mut().register("api".to_string(), TestService).unwrap();
+        builder.service_stack_mut().register("web".to_string(), TestService).unwrap();
+        
+        // Register tasks
+        builder.task_stack_mut().register("db-migrate".to_string(), TestTask).unwrap();
+        builder.task_stack_mut().register("cache-warm".to_string(), TestTask).unwrap();
+
+        let config = json!({
+            "services": {
+                "db": {
+                    "service_type": "test-service",
+                    "dependencies": []
+                },
+                "cache": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "db" },
+                        { "task": "db-migrate" }
+                    ]
+                },
+                "api": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "db" },
+                        { "service": "cache" },
+                        { "task": "cache-warm" }
+                    ]
+                },
+                "web": {
+                    "service_type": "test-service",
+                    "dependencies": [
+                        { "service": "api" }
+                    ]
+                }
+            },
+            "tasks": {
+                "db-migrate": {
+                    "task_type": "test-task",
+                    "dependencies": [
+                        { "service": "db" }
+                    ]
+                },
+                "cache-warm": {
+                    "task_type": "test-task",
+                    "dependencies": [
+                        { "service": "cache" }
+                    ]
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(daemon.service_stack().get("db").is_some());
+        assert!(daemon.service_stack().get("web").is_some());
+        assert_eq!(daemon.task_stack().list_types().len(), 1);
+    }
+
+    #[smol_potat::test]
+    async fn test_task_depending_on_task() {
+        let mut builder = BaseDaemon::builder();
+        builder.task_stack_mut().register("task1".to_string(), TestTask).unwrap();
+        builder.task_stack_mut().register("task2".to_string(), TestTask).unwrap();
+
+        let config = json!({
+            "tasks": {
+                "task1": {
+                    "task_type": "test-task",
+                    "dependencies": []
+                },
+                "task2": {
+                    "task_type": "test-task",
+                    "dependencies": [
+                        { "task": "task1" }
+                    ]
+                }
+            }
+        });
+
+        let daemon = builder
+            .with_test_mode()
+            .with_config(config)
+            .build()
+            .await
+            .unwrap();
+
+        assert_eq!(daemon.task_stack().list_types().len(), 1); // Only one type registered
     }
 }

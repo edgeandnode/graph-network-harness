@@ -1,6 +1,6 @@
 //! async-std runtime spawner implementation
 
-use crate::{Spawner, SpawnerWithHandle, SpawnHandle};
+use crate::{SpawnHandle, Spawner, SpawnerWithHandle};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -16,10 +16,10 @@ impl Spawner for AsyncStdSpawner {
 
 impl SpawnerWithHandle for AsyncStdSpawner {
     type Handle = AsyncStdHandle;
-    
+
     fn spawn_with_handle(
-        &self, 
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+        &self,
+        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     ) -> Self::Handle {
         AsyncStdHandle {
             inner: async_std::task::spawn(future),
@@ -41,16 +41,16 @@ impl SpawnHandle for AsyncStdHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[async_std::test]
     async fn test_async_std_spawner() {
         let spawner = AsyncStdSpawner;
         let (tx, rx) = async_channel::bounded(1);
-        
+
         spawner.spawn(Box::pin(async move {
             tx.send(42).await.unwrap();
         }));
-        
+
         assert_eq!(rx.recv().await.unwrap(), 42);
     }
 }

@@ -35,7 +35,7 @@ pub trait Spawner: Send + Sync {
     ///
     /// The future will run to completion in the background.
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
-    
+
     /// Spawn a future and detach it (alias for spawn)
     fn spawn_detached(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
         self.spawn(future);
@@ -46,11 +46,11 @@ pub trait Spawner: Send + Sync {
 pub trait SpawnerWithHandle: Send + Sync {
     /// The handle type returned when spawning
     type Handle: SpawnHandle;
-    
+
     /// Spawn a future and return a handle to it
     fn spawn_with_handle(
-        &self, 
-        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>
+        &self,
+        future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     ) -> Self::Handle;
 }
 
@@ -58,12 +58,12 @@ pub trait SpawnerWithHandle: Send + Sync {
 pub trait SpawnHandle: Send {
     /// Detach the task, allowing it to run in the background
     fn detach(self);
-    
+
     /// Abort the task if supported by the runtime
     fn abort(&self) -> Result<(), UnsupportedError> {
         Err(UnsupportedError::new("abort"))
     }
-    
+
     /// Check if the task is finished
     fn is_finished(&self) -> Result<bool, UnsupportedError> {
         Err(UnsupportedError::new("is_finished"))
@@ -84,7 +84,11 @@ impl UnsupportedError {
 
 impl std::fmt::Display for UnsupportedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Operation '{}' not supported by this runtime", self.operation)
+        write!(
+            f,
+            "Operation '{}' not supported by this runtime",
+            self.operation
+        )
     }
 }
 
@@ -100,20 +104,18 @@ pub mod async_std;
 #[cfg(feature = "smol")]
 pub mod smol;
 
-
 /// Prelude for common imports
 pub mod prelude {
-    pub use crate::{Spawner, SpawnerWithHandle, SpawnHandle};
-    
+    pub use crate::{SpawnHandle, Spawner, SpawnerWithHandle};
+
     #[cfg(feature = "tokio")]
     pub use crate::tokio::TokioSpawner;
-    
+
     #[cfg(feature = "async-std")]
     pub use crate::async_std::AsyncStdSpawner;
-    
+
     #[cfg(feature = "smol")]
     pub use crate::smol::SmolSpawner;
-    
 }
 
 /// Create a spawner for the current runtime (if detectable)
@@ -126,20 +128,23 @@ pub fn current_runtime_spawner() -> Option<Box<dyn Spawner>> {
             return Some(Box::new(tokio::TokioSpawner));
         }
     }
-    
+
     // Other runtimes don't have reliable detection
     // Could check thread-local state or environment variables
-    
+
     None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_unsupported_error() {
         let err = UnsupportedError::new("test_op");
-        assert_eq!(err.to_string(), "Operation 'test_op' not supported by this runtime");
+        assert_eq!(
+            err.to_string(),
+            "Operation 'test_op' not supported by this runtime"
+        );
     }
 }

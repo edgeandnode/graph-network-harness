@@ -100,8 +100,6 @@ pub mod async_std;
 #[cfg(feature = "smol")]
 pub mod smol;
 
-#[cfg(feature = "async-global")]
-pub mod async_global;
 
 /// Prelude for common imports
 pub mod prelude {
@@ -116,8 +114,6 @@ pub mod prelude {
     #[cfg(feature = "smol")]
     pub use crate::smol::SmolSpawner;
     
-    #[cfg(feature = "async-global")]
-    pub use crate::async_global::AsyncGlobalSpawner;
 }
 
 /// Create a spawner for the current runtime (if detectable)

@@ -1,7 +1,7 @@
 # ADR-011: Graph Test Daemon
 
 ## Status
-Proposed
+Implemented
 
 ## Context
 
@@ -28,86 +28,132 @@ The current approach has several pain points:
 
 ## Decision
 
-We will create a specialized `GraphTestDaemon` as the first implementation of the domain-oriented action system defined in [ADR-010](./010-domain-oriented-action-system.md). This daemon extends the base harness functionality with Graph Protocol-specific service types and test actions.
+We have created a specialized `GraphTestDaemon` as the first implementation of the domain-oriented action system defined in [ADR-010](./010-domain-oriented-action-system.md). This daemon extends the base harness functionality with Graph Protocol-specific service types and test actions.
+
+### Key Implementation Decisions
+
+1. **YAML Configuration Required**: No default constructor - all daemon instances require explicit YAML configuration
+2. **service-orchestration Integration**: Uses ServiceTarget from service-orchestration for runtime deployment
+3. **Service Type Linking**: YAML `service_type` field links runtime config to action implementations  
+4. **Dynamic Service Creation**: ServiceRegistry creates services based on YAML configuration
+5. **Strongly-typed Configuration**: Uses service-orchestration config structures instead of HashMap<String, Value>
 
 ### Architecture
 
 ```rust
-// crates/graph-test-daemon/src/lib.rs
-use harness_core::{BaseDaemon, Daemon, ServiceType, Action, Result};
+// crates/graph-test-daemon/src/daemon.rs
+use harness_core::prelude::*;
+use service_orchestration::{ServiceConfig, ServiceTarget};
 
 pub struct GraphTestDaemon {
     base: BaseDaemon,
-    graph_state: Arc<Mutex<GraphTestState>>,
 }
 
-impl Daemon for GraphTestDaemon {
-    fn new() -> Result<Self> {
-        let base = BaseDaemon::builder()
-            // Leverage existing harness services
-            .with_service_manager()
-            .with_service_registry()
-            .with_config_parser()
-            
-            // Graph-specific service types
-            .register_service_type::<AnvilBlockchain>()
-            .register_service_type::<GraphNode>()
-            .register_service_type::<IndexerAgent>()
-            .register_service_type::<IPFSNode>()
-            .register_service_type::<GatewayService>()
-            
-            // High-level test actions
-            .register_action("deploy-subgraph", Self::deploy_subgraph)
-            .register_action("create-allocation", Self::create_allocation)
-            .register_action("mine-blocks", Self::mine_blocks)
-            .register_action("verify-indexing", Self::verify_indexing_status)
-            .register_action("inject-reorg", Self::inject_blockchain_reorg)
-            .build()?;
-            
-        Ok(Self {
-            base,
-            graph_state: Arc::new(Mutex::new(GraphTestState::new())),
-        })
+impl GraphTestDaemon {
+    /// Create from YAML configuration file (required - no default constructor)
+    pub async fn from_config<P: AsRef<Path>>(endpoint: SocketAddr, config_path: P) -> Result<Self> {
+        let config_content = std::fs::read_to_string(config_path.as_ref())?;
+        let config: GraphStackConfig = serde_yaml::from_str(&config_content)?;
+        Self::from_stack_config(endpoint, config).await
     }
-    
-    fn base(&self) -> &BaseDaemon {
-        &self.base
+
+    /// Create from parsed stack configuration
+    pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self> {
+        let mut builder = BaseDaemon::builder().with_endpoint(endpoint);
+        
+        // Register services based on service_type in YAML
+        {
+            let stack = builder.service_stack_mut();
+            for (instance_name, service_config) in &config.services {
+                match service_config.service_type.as_str() {
+                    "postgres" => {
+                        let postgres = PostgresService::new(db_name, port);
+                        stack.register(instance_name.clone(), postgres)?;
+                    }
+                    "anvil" => {
+                        let anvil = AnvilService::new(chain_id, port);
+                        stack.register(instance_name.clone(), anvil)?;
+                    }
+                    // ... other service types
+                }
+            }
+        }
+        
+        // Register high-level actions
+        builder = builder
+            .register_action("setup-test-stack", "Set up Graph Protocol test stack", action_fn)?
+            .register_action("health-check-stack", "Check health of all services", action_fn)?;
+            
+        let base = builder.build().await?;
+        Ok(Self { base })
     }
 }
 ```
 
-### Domain-Specific Service Types
+### YAML Configuration Structure
+
+```yaml
+name: graph-test-stack
+description: Complete Graph Protocol test environment
+
+services:
+  postgres:
+    service_type: postgres  # Links to PostgresService for actions
+    name: postgres
+    target:
+      type: Docker
+      image: postgres:14
+      env:
+        POSTGRES_USER: graph-node
+        POSTGRES_PASSWORD: graph-password
+        POSTGRES_DB: graph-node
+      ports: [5432]
+    health_check:
+      command: pg_isready
+      args: ["-U", "graph-node"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  anvil:
+    service_type: anvil  # Links to AnvilService for actions
+    name: anvil
+    target:
+      type: Process
+      binary: anvil
+      args: ["--port", "8545", "--chain-id", "31337"]
+      env:
+        CHAIN_ID: "31337"
+```
+
+### Service Type Implementation
 
 ```rust
-#[derive(ServiceType)]
-#[service_type(name = "anvil-blockchain")]
-pub struct AnvilBlockchain {
-    pub chain_id: u32,
-    pub block_time: Option<u64>,
-    pub accounts: Vec<Account>,
-    
-    #[service_type(test_only)]
-    pub auto_mine: bool,
-    
-    #[service_type(test_only)]
-    pub fork_url: Option<String>,
+// Each service_type maps to a Service implementation
+pub struct AnvilService {
+    chain_id: u64,
+    port: u16,
 }
 
-#[derive(ServiceType)]
-#[service_type(name = "graph-node")]
-pub struct GraphNode {
-    pub ethereum_rpc: String,
-    pub ipfs_endpoint: String,
-    pub postgres_url: String,
+#[async_trait]
+impl Service for AnvilService {
+    fn name(&self) -> &str { "anvil" }
+    fn description(&self) -> &str { "Ethereum test blockchain" }
     
-    #[service_type(enriched)]
-    pub indexing_status_endpoint: String,
+    fn available_actions(&self) -> Vec<ActionInfo> {
+        vec![
+            ActionInfo { name: "mine-blocks".to_string(), description: "Mine blocks".to_string() },
+            ActionInfo { name: "set-balance".to_string(), description: "Set account balance".to_string() },
+        ]
+    }
     
-    #[service_type(enriched)]
-    pub admin_endpoint: String,
-    
-    #[service_type(test_only)]
-    pub log_level: String,
+    async fn handle_action(&self, action: &str, params: serde_json::Value) -> Result<serde_json::Value> {
+        match action {
+            "mine-blocks" => self.mine_blocks(params).await,
+            "set-balance" => self.set_balance(params).await,
+            _ => Err(Error::action_not_found(action))
+        }
+    }
 }
 ```
 
@@ -269,19 +315,21 @@ impl GraphTestState {
 ### Positive
 
 1. **Type Safety**: All Graph Protocol operations are type-checked at compile time
-2. **Workflow Automation**: Complex multi-step processes become single action calls
-3. **Better Error Handling**: Clear error messages instead of silent bash failures
-4. **Performance**: Direct API calls instead of CLI wrapping
-5. **Reproducibility**: Deterministic test scenarios with proper state tracking
-6. **Extensibility**: Easy to add new Graph-specific actions
+2. **YAML Configuration**: Declarative service configuration with strong typing
+3. **service-orchestration Integration**: Leverages existing infrastructure for service lifecycle  
+4. **Service Type Linking**: Clear mapping between runtime config and action implementations
+5. **Better Error Handling**: Clear error messages instead of silent bash failures
+6. **Extensibility**: Easy to add new Graph-specific service types and actions
 7. **Debugging**: Full visibility into test execution with structured logging
+8. **Reproducibility**: Deterministic test scenarios with YAML-defined service stacks
 
 ### Negative
 
 1. **Domain Coupling**: Tightly coupled to Graph Protocol concepts
-2. **Maintenance**: Must update when Graph Protocol changes
-3. **Learning Curve**: Developers need to understand both harness and Graph concepts
-4. **Binary Size**: Includes Graph-specific dependencies
+2. **Configuration Overhead**: Requires YAML configuration for all use cases (no defaults)
+3. **Maintenance**: Must update when Graph Protocol or service-orchestration changes
+4. **Learning Curve**: Developers need to understand harness, service-orchestration, and Graph concepts
+5. **Binary Size**: Includes Graph-specific dependencies
 
 ### Neutral
 
@@ -289,45 +337,41 @@ impl GraphTestState {
 2. **Requires local-network**: Still depends on Graph Protocol docker images
 3. **Test-Only Features**: Many features only make sense in test context
 
-## Implementation Plan
+## Implementation Status
 
-**Prerequisites**: This implementation depends on the `harness-core` library defined in ADR-010. The core library must be implemented first to provide the base abstractions (`Daemon`, `ServiceType`, `Action` traits).
+**COMPLETED**: The graph-test-daemon has been implemented using the service-orchestration architecture.
 
-### Phase 0: Prerequisites (if not already complete)
-- Implement `harness-core` library as defined in ADR-010
-- Create `BaseDaemon` with builder pattern
-- Implement `ServiceType` derive macro
-- Create action discovery protocol
+### Completed Implementation
 
-### Phase 1: Core Infrastructure (Week 1)
-- Create `graph-test-daemon` crate
-- Implement `GraphTestDaemon` with basic service types
-- Add `AnvilBlockchain` service with mining controls
-- Create `GraphTestState` for tracking deployments
+#### ✅ Core Infrastructure
+- Created `graph-test-daemon` crate with YAML configuration
+- Implemented `GraphTestDaemon` using `BaseDaemon` from harness-core
+- Integrated with service-orchestration for service lifecycle management
+- Added service type linking via YAML `service_type` field
 
-### Phase 2: Service Types (Week 2)
-- Implement `GraphNode` with admin API integration
-- Add `IndexerAgent` with allocation management
-- Create `IPFSNode` with content verification
-- Add `GatewayService` with query routing
+#### ✅ Service Types  
+- **AnvilService**: Ethereum test blockchain with mining controls
+- **PostgresService**: Database management and queries
+- **IpfsService**: Content storage and retrieval
+- **GraphNodeService**: Subgraph deployment and indexing (basic)
 
-### Phase 3: Core Actions (Week 3)
-- Implement `deploy_subgraph` action
-- Add `create_allocation` workflow
-- Create `mine_blocks` with epoch awareness
-- Add `verify_indexing_status` checks
+#### ✅ Configuration System
+- YAML-based service stack configuration
+- ServiceTarget integration for deployment types (Process, Docker, SSH planned)
+- Health check configuration support
+- Environment variable and argument extraction
 
-### Phase 4: Advanced Actions (Week 4)
-- Implement `inject_blockchain_reorg`
-- Add `simulate_query_load`
-- Create `verify_payment_flow`
-- Add grafting-specific actions
+#### ✅ Action Framework
+- Service-specific actions through Service trait
+- High-level daemon actions (`setup-test-stack`, `health-check-stack`)
+- Action discovery and invocation through harness-core
 
-### Phase 5: Test Scenarios (Week 5)
-- Create `TestScenario` builder API
-- Implement common test patterns
-- Add performance benchmarking
-- Create example integration tests
+### Future Enhancements
+- Advanced GraphNode actions (deploy-subgraph, query-subgraph)
+- IndexerAgent service for allocation management  
+- Advanced blockchain actions (inject-reorg, simulate-load)
+- Test scenario builder API
+- Performance benchmarking capabilities
 
 ## Example Usage
 
@@ -337,19 +381,16 @@ use graph_test_daemon::GraphTestDaemon;
 
 #[tokio::test]
 async fn test_subgraph_reorg_handling() {
-    // Start the Graph test daemon (implements harness_core::Daemon trait)
-    let daemon = GraphTestDaemon::new().unwrap();
+    // Start the Graph test daemon with required configuration
+    let endpoint = "127.0.0.1:9443".parse().unwrap();
+    let daemon = GraphTestDaemon::from_config(endpoint, "test-configs/reorg-test.yaml").await.unwrap();
     daemon.start().await.unwrap();
     
     // Connect test client using harness_core
-    let client = TestClient::connect(daemon.base().endpoint()).await.unwrap();
+    let client = TestClient::connect(daemon.endpoint()).await.unwrap();
     
-    // Setup Graph Protocol stack
-    client.action("setup-graph-stack", json!({
-        "ethereum_chain_id": 1337,
-        "start_block": 0,
-        "index_node_ids": true,
-    })).await.unwrap();
+    // Setup Graph Protocol stack (services already configured in YAML)
+    client.action("setup-test-stack", json!({})).await.unwrap();
     
     // Deploy test subgraph
     let deployment = client.action("deploy-subgraph", json!({

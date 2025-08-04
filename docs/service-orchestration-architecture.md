@@ -5,12 +5,12 @@
 The service orchestration system provides heterogeneous service management through a layered architecture that separates execution mechanisms from lifecycle management:
 
 ```
-┌─────────────────────┐
-│   harness CLI       │
-│  (User Interface)   │
-└──────────┬──────────┘
-           │ WebSocket/TLS
-           ▼
+┌─────────────────────┐       ┌─────────────────────┐
+│   harness CLI       │       │ graph-test-daemon   │
+│  (User Interface)   │       │ (Specialized Daemon) │
+└──────────┬──────────┘       └──────────┬──────────┘
+           │ WebSocket/TLS               │ WebSocket/TLS  
+           ▼                             ▼
 ┌─────────────────────┐       ┌─────────────────────┐
 │   harness daemon    │       │  service-registry   │
 │  (Server Process)   │◄─────►│  (Service Disco)    │
@@ -55,6 +55,15 @@ The service orchestration system provides heterogeneous service management throu
 - **WebSocket Server**: TLS-secured WebSocket API
 - **State Management**: Maintains ServiceManager and Registry instances
 - **Request Handling**: Processes client requests and returns responses
+
+#### Specialized Daemons
+
+**graph-test-daemon** (`crates/graph-test-daemon/`) is an example of a specialized daemon:
+- **Domain-Specific Services**: Graph Protocol services (PostgreSQL, Anvil, IPFS, Graph Node)
+- **YAML Configuration**: Declarative service stack configuration with service type linking
+- **Service Type Mapping**: Links YAML `service_type` to action implementations
+- **Actionable Services**: Each service provides domain-specific actions (mine-blocks, deploy-subgraph, etc.)
+- **Built on harness-core**: Extends BaseDaemon with Graph Protocol semantics
 
 ### 3. service-orchestration (`crates/service-orchestration/`)
 - **ServiceManager**: Central orchestrator for service lifecycle
@@ -223,11 +232,38 @@ The service orchestration system provides heterogeneous service management throu
 
 ## Configuration Flow
 
+### Standard Harness Flow
 1. **YAML Config** → harness-config parsing
 2. **Resolution Context** → Variable substitution, service references
 3. **ServiceConfig** → service-orchestration types
 4. **Command Building** → command-executor Command type
 5. **Execution** → Process/Container/SSH execution
+
+### Specialized Daemon Flow (graph-test-daemon)
+1. **YAML Stack Config** → GraphStackConfig parsing
+2. **Service Type Mapping** → service_type links to Service implementations
+3. **Target Extraction** → Parameters extracted from ServiceTarget
+4. **Service Registration** → Services registered in BaseDaemon ServiceStack
+5. **Action Binding** → Service actions exposed through daemon API
+
+Example graph-test-daemon YAML:
+```yaml
+name: graph-test-stack
+services:
+  postgres:
+    service_type: postgres  # → PostgresService with database actions
+    target:
+      type: Docker
+      image: postgres:14
+      env: { POSTGRES_DB: "graph-node" }
+      ports: [5432]
+  anvil:
+    service_type: anvil     # → AnvilService with blockchain actions  
+    target:
+      type: Process
+      binary: anvil
+      args: ["--port", "8545"]
+```
 
 ## Current Implementation Details
 

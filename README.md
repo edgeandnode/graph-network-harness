@@ -72,17 +72,20 @@ harness stop
 
 ## Graph Protocol Testing
 
-The `graph-test-daemon` provides specialized services for Graph Protocol development:
+The `graph-test-daemon` provides specialized services for Graph Protocol development with YAML-based configuration:
 
-```rust
-// Services available:
-// - GraphNode: Deploy and query subgraphs
-// - Anvil: Local Ethereum blockchain
-// - PostgreSQL: Indexer database
-// - IPFS: Decentralized storage
-
-graph-test-daemon --endpoint 127.0.0.1:9443
+```bash
+# Start daemon with YAML configuration (required)
+graph-test-daemon --config graph-stack.yaml --endpoint 127.0.0.1:9443
 ```
+
+Services available through service type linking:
+- **postgres**: Database operations and queries  
+- **anvil**: Blockchain mining and balance management
+- **graph-node**: Subgraph deployment and indexing
+- **ipfs**: Content storage and retrieval
+
+Each service provides domain-specific actions accessible through the daemon API. See [graph-test-daemon documentation](crates/graph-test-daemon/README.md) for configuration examples.
 
 ## Documentation
 

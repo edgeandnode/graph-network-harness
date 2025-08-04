@@ -22,7 +22,14 @@ fn test_service_config_yaml_roundtrip() {
             ]),
             working_dir: Some("/tmp".to_string()),
         },
-        dependencies: vec!["database".to_string(), "cache".to_string()],
+        dependencies: vec![
+            service_orchestration::Dependency::Service {
+                service: "database".to_string(),
+            },
+            service_orchestration::Dependency::Service {
+                service: "cache".to_string(),
+            },
+        ],
         health_check: Some(HealthCheck {
             command: "curl".to_string(),
             args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
@@ -83,7 +90,9 @@ fn test_remote_lan_service_config() {
             binary: "./api-server".to_string(),
             args: vec!["--port".to_string(), "3000".to_string()],
         },
-        dependencies: vec!["database".to_string()],
+        dependencies: vec![service_orchestration::Dependency::Service {
+            service: "database".to_string(),
+        }],
         health_check: None,
     };
 
@@ -328,11 +337,14 @@ fn test_executor_type_detection() {
 
     let remote_config = ServiceConfig {
         name: "test".to_string(),
-        target: ServiceTarget::RemoteLan {
+        target: ServiceTarget::Remote {
             host: "test.example.com".to_string(),
             user: "test".to_string(),
-            binary: "test".to_string(),
-            args: vec![],
+            mode: service_orchestration::RemoteMode::Process {
+                binary: "test".to_string(),
+                args: vec![],
+            },
+            env: HashMap::new(),
         },
         dependencies: vec![],
         health_check: None,
@@ -364,7 +376,9 @@ fn test_service_config_env_injection() {
             env: original_env.clone(),
             working_dir: None,
         },
-        dependencies: vec!["db".to_string()],
+        dependencies: vec![service_orchestration::Dependency::Service {
+            service: "db".to_string(),
+        }],
         health_check: None,
     };
 

@@ -22,7 +22,10 @@ pub mod prelude {
     pub use crate::client::TestClient;
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::{Error, Result};
-    pub use crate::service::{ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState, StatefulService};
+    pub use crate::service::{
+        ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState,
+        StatefulService,
+    };
     pub use crate::task::{DeploymentTask, JsonTask, TaskResult, TaskStack, TaskState};
     pub use crate::typed_action::TypedAction;
 

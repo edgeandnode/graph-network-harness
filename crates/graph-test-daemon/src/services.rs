@@ -171,7 +171,7 @@ impl Service for GraphNodeService {
 }
 
 /// ServiceSetup implementation for GraphNodeService
-/// 
+///
 /// Graph Node doesn't require complex setup - it starts up and connects to dependencies.
 /// Setup completion is determined by health check success.
 #[async_trait]
@@ -179,8 +179,11 @@ impl ServiceSetup for GraphNodeService {
     async fn is_setup_complete(&self) -> Result<bool> {
         // For Graph Node, setup is complete when the service is healthy
         // In a real implementation, this would check the GraphQL endpoint
-        info!("Checking if Graph Node setup is complete at endpoint: {}", self.endpoint);
-        
+        info!(
+            "Checking if Graph Node setup is complete at endpoint: {}",
+            self.endpoint
+        );
+
         // Simulate health check - in reality this would query http://graph-node:8030
         // For now, assume setup is complete if we can construct the service
         Ok(true)
@@ -188,23 +191,23 @@ impl ServiceSetup for GraphNodeService {
 
     async fn perform_setup(&self) -> Result<()> {
         info!("Performing Graph Node setup");
-        
+
         // Graph Node setup is primarily handled by service orchestration
         // The main setup is ensuring database connections and IPFS connectivity
         // This would be where we'd verify connections and perform any initialization
-        
+
         Ok(())
     }
 
     async fn validate_setup(&self) -> Result<()> {
         info!("Validating Graph Node setup");
-        
+
         // In a real implementation, this would:
         // 1. Check GraphQL endpoint is responding
         // 2. Verify database connection
         // 3. Check IPFS connectivity
         // 4. Ensure Ethereum RPC connection
-        
+
         Ok(())
     }
 }
@@ -560,7 +563,7 @@ impl Service for IpfsService {
 }
 
 /// Graph Contracts service that handles protocol contract deployment
-/// 
+///
 /// This service implements the setup patterns from local-network/graph-contracts/run.sh
 #[derive(Default)]
 pub struct GraphContractsService {
@@ -595,7 +598,9 @@ pub enum GraphContractsEvent {
     /// Contract deployed
     ContractDeployed { name: String, address: String },
     /// All contracts deployed
-    DeploymentCompleted { addresses: std::collections::HashMap<String, String> },
+    DeploymentCompleted {
+        addresses: std::collections::HashMap<String, String>,
+    },
     /// Address verification completed
     AddressesVerified,
     /// Subgraph deployed
@@ -632,49 +637,66 @@ impl Service for GraphContractsService {
 
                 // Simulate deploying each contract (based on local-network script)
                 let contracts = vec![
-                    "Controller", "EpochManager", "GraphToken", "DisputeManager",
-                    "L1Staking", "StakingExtension", "Curation", "RewardsManager",
-                    "ServiceRegistry", "L1GNS", "SubgraphNFT", "L1GraphTokenGateway"
+                    "Controller",
+                    "EpochManager",
+                    "GraphToken",
+                    "DisputeManager",
+                    "L1Staking",
+                    "StakingExtension",
+                    "Curation",
+                    "RewardsManager",
+                    "ServiceRegistry",
+                    "L1GNS",
+                    "SubgraphNFT",
+                    "L1GraphTokenGateway",
                 ];
 
                 let mut addresses = std::collections::HashMap::new();
                 for contract in contracts {
                     let address = format!("0x{:040x}", contract.len()); // Mock address
                     addresses.insert(contract.to_string(), address.clone());
-                    
-                    let _ = tx.send(GraphContractsEvent::ContractDeployed {
-                        name: contract.to_string(),
-                        address,
-                    }).await;
-                    
+
+                    let _ = tx
+                        .send(GraphContractsEvent::ContractDeployed {
+                            name: contract.to_string(),
+                            address,
+                        })
+                        .await;
+
                     // Small delay to simulate deployment time
                     smol::Timer::after(Duration::from_millis(100)).await;
                 }
 
-                let _ = tx.send(GraphContractsEvent::DeploymentCompleted {
-                    addresses: addresses.clone(),
-                }).await;
+                let _ = tx
+                    .send(GraphContractsEvent::DeploymentCompleted {
+                        addresses: addresses.clone(),
+                    })
+                    .await;
 
                 // Simulate subgraph deployment
-                let _ = tx.send(GraphContractsEvent::SubgraphDeployed {
-                    deployment_id: "QmGraphNetwork123".to_string(),
-                }).await;
+                let _ = tx
+                    .send(GraphContractsEvent::SubgraphDeployed {
+                        deployment_id: "QmGraphNetwork123".to_string(),
+                    })
+                    .await;
             }
 
             GraphContractsAction::VerifyAddresses => {
                 info!("Verifying contract addresses");
-                
+
                 // In real implementation, this would verify against contracts.json
                 let _ = tx.send(GraphContractsEvent::AddressesVerified).await;
             }
 
             GraphContractsAction::GetStatus => {
                 info!("Getting deployment status");
-                
+
                 if let Some(addresses) = &self.deployed_addresses {
-                    let _ = tx.send(GraphContractsEvent::DeploymentCompleted {
-                        addresses: addresses.clone(),
-                    }).await;
+                    let _ = tx
+                        .send(GraphContractsEvent::DeploymentCompleted {
+                            addresses: addresses.clone(),
+                        })
+                        .await;
                 }
             }
         }
@@ -684,40 +706,40 @@ impl Service for GraphContractsService {
 }
 
 /// ServiceSetup implementation for GraphContractsService
-/// 
+///
 /// This implements the complex setup logic from local-network/graph-contracts/run.sh
-#[async_trait]  
+#[async_trait]
 impl ServiceSetup for GraphContractsService {
     async fn is_setup_complete(&self) -> Result<bool> {
         info!("Checking if Graph Protocol contracts are already deployed");
-        
+
         // Check if graph-network subgraph exists (idempotency check from script)
         // In real implementation: curl http://graph-node:8030/subgraphs/name/graph-network
-        
+
         // For now, check if we have deployed addresses
         Ok(self.deployed_addresses.is_some())
     }
 
     async fn perform_setup(&self) -> Result<()> {
         info!("Deploying Graph Protocol contracts and subgraph");
-        
+
         // This would implement the script logic:
         // 1. Deploy contracts using hardhat
         // 2. Verify addresses match expected
         // 3. Build and deploy graph-network subgraph
         // 4. Store addresses for future reference
-        
+
         Ok(())
     }
 
     async fn validate_setup(&self) -> Result<()> {
         info!("Validating Graph Protocol contract deployment");
-        
+
         // This would verify:
         // 1. All contract addresses match expected values in contracts.json
         // 2. Graph-network subgraph is deployed and healthy
         // 3. Contracts are accessible and responding
-        
+
         Ok(())
     }
 }

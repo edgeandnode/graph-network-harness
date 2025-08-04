@@ -152,11 +152,17 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                         pid: running.pid,
                         container_id: running.container_id,
                         start_time: running.metadata.get("start_time").cloned(),
-                        dependencies: running.config.dependencies
+                        dependencies: running
+                            .config
+                            .dependencies
                             .iter()
                             .map(|dep| match dep {
-                                service_orchestration::Dependency::Service { service } => service.clone(),
-                                service_orchestration::Dependency::Task { task } => format!("task:{}", task),
+                                service_orchestration::Dependency::Service { service } => {
+                                    service.clone()
+                                }
+                                service_orchestration::Dependency::Task { task } => {
+                                    format!("task:{}", task)
+                                }
                             })
                             .collect(),
                     }

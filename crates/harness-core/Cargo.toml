@@ -56,3 +56,4 @@ async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 [features]
 default = []
+test-utils = []

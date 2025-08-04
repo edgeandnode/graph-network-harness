@@ -4,8 +4,8 @@
 //! one-time setup operations.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::config::{Dependency, ServiceConfig, ServiceTarget};
 
@@ -49,7 +49,7 @@ impl TaskConfig {
 }
 
 /// Configuration for a service instance in a stack
-/// 
+///
 /// This extends the generic service-orchestration config with a service_type
 /// field that links the runtime configuration to action implementations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,14 +91,13 @@ mod tests {
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
                 working_dir: Some("./contracts".to_string()),
             },
-            dependencies: vec![
-                Dependency::Service {
-                    service: "anvil".to_string(),
-                },
-            ],
-            config: HashMap::from([
-                ("deployer_key".to_string(), Value::String("0x123...".to_string())),
-            ]),
+            dependencies: vec![Dependency::Service {
+                service: "anvil".to_string(),
+            }],
+            config: HashMap::from([(
+                "deployer_key".to_string(),
+                Value::String("0x123...".to_string()),
+            )]),
         };
 
         let yaml = serde_yaml::to_string(&task).expect("Failed to serialize");
@@ -112,8 +111,9 @@ mod tests {
             name: "test-stack".to_string(),
             description: Some("A test stack with tasks".to_string()),
             services: HashMap::new(),
-            tasks: HashMap::from([
-                ("deploy-contracts".to_string(), TaskConfig::new(
+            tasks: HashMap::from([(
+                "deploy-contracts".to_string(),
+                TaskConfig::new(
                     "graph-contracts".to_string(),
                     ServiceTarget::Process {
                         binary: "hardhat".to_string(),
@@ -121,8 +121,8 @@ mod tests {
                         env: HashMap::new(),
                         working_dir: None,
                     },
-                )),
-            ]),
+                ),
+            )]),
         };
 
         let yaml = serde_yaml::to_string(&stack).expect("Failed to serialize");

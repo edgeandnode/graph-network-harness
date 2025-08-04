@@ -41,7 +41,9 @@ mod manager;
 mod package;
 mod task_config;
 
-pub use config::{Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget};
+pub use config::{
+    Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+};
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
     ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,

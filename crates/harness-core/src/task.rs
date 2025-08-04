@@ -5,7 +5,10 @@
 //! and event types, and can leverage command-executor for process management.
 
 use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
+use command_executor::ProcessEventType;
+use command_executor::event::ProcessEvent;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -13,9 +16,6 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
-use command_executor::event::ProcessEvent;
-use command_executor::ProcessEventType;
-use async_runtime_compat::Spawner;
 
 use crate::{Error, Result};
 
@@ -167,7 +167,10 @@ pub trait JsonTask: Send + Sync {
 
     /// Execute the task using JSON input
     /// Returns a receiver for JSON events and a future that must be spawned to perform the conversion
-    async fn execute_json(&self, input: Value) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)>;
+    async fn execute_json(
+        &self,
+        input: Value,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)>;
 
     /// Get the action schema
     fn action_schema(&self) -> &Value;
@@ -196,13 +199,16 @@ where
         self.inner.is_completed().await
     }
 
-    async fn execute_json(&self, input: Value) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
+    async fn execute_json(
+        &self,
+        input: Value,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
         // Get typed event receiver
         let event_rx = self.execute_json(input).await?;
-        
+
         // Create channel for JSON events
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Create the conversion future
         let converter = async move {
             while let Ok(event) = event_rx.recv().await {
@@ -211,7 +217,7 @@ where
                 }
             }
         };
-        
+
         Ok((rx, Box::pin(converter)))
     }
 
@@ -296,10 +302,10 @@ impl TaskStack {
         })?;
 
         let (rx, converter) = task.execute_json(input).await?;
-        
+
         // Spawn the converter
         spawner.spawn(converter);
-        
+
         Ok(rx)
     }
 
@@ -322,10 +328,10 @@ impl Default for TaskStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use schemars::JsonSchema;
-    use serde::{Deserialize, Serialize};
     use async_runtime_compat::smol::SmolSpawner;
     use chrono;
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize, JsonSchema)]
     struct TestAction {
@@ -389,7 +395,8 @@ mod tests {
                     }
                 }
                 completed.store(true, std::sync::atomic::Ordering::SeqCst);
-            }).detach();
+            })
+            .detach();
 
             Ok(rx)
         }
@@ -415,7 +422,9 @@ mod tests {
     #[smol_potat::test]
     async fn test_task_execution() {
         let mut stack = TaskStack::new();
-        stack.register("test-1".to_string(), TestTask::new()).unwrap();
+        stack
+            .register("test-1".to_string(), TestTask::new())
+            .unwrap();
 
         let input = serde_json::json!({
             "message": "Hello, Task!"
@@ -423,7 +432,7 @@ mod tests {
 
         let spawner = SmolSpawner;
         let rx = stack.execute("test-1", input, &spawner).await.unwrap();
-        
+
         // Collect some events
         let mut events = Vec::new();
         for _ in 0..5 {
@@ -463,11 +472,15 @@ mod tests {
     #[test]
     fn test_task_type_tracking() {
         let mut stack = TaskStack::new();
-        
+
         // Register multiple instances of the same task type
-        stack.register("test-1".to_string(), TestTask::new()).unwrap();
-        stack.register("test-2".to_string(), TestTask::new()).unwrap();
-        
+        stack
+            .register("test-1".to_string(), TestTask::new())
+            .unwrap();
+        stack
+            .register("test-2".to_string(), TestTask::new())
+            .unwrap();
+
         // Should only have one task type
         let types = stack.list_types();
         assert_eq!(types.len(), 1);
@@ -518,20 +531,25 @@ mod tests {
             // Use smol for tests
             smol::spawn(async move {
                 // Send some events
-                let _ = tx.send(TranslatingEvent {
-                    event_type: "started".to_string(),
-                    message: "Task started".to_string(),
-                }).await;
-                
+                let _ = tx
+                    .send(TranslatingEvent {
+                        event_type: "started".to_string(),
+                        message: "Task started".to_string(),
+                    })
+                    .await;
+
                 smol::Timer::after(std::time::Duration::from_millis(10)).await;
-                
-                let _ = tx.send(TranslatingEvent {
-                    event_type: "completed".to_string(),
-                    message: "Task completed".to_string(),
-                }).await;
-                
+
+                let _ = tx
+                    .send(TranslatingEvent {
+                        event_type: "completed".to_string(),
+                        message: "Task completed".to_string(),
+                    })
+                    .await;
+
                 completed.store(true, std::sync::atomic::Ordering::SeqCst);
-            }).detach();
+            })
+            .detach();
 
             Ok(rx)
         }
@@ -584,12 +602,15 @@ mod tests {
             event_type: ProcessEventType::Stdout,
             data: Some("Operation completed with SUCCESS".to_string()),
         };
-        
+
         let result = task.process_event(&event);
-        assert_eq!(result, Some(TranslatingEvent {
-            event_type: "success".to_string(),
-            message: "Operation completed with SUCCESS".to_string(),
-        }));
+        assert_eq!(
+            result,
+            Some(TranslatingEvent {
+                event_type: "success".to_string(),
+                message: "Operation completed with SUCCESS".to_string(),
+            })
+        );
 
         // Test stdout error
         let event = ProcessEvent {
@@ -597,25 +618,34 @@ mod tests {
             event_type: ProcessEventType::Stdout,
             data: Some("ERROR: Failed to connect".to_string()),
         };
-        
+
         let result = task.process_event(&event);
-        assert_eq!(result, Some(TranslatingEvent {
-            event_type: "error".to_string(),
-            message: "ERROR: Failed to connect".to_string(),
-        }));
+        assert_eq!(
+            result,
+            Some(TranslatingEvent {
+                event_type: "error".to_string(),
+                message: "ERROR: Failed to connect".to_string(),
+            })
+        );
 
         // Test exit code
         let event = ProcessEvent {
             timestamp: chrono::Utc::now(),
-            event_type: ProcessEventType::Exited { code: Some(1), signal: None },
+            event_type: ProcessEventType::Exited {
+                code: Some(1),
+                signal: None,
+            },
             data: None,
         };
-        
+
         let result = task.process_event(&event);
-        assert_eq!(result, Some(TranslatingEvent {
-            event_type: "exit".to_string(),
-            message: "Process exited with code 1".to_string(),
-        }));
+        assert_eq!(
+            result,
+            Some(TranslatingEvent {
+                event_type: "exit".to_string(),
+                message: "Process exited with code 1".to_string(),
+            })
+        );
 
         // Test no translation
         let event = ProcessEvent {
@@ -623,7 +653,7 @@ mod tests {
             event_type: ProcessEventType::Stdout,
             data: Some("Regular output".to_string()),
         };
-        
+
         let result = task.process_event(&event);
         assert_eq!(result, None);
     }
@@ -634,7 +664,7 @@ mod tests {
         let task = EventTranslatingTask {
             completed: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
-        
+
         stack.register("translator".to_string(), task).unwrap();
 
         // Execute the task
@@ -680,7 +710,7 @@ mod tests {
     fn test_json_schema_generation() {
         let schema = TestTask::action_schema();
         assert!(!schema.is_null());
-        
+
         // Verify schema contains expected fields
         let schema_str = schema.to_string();
         assert!(schema_str.contains("TestAction"));

@@ -287,11 +287,9 @@ mod tests {
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                 working_dir: Some("/tmp".to_string()),
             },
-            dependencies: vec![
-                Dependency::Service {
-                    service: "database".to_string(),
-                },
-            ],
+            dependencies: vec![Dependency::Service {
+                service: "database".to_string(),
+            }],
             health_check: Some(HealthCheck {
                 command: "curl".to_string(),
                 args: vec!["http://localhost:8080/health".to_string()],
@@ -346,7 +344,7 @@ mod tests {
         };
         let yaml = serde_yaml::to_string(&service_dep).expect("Failed to serialize");
         assert_eq!(yaml.trim(), "service: postgres");
-        
+
         let deserialized: Dependency = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(service_dep, deserialized);
 
@@ -356,7 +354,7 @@ mod tests {
         };
         let yaml = serde_yaml::to_string(&task_dep).expect("Failed to serialize");
         assert_eq!(yaml.trim(), "task: deploy-contracts");
-        
+
         let deserialized: Dependency = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
         assert_eq!(task_dep, deserialized);
     }
@@ -370,20 +368,20 @@ dependencies:
   - task: deploy-contracts
   - task: migrate-database
 "#;
-        
+
         #[derive(Deserialize)]
         struct TestConfig {
             dependencies: Vec<Dependency>,
         }
-        
+
         let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
         assert_eq!(config.dependencies.len(), 4);
-        
+
         match &config.dependencies[0] {
             Dependency::Service { service } => assert_eq!(service, "postgres"),
             _ => panic!("Expected service dependency"),
         }
-        
+
         match &config.dependencies[2] {
             Dependency::Task { task } => assert_eq!(task, "deploy-contracts"),
             _ => panic!("Expected task dependency"),
@@ -397,22 +395,22 @@ dependencies:
             container: "existing-container".to_string(),
             env: HashMap::from([("KEY".to_string(), "value".to_string())]),
         };
-        
+
         let yaml = serde_yaml::to_string(&docker_attach).expect("Failed to serialize");
         assert!(yaml.contains("type: docker-attach"));
         assert!(yaml.contains("container: existing-container"));
-        
+
         // Test ProcessAttach
         let process_attach = ServiceTarget::ProcessAttach {
             pid: Some(1234),
             process_name: None,
             env: HashMap::new(),
         };
-        
+
         let yaml = serde_yaml::to_string(&process_attach).expect("Failed to serialize");
         assert!(yaml.contains("type: process-attach"));
         assert!(yaml.contains("pid: 1234"));
-        
+
         // Test Remote with process mode
         let remote = ServiceTarget::Remote {
             host: "example.com".to_string(),
@@ -423,7 +421,7 @@ dependencies:
             },
             env: HashMap::new(),
         };
-        
+
         let yaml = serde_yaml::to_string(&remote).expect("Failed to serialize");
         assert!(yaml.contains("type: remote"));
         assert!(yaml.contains("host: example.com"));

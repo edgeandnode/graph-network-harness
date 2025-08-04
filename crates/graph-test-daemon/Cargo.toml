@@ -27,6 +27,7 @@ harness-core = { path = "../harness-core" }
 service-orchestration = { path = "../service-orchestration" }
 service-registry = { path = "../service-registry" }
 command-executor = { path = "../command-executor" }
+async-runtime-compat = { path = "../async-runtime-compat" }
 
 # Graph Protocol specific dependencies
 reqwest = { workspace = true }

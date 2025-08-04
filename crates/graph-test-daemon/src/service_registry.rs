@@ -7,7 +7,9 @@ use harness_core::prelude::*;
 use harness_core::service::ServiceWrapper;
 use std::collections::HashMap;
 
-use crate::services::{AnvilService, GraphContractsService, GraphNodeService, IpfsService, PostgresService};
+use crate::services::{
+    AnvilService, GraphContractsService, GraphNodeService, IpfsService, PostgresService,
+};
 
 /// Function type for creating service instances
 type ServiceConstructor = Box<dyn Fn() -> Box<dyn JsonService> + Send + Sync>;
@@ -79,7 +81,7 @@ mod tests {
     #[test]
     fn test_service_registry() {
         let registry = ServiceRegistry::new();
-        
+
         // Check that services are registered
         let types = registry.registered_types();
         assert!(types.contains(&"anvil"));
@@ -87,11 +89,11 @@ mod tests {
         assert!(types.contains(&"ipfs"));
         assert!(types.contains(&"graph-node"));
         assert!(types.contains(&"graph-contracts"));
-        
+
         // Test creating a service
         let service = registry.create_service("anvil");
         assert!(service.is_some());
-        
+
         // Test unknown service type
         let unknown = registry.create_service("unknown");
         assert!(unknown.is_none());

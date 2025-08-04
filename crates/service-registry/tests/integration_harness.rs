@@ -1,7 +1,7 @@
 //! Integration tests for service registry with real harness deployments
 
 use command_executor::{
-    Command, Executor, Target, backends::local::LocalLauncher, target::DockerContainer,
+    Command, Executor, Target, backends::LocalLauncher, target::DockerContainer,
 };
 use service_registry::{
     Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,

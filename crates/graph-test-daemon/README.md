@@ -33,9 +33,53 @@ Each service exposes strongly-typed actions and produces events that can be cons
 
 ## Usage
 
+The daemon requires a YAML configuration file that defines the Graph Protocol service stack:
+
 ```bash
-# Start the daemon
-graph-test-daemon --endpoint 127.0.0.1:9443
+# Start the daemon with required configuration
+graph-test-daemon --config path/to/config.yaml --endpoint 127.0.0.1:9443
+```
+
+### Configuration Format
+
+The YAML configuration defines services with their runtime targets and links them to action implementations via `service_type`:
+
+```yaml
+name: graph-test-stack
+description: Complete Graph Protocol test environment
+
+services:
+  postgres:
+    service_type: postgres  # Links to PostgresService for actions
+    name: postgres
+    target:
+      type: Docker
+      image: postgres:14
+      env:
+        POSTGRES_USER: graph-node
+        POSTGRES_PASSWORD: graph-password
+        POSTGRES_DB: graph-node
+      ports: [5432]
+    health_check:
+      command: pg_isready
+      args: ["-U", "graph-node"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  anvil:
+    service_type: anvil  # Links to AnvilService for actions
+    name: anvil
+    target:
+      type: Process
+      binary: anvil
+      args: ["--port", "8545", "--chain-id", "31337"]
+      env:
+        CHAIN_ID: "31337"
+    health_check:
+      command: curl
+      args: ["-s", "http://localhost:8545"]
+      interval: 5
 ```
 
 ### Test Example
@@ -68,17 +112,45 @@ while let Ok(event) = events.recv().await {
 
 ## Configuration
 
-Services configured through environment variables:
-- `GRAPH_NODE_ENDPOINT`: GraphNode endpoint
-- `ANVIL_PORT`: Anvil RPC port (default: 8545)
-- `POSTGRES_HOST`: PostgreSQL host
-- `IPFS_API_PORT`: IPFS API port (default: 5001)
+### Service Type Linking
+
+Each service in the YAML configuration uses a `service_type` field that links the runtime configuration to action implementations:
+
+- **`postgres`**: PostgresService - Database operations and queries
+- **`anvil`**: AnvilService - Blockchain mining and balance management  
+- **`graph-node`**: GraphNodeService - Subgraph deployment and indexing
+- **`ipfs`**: IpfsService - Content storage and retrieval
+
+### Service Target Types
+
+Services can be deployed using different target types from service-orchestration:
+
+- **`Process`**: Local process execution with command-executor
+- **`Docker`**: Container deployment with Docker CLI
+- **`SSH`**: Remote execution (planned)
+
+### Parameter Extraction
+
+Service parameters are extracted from the target configuration:
+- **Environment variables**: `target.env` values
+- **Process arguments**: `target.args` for process targets
+- **Container ports**: `target.ports` for Docker targets
 
 ## Development
 
 To add new services:
-1. Define action and event types
-2. Implement the `Service` trait
-3. Register in `GraphTestDaemon::new()`
+1. Define action and event types in `services.rs`
+2. Implement the `Service` trait with actionable methods
+3. Add service creation logic in `GraphTestDaemon::from_stack_config()`
+4. Add the new `service_type` to the match statement
 
-See harness-core documentation for the `Service` trait details.
+### Architecture
+
+The daemon uses a layered architecture:
+
+1. **YAML Configuration**: Defines service instances and their targets
+2. **Service Registry**: Maps `service_type` to action implementations  
+3. **service-orchestration**: Handles service lifecycle and execution
+4. **command-executor**: Provides runtime-agnostic process management
+
+See harness-core documentation for the `Service` trait details and service-orchestration for target types.

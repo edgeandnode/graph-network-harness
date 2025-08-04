@@ -137,6 +137,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-attributes"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -287,6 +297,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-runtime-compat"
+version = "0.1.0"
+dependencies = [
+ "async-channel 2.5.0",
+ "async-global-executor",
+ "async-std",
+ "futures",
+ "smol",
+ "smol-potat",
+ "tokio",
+]
+
+[[package]]
 name = "async-signal"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,6 +333,7 @@ version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "730294c1c08c2e0f85759590518f6333f0d5a0a766a27d519c1b244c3dfd8a24"
 dependencies = [
+ "async-attributes",
  "async-channel 1.9.0",
  "async-global-executor",
  "async-io 2.5.0",
@@ -1096,15 +1120,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "async-runtime-compat",
  "async-trait",
  "chrono",
  "clap",
+ "command-executor",
  "futures",
  "harness-core",
  "reqwest",
  "schemars",
  "serde",
  "serde_json",
+ "serde_yaml",
  "service-orchestration",
  "service-registry",
  "smol",
@@ -1190,9 +1217,11 @@ dependencies = [
  "anyhow",
  "async-channel 2.5.0",
  "async-net",
+ "async-runtime-compat",
  "async-trait",
  "async-tungstenite",
  "chrono",
+ "command-executor",
  "futures",
  "harness-config",
  "indexmap",
@@ -2468,6 +2497,7 @@ dependencies = [
  "flate2",
  "futures",
  "serde",
+ "serde_json",
  "serde_yaml",
  "service-registry",
  "smol",

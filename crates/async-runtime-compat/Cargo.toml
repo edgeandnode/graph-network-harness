@@ -1,0 +1,32 @@
+[package]
+name = "async-runtime-compat"
+version = "0.1.0"
+edition = "2021"
+description = "Runtime-agnostic spawning and async utilities"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Core async types
+futures = "0.3"
+
+# Optional runtime dependencies
+tokio = { version = "1", optional = true, features = ["rt"] }
+async-std = { version = "1", optional = true }
+smol = { version = "2", optional = true }
+async-global-executor = { version = "2", optional = true }
+
+[features]
+default = []
+tokio = ["dep:tokio"]
+async-std = ["dep:async-std"]
+smol = ["dep:smol"]
+async-global = ["dep:async-global-executor"]
+# Feature to enable all runtime support
+all-runtimes = ["tokio", "async-std", "smol", "async-global"]
+
+[dev-dependencies]
+# For testing with different runtimes
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+async-std = { version = "1", features = ["attributes"] }
+smol-potat = "1"
+async-channel = "2"

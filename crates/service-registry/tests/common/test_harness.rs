@@ -1,6 +1,6 @@
 //! Test harness utilities for integration testing
 
-use command_executor::{Command, Executor, Target, backends::local::LocalLauncher};
+use command_executor::{Command, Executor, Target, backends::LocalLauncher};
 use service_registry::{Registry, ServiceEntry};
 use std::sync::Arc;
 use std::time::Duration;

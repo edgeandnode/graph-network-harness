@@ -39,8 +39,11 @@ mod executors;
 mod health;
 mod manager;
 mod package;
+mod task_config;
 
-pub use config::{HealthCheck, ServiceConfig, ServiceStatus, ServiceTarget};
+pub use config::{
+    Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+};
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
     ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
@@ -51,6 +54,7 @@ pub use package::{
     DeployedPackage, PackageBuilder, PackageDeployer, PackageHealthCheck, PackageManifest,
     PackageService, RemoteTarget,
 };
+pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
 
 /// Error types for orchestration operations
 #[derive(thiserror::Error, Debug)]

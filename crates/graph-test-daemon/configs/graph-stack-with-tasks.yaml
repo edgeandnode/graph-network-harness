@@ -1,0 +1,184 @@
+# Graph Protocol Test Stack Configuration with Tasks
+name: graph-test-stack-with-tasks
+description: Complete Graph Protocol test environment with deployment tasks
+
+# Deployment tasks that run once
+tasks:
+  deploy-graph-contracts:
+    task_type: graph-contracts-deployment
+    target:
+      type: process
+      binary: npx
+      args:
+        - hardhat
+        - deploy
+        - --network
+        - localhost
+      env:
+        ETHEREUM_URL: http://localhost:8545
+      working_dir: ./contracts/graph-contracts
+    dependencies:
+      - service: anvil  # Need blockchain running first
+    config:
+      network_name: localhost
+      deployer_key: ${DEPLOYER_PRIVATE_KEY}
+
+  deploy-tap-contracts:
+    task_type: tap-contracts-deployment
+    target:
+      type: process
+      binary: npx
+      args:
+        - hardhat
+        - deploy
+        - --network
+        - localhost
+      env:
+        ETHEREUM_URL: http://localhost:8545
+      working_dir: ./contracts/tap-contracts
+    dependencies:
+      - service: anvil
+      - task: deploy-graph-contracts  # TAP contracts depend on Graph contracts
+    config:
+      network_name: localhost
+      deployer_key: ${DEPLOYER_PRIVATE_KEY}
+
+# Long-running services
+services:
+  # PostgreSQL database for Graph Node
+  postgres:
+    service_type: postgres
+    name: postgres
+    target:
+      type: docker
+      image: postgres:14
+      env:
+        POSTGRES_USER: graph-node
+        POSTGRES_PASSWORD: graph-password
+        POSTGRES_DB: graph-node
+      ports: [5432]
+    health_check:
+      command: pg_isready
+      args: ["-U", "graph-node"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  # IPFS for subgraph storage
+  ipfs:
+    service_type: ipfs
+    name: ipfs
+    target:
+      type: docker
+      image: ipfs/go-ipfs:latest
+      env: {}
+      ports: [5001, 8080]
+    health_check:
+      command: curl
+      args: ["http://localhost:5001/api/v0/id"]
+      interval: 5
+      timeout: 3
+      retries: 5
+
+  # Anvil local blockchain
+  anvil:
+    service_type: anvil
+    name: anvil
+    target:
+      type: process
+      binary: anvil
+      args:
+        - --host
+        - "0.0.0.0"
+        - --port
+        - "8545"
+        - --chain-id
+        - "31337"
+        - --block-time
+        - "1"
+        - --accounts
+        - "10"
+        - --balance
+        - "10000"
+      env:
+        RUST_LOG: info
+        CHAIN_ID: "31337"
+    health_check:
+      command: curl
+      args:
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+        - "http://localhost:8545"
+      interval: 2
+      timeout: 1
+      retries: 10
+
+  # Graph Node indexer
+  graph-node:
+    service_type: graph-node
+    name: graph-node
+    target:
+      type: docker
+      image: graphprotocol/graph-node:latest
+      env:
+        postgres_host: postgres
+        postgres_user: graph-node
+        postgres_pass: graph-password
+        postgres_db: graph-node
+        ipfs: ipfs:5001
+        ethereum: mainnet:http://anvil:8545
+        GRAPH_LOG: info
+        GRAPH_ENDPOINT: localhost
+      ports: [8000, 8001, 8020, 8030, 8040]
+    dependencies:
+      - service: postgres
+      - service: ipfs
+      - service: anvil
+      - task: deploy-graph-contracts  # Must have contracts deployed first
+    health_check:
+      command: curl
+      args:
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"query":"{ indexingStatuses { subgraph health } }"}'
+        - "http://localhost:8030/graphql"
+      interval: 10
+      timeout: 5
+      retries: 10
+
+  # Example of attaching to existing container
+  existing-redis:
+    service_type: redis
+    name: redis
+    target:
+      type: docker-attach
+      container: production-redis  # Attach to existing container
+      env:
+        REDIS_URL: redis://localhost:6379
+
+  # Example of remote service
+  remote-indexer:
+    service_type: indexer-service
+    name: indexer-service
+    target:
+      type: remote
+      host: indexer.example.com
+      user: ubuntu
+      binary: indexer-service
+      args:
+        - --port
+        - "7600"
+        - --network-subgraph-endpoint
+        - http://graph-node:8000/subgraphs/name/graph-network
+      env:
+        INDEXER_AGENT_ETHEREUM: http://anvil:8545
+    dependencies:
+      - service: graph-node
+      - task: deploy-graph-contracts

@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::services::*;
+    use async_runtime_compat;
     use harness_core::prelude::*;
     use serde_json::json;
 
@@ -142,11 +143,13 @@ mod tests {
         assert!(all_actions.len() >= 4); // At least one action per service
 
         // Test dispatching to different services
+        let spawner = async_runtime_compat::smol::SmolSpawner;
         let postgres_result = stack
             .dispatch(
                 "postgres-1",
                 "default",
                 json!({"type": "CreateDatabase", "name": "test_db"}),
+                &spawner,
             )
             .await;
         assert!(postgres_result.is_ok());
@@ -156,6 +159,7 @@ mod tests {
                 "ipfs-1",
                 "default",
                 json!({"type": "AddContent", "content": "Hello IPFS"}),
+                &spawner,
             )
             .await;
         assert!(ipfs_result.is_ok());

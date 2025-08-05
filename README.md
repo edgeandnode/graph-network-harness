@@ -109,7 +109,9 @@ cargo xtask test --package service-registry
 
 ## Current Status
 
-Core orchestration is complete (ADR-007 ~80% implemented). The framework is functional with CLI support for YAML-based service management. Advanced features like WireGuard mesh networking and enhanced CLI UX are planned.
+Core orchestration is complete (ADR-007 ~80% implemented). The framework is functional with CLI support for YAML-based service management targeting Local, LAN, and Remote (SSH) environments. 
+
+**Note**: Built-in WireGuard management has been deprecated. Users should configure WireGuard networking separately and use Remote targets with WireGuard IPs. See [docs/WIREGUARD-DEPRECATION.md](docs/WIREGUARD-DEPRECATION.md) for migration guidance.
 
 ## License
 

@@ -30,13 +30,15 @@ The Graph Network Harness has a solid foundation with core orchestration functio
 - ✅ Service registration and discovery
 - ✅ Persistent storage
 - ✅ WebSocket pub/sub for events
-- ✅ Network topology types (LAN, WireGuard, Local)
+- ✅ Network topology types (LAN, Remote, Local)
 - ✅ Service status tracking
 - ✅ Network manager with topology detection
 
 **Missing**:
-- ⬜ WireGuard peer discovery
 - ⬜ Multi-registry federation
+
+**Deprecated**:
+- ❌ WireGuard peer discovery (users should manage WireGuard separately)
 - ⬜ Service versioning
 
 ### ✅ service-orchestration (80% Complete)

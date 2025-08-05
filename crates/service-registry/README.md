@@ -5,7 +5,7 @@ Runtime-agnostic service discovery and network topology management with TLS-secu
 ## Features
 
 - **Service Discovery**: Real-time tracking of services across networks
-- **Network Topology**: Automatic detection of Local, LAN, and WireGuard networks
+- **Network Topology**: Automatic detection of Local, LAN, and Remote networks
 - **TLS Security**: All connections secured with TLS (required, not optional)
 - **IP Allocation**: Automatic IP address management within configured subnets
 - **Event System**: Subscribe to service state changes and network events
@@ -16,7 +16,7 @@ Runtime-agnostic service discovery and network topology management with TLS-secu
 
 The registry provides three core functions:
 
-1. **Service Registration**: Services register with their network location (Local/LAN/WireGuard)
+1. **Service Registration**: Services register with their network location (Local/LAN/Remote)
 2. **Discovery**: Other services query for endpoints based on network topology
 3. **Events**: Real-time notifications of service state changes
 

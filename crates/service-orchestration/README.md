@@ -61,8 +61,8 @@ The library supports multiple execution backends through the `ServiceTarget` enu
 
 - **Local Process**: Execute services as local processes with PID tracking
 - **Docker Container**: Manage Docker containers with full lifecycle support  
-- **Remote LAN**: Deploy to remote hosts via SSH connections
-- **WireGuard Package**: Deploy pre-built packages to WireGuard peers
+- **Remote**: Deploy to remote hosts via SSH connections (replaces Remote LAN)
+- ~~**WireGuard Package**: Deploy pre-built packages to WireGuard peers~~ (deprecated - use Remote with WireGuard IPs)
 
 Each target type has specific configuration requirements. See the `config::ServiceTarget` documentation for complete details on configuring each backend type.
 

@@ -189,7 +189,7 @@ error_set! {
 - Always use smol for async tests to maintain runtime agnosticism
 - Integration tests require Docker to be running
 - Use docker-compose to simulate complex network topologies
-- Test various scenarios: local, LAN, WireGuard, mixed networks
+- Test various scenarios: local, LAN, remote (SSH), mixed networks
 - Use `--keep-running` flag for interactive debugging
 - Check `test-activity/logs/current/` for real-time log output
 - Session logs persist after test completion for post-mortem analysis
@@ -204,7 +204,7 @@ error_set! {
 ### Integration Testing Strategy
 - **Local Tests**: Single machine scenarios (processes, Docker containers)
 - **LAN Tests**: Use docker-compose networks to simulate LAN topologies
-- **WireGuard Tests**: Mock WireGuard behavior without requiring root
+- **Remote Tests**: Test SSH-based remote execution (requires SSH setup)
 - **End-to-End Tests**: Full system tests with real services
 
 ### Test Independence

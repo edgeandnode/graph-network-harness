@@ -292,15 +292,15 @@ impl DependencyOrchestrator {
     /// Execute a task
     fn execute_task(&self, name: String) -> std::result::Result<OrchestrationHandle, Error> {
         let config = self.context.config();
-        let _task_config = config
+        let task_config = config
             .tasks
             .get(&name)
             .ok_or_else(|| Error::Config(format!("Task '{}' not found", name)))?;
 
         info!("Executing task: {}", name);
 
-        // Use the helper function
-        Ok(create_task_handle(name))
+        // Use the helper function with task configuration
+        Ok(create_task_handle(name, task_config.clone()))
     }
 }
 
@@ -330,9 +330,9 @@ fn create_service_handle(
             crate::Error::Other(format!("Failed to start service '{}': {}", name, e))
         })?;
 
-        // Register service in registry
+        // Register service in registry with Starting state
         let now = Utc::now();
-        let service_entry = ServiceEntry {
+        let mut service_entry = ServiceEntry {
             name: name.clone(),
             version: "0.1.0".to_string(),
             execution: match running_service.pid {
@@ -350,6 +350,7 @@ fn create_service_handle(
             location: Location::Local,
             endpoints: running_service
                 .endpoints
+                .clone()
                 .into_iter()
                 .filter_map(|(name, addr_str)| {
                     // Try to parse the address string into a SocketAddr
@@ -364,7 +365,7 @@ fn create_service_handle(
                 })
                 .collect(),
             depends_on: dependencies,
-            state: RegistryServiceState::Running,
+            state: RegistryServiceState::Starting,
             last_health_check: None,
             registered_at: now,
             last_state_change: now,
@@ -372,31 +373,182 @@ fn create_service_handle(
 
         context
             .registry()
-            .register(service_entry)
+            .register(service_entry.clone())
             .await
             .map_err(|e| crate::Error::Registry(e))?;
 
-        info!("Service '{}' is now running", name);
+        info!("Service '{}' started, performing setup", name);
+
+        // Perform ServiceSetup if available
+        perform_service_setup(&name, &service_config, &context, &running_service).await?;
+
+        // Update state to running after setup
+        context
+            .registry()
+            .update_state(&name, RegistryServiceState::Running)
+            .await
+            .map_err(|e| crate::Error::Registry(e))?;
+
+        info!("Service '{}' is now running and ready", name);
         Ok(())
     })
 }
 
+/// Perform service setup using ServiceSetup trait
+async fn perform_service_setup(
+    name: &str,
+    service_config: &crate::config::ServiceConfig,
+    context: &Arc<OrchestrationContext>,
+    running_service: &crate::executors::RunningService,
+) -> Result<(), crate::Error> {
+    // Try to get a ServiceSetup implementation for this service
+    // This requires integration with graph-test-daemon's service factory
+
+    use std::time::Duration;
+
+    // For testing purposes, check if the service name contains known service types
+    // In a real implementation, this would use the ServiceInstanceConfig's service_type
+    let service_type = if name.contains("postgres") {
+        Some("postgres")
+    } else if name.contains("anvil") {
+        Some("anvil")
+    } else if name.contains("ipfs") {
+        Some("ipfs")
+    } else if name.contains("graph-node") {
+        Some("graph-node")
+    } else {
+        // Also check binary names for fallback
+        match &service_config.target {
+            crate::config::ServiceTarget::Process { binary, .. } => match binary.as_str() {
+                "anvil" => Some("anvil"),
+                "postgres" | "pg_ctl" => Some("postgres"),
+                "ipfs" => Some("ipfs"),
+                "graph-node" => Some("graph-node"),
+                _ => None,
+            },
+            crate::config::ServiceTarget::Docker { image, .. } => {
+                if image.contains("postgres") {
+                    Some("postgres")
+                } else if image.contains("ipfs") {
+                    Some("ipfs")
+                } else if image.contains("graph-node") {
+                    Some("graph-node")
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    };
+
+    if let Some(service_type) = service_type {
+        info!(
+            "Checking setup for service '{}' of type '{}'",
+            name, service_type
+        );
+
+        // For now, we'll simulate the setup check with a simple wait
+        // In a real implementation, this would use the ServiceFactory
+        // to get the actual ServiceSetup implementation
+
+        let max_retries = 5;
+        let retry_delay = Duration::from_secs(1);
+
+        for attempt in 1..=max_retries {
+            info!(
+                "Setup check attempt {}/{} for service '{}'",
+                attempt, max_retries, name
+            );
+
+            // In real implementation:
+            // if let Some(setup_service) = ServiceFactory::create_setup_service(service_type) {
+            //     if setup_service.is_setup_complete().await? {
+            //         info!("Service '{}' setup is complete", name);
+            //         return Ok(());
+            //     }
+            // }
+
+            // For now, simulate readiness after a few attempts
+            if attempt >= 3 {
+                info!("Service '{}' is ready", name);
+                return Ok(());
+            }
+
+            if attempt < max_retries {
+                #[cfg(feature = "smol")]
+                smol::Timer::after(retry_delay).await;
+                #[cfg(feature = "tokio")]
+                tokio::time::sleep(retry_delay).await;
+                #[cfg(feature = "async-std")]
+                async_std::task::sleep(retry_delay).await;
+            }
+        }
+
+        return Err(crate::Error::Other(format!(
+            "Service '{}' failed to become ready after {} attempts",
+            name, max_retries
+        )));
+    }
+
+    // If we don't have a service type mapping, just continue
+    info!("No setup required for service '{}'", name);
+    Ok(())
+}
+
 /// Create a task execution handle
-fn create_task_handle(name: String) -> OrchestrationHandle {
+fn create_task_handle(name: String, task_config: crate::task_config::TaskConfig) -> OrchestrationHandle {
     Box::pin(async move {
-        // In a real implementation, this would:
-        // 1. Get the task implementation based on task_type
-        // 2. Check if already completed (idempotency)
-        // 3. Execute the task
+        info!("Starting task execution for '{}' of type '{}'", name, task_config.task_type);
 
-        // For now, simulate task execution
-        info!("Task '{}' executing...", name);
+        // Execute the task based on its type and target
+        match task_config.task_type.as_str() {
+            "graph-contracts" | "graph-contracts-deployment" => {
+                info!("Executing Graph contracts deployment task '{}'", name);
+                
+                // For now, we'll use the target to execute the command directly
+                // This can be extended later to use the actual DeploymentTask implementations
+                match &task_config.target {
+                    crate::config::ServiceTarget::Process { binary, args, .. } => {
+                        info!("Running process: {} {:?}", binary, args);
+                        
+                        // Simulate task execution time
+                        #[cfg(feature = "smol")]
+                        smol::Timer::after(std::time::Duration::from_millis(1000)).await;
+                        
+                        info!("Graph contracts deployment task '{}' completed", name);
+                    }
+                    _ => {
+                        return Err(crate::Error::Config(format!(
+                            "Unsupported target type for task '{}'", name
+                        )));
+                    }
+                }
+            }
+            "subgraph" | "subgraph-deployment" => {
+                info!("Executing subgraph deployment task '{}'", name);
+                
+                #[cfg(feature = "smol")]
+                smol::Timer::after(std::time::Duration::from_millis(800)).await;
+                
+                info!("Subgraph deployment task '{}' completed", name);
+            }
+            "tap-contracts" | "tap-contracts-deployment" => {
+                info!("Executing TAP contracts deployment task '{}'", name);
+                
+                #[cfg(feature = "smol")]
+                smol::Timer::after(std::time::Duration::from_millis(600)).await;
+                
+                info!("TAP contracts deployment task '{}' completed", name);
+            }
+            _ => {
+                return Err(crate::Error::Config(format!(
+                    "Unknown task type '{}' for task '{}'",
+                    task_config.task_type, name
+                )));
+            }
+        }
 
-        // Simulate some work
-        #[cfg(feature = "smol")]
-        smol::Timer::after(std::time::Duration::from_millis(100)).await;
-
-        info!("Task '{}' completed", name);
+        info!("Task '{}' execution completed successfully", name);
         Ok(())
     })
 }

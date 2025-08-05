@@ -49,10 +49,6 @@ pub enum Error {
     /// Command execution error
     #[error("Command execution error: {0}")]
     CommandExecution(#[from] command_executor::Error),
-
-    /// Database error
-    #[error("Database error: {0}")]
-    Database(#[from] sled::Error),
 }
 
 /// Result type alias

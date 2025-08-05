@@ -59,11 +59,8 @@ impl ServiceManager {
 
         std::fs::create_dir_all(&state_dir).map_err(crate::Error::Io)?;
 
-        // Create registry with persistence
-        let registry_db_path = state_dir.join("registry_db");
-        std::fs::create_dir_all(&registry_db_path).map_err(crate::Error::Io)?;
-
-        let registry = Registry::with_persistence(registry_db_path.to_string_lossy()).await;
+        // Create in-memory registry
+        let registry = Registry::new().await;
 
         let network_config = NetworkConfig::default();
         let network_manager = NetworkManager::new(network_config)?;

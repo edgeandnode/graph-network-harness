@@ -1,6 +1,6 @@
 //! Registry backend implementations
 
-pub mod sled;
+pub mod memory;
 
 use crate::{error::Result, models::*};
 use async_trait::async_trait;

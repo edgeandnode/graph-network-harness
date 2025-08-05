@@ -148,7 +148,7 @@ impl Daemon for BaseDaemon {
 /// Builder for creating daemon instances
 pub struct DaemonBuilder {
     endpoint: SocketAddr,
-    registry_path: Option<String>,
+    state_dir: Option<std::path::PathBuf>,
     action_registry: ActionRegistry,
     service_stack: ServiceStack,
     task_stack: TaskStack,
@@ -162,7 +162,7 @@ impl DaemonBuilder {
     pub fn new() -> Self {
         Self {
             endpoint: "127.0.0.1:9443".parse().unwrap(),
-            registry_path: None,
+            state_dir: None,
             action_registry: ActionRegistry::new(),
             service_stack: ServiceStack::new(),
             task_stack: TaskStack::new(),
@@ -185,9 +185,9 @@ impl DaemonBuilder {
         self
     }
 
-    /// Set the registry persistence path
-    pub fn with_registry_path(mut self, path: impl Into<String>) -> Self {
-        self.registry_path = Some(path.into());
+    /// Set the state directory
+    pub fn with_state_dir(mut self, path: impl Into<std::path::PathBuf>) -> Self {
+        self.state_dir = Some(path.into());
         self
     }
 
@@ -238,13 +238,8 @@ impl DaemonBuilder {
             ServiceManager::new_for_tests()
                 .await
                 .map_err(Error::ServiceOrchestration)?
-        } else if let Some(registry_path) = &self.registry_path {
-            // If a registry path is provided, use its parent as the state directory
-            let state_dir = std::path::Path::new(registry_path)
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .to_path_buf();
-            ServiceManager::with_state_dir(state_dir)
+        } else if let Some(state_dir) = &self.state_dir {
+            ServiceManager::with_state_dir(state_dir.clone())
                 .await
                 .map_err(Error::ServiceOrchestration)?
         } else {
@@ -254,13 +249,8 @@ impl DaemonBuilder {
         };
 
         #[cfg(not(test))]
-        let service_manager = if let Some(registry_path) = &self.registry_path {
-            // If a registry path is provided, use its parent as the state directory
-            let state_dir = std::path::Path::new(registry_path)
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .to_path_buf();
-            ServiceManager::with_state_dir(state_dir)
+        let service_manager = if let Some(state_dir) = &self.state_dir {
+            ServiceManager::with_state_dir(state_dir.clone())
                 .await
                 .map_err(Error::ServiceOrchestration)?
         } else {
@@ -269,13 +259,8 @@ impl DaemonBuilder {
                 .map_err(Error::ServiceOrchestration)?
         };
 
-        // Create service registry
-        let service_registry = if let Some(path) = &self.registry_path {
-            info!("Creating registry with persistence at {}", path);
-            Registry::with_persistence(path).await
-        } else {
-            Registry::new().await
-        };
+        // Create service registry (always in-memory)
+        let service_registry = Registry::new().await;
 
         Ok(BaseDaemon {
             service_manager,

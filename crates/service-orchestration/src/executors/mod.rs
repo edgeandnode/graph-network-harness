@@ -6,12 +6,14 @@
 pub mod attached;
 pub mod docker;
 pub mod process;
+pub mod registry;
 pub mod stream_utils;
 pub mod traits;
 
 pub use attached::{DockerAttachedExecutor, LocalProcessAttachedExecutor, SystemdAttachedExecutor};
 pub use docker::DockerExecutor;
 pub use process::ProcessExecutor;
+pub use registry::ExecutorRegistry;
 pub use traits::{
     AttachedService, EventStream as TraitEventStream, EventStreamable, ManagedService,
 };

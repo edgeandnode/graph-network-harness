@@ -357,6 +357,8 @@ async fn test_service_lifecycle_management() {
     assert_eq!(events.len(), 1);
 }
 
+// Persistence has been removed - registry is now in-memory only
+/*
 /// Test persistence across restarts
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
@@ -398,6 +400,7 @@ async fn test_persistence_across_restarts() {
         assert_eq!(services[0].state, ServiceState::Running);
     }
 }
+*/
 
 /// Test error handling and recovery
 #[smol_potat::test]

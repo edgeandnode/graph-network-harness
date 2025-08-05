@@ -343,6 +343,65 @@ impl Service for AnvilService {
     }
 }
 
+/// ServiceSetup implementation for AnvilService
+///
+/// Anvil is a foundation service that doesn't require complex setup - it starts immediately
+#[async_trait]
+impl ServiceSetup for AnvilService {
+    async fn is_setup_complete(&self) -> Result<bool> {
+        info!(
+            "Checking if Anvil blockchain is ready on port {}",
+            self.port
+        );
+
+        // Check if Anvil RPC endpoint is responding using TCP connection
+        // For a real implementation, we'd send an RPC request, but for now
+        // we'll just check if the port is open
+        use std::net::TcpStream;
+        use std::time::Duration;
+
+        let addr = format!("127.0.0.1:{}", self.port);
+        match TcpStream::connect_timeout(
+            &addr.parse::<std::net::SocketAddr>().unwrap(),
+            Duration::from_secs(1),
+        ) {
+            Ok(_) => {
+                info!("Anvil is accepting connections on port {}", self.port);
+                // In a real implementation, we'd send an eth_chainId RPC request
+                // For now, assume if the port is open, Anvil is ready
+                Ok(true)
+            }
+            Err(e) => {
+                info!("Anvil not yet ready on port {}: {}", self.port, e);
+                Ok(false)
+            }
+        }
+    }
+
+    async fn perform_setup(&self) -> Result<()> {
+        info!("Performing Anvil setup (blockchain initialization)");
+
+        // Anvil setup would involve:
+        // 1. Starting the blockchain process
+        // 2. Waiting for RPC to be available
+        // 3. Pre-funding test accounts
+        // For now, this is a no-op since we assume Anvil is started externally
+
+        Ok(())
+    }
+
+    async fn validate_setup(&self) -> Result<()> {
+        info!("Validating Anvil setup");
+
+        // In a real implementation, this would:
+        // 1. Check if RPC is responding on the expected port
+        // 2. Verify test accounts are funded
+        // 3. Ensure chain ID matches expected value
+
+        Ok(())
+    }
+}
+
 /// PostgreSQL database service
 pub struct PostgresService {
     db_name: String,
@@ -460,6 +519,74 @@ impl IpfsService {
     }
 }
 
+/// ServiceSetup implementation for PostgresService
+///
+/// PostgreSQL setup involves ensuring the database exists and has proper permissions
+#[async_trait]
+impl ServiceSetup for PostgresService {
+    async fn is_setup_complete(&self) -> Result<bool> {
+        info!(
+            "Checking if PostgreSQL setup is complete for database '{}' on port {}",
+            self.db_name, self.port
+        );
+
+        // For PostgreSQL, we need to check if:
+        // 1. The server is accepting connections
+        // 2. The graph-node database exists
+        // Since we can't directly connect to PostgreSQL from here without a driver,
+        // we'll use a simple TCP connection check for now
+        use std::net::TcpStream;
+        use std::time::Duration;
+
+        let addr = format!("127.0.0.1:{}", self.port);
+        match TcpStream::connect_timeout(
+            &addr.parse::<std::net::SocketAddr>().unwrap(),
+            Duration::from_secs(1),
+        ) {
+            Ok(_) => {
+                info!("PostgreSQL is accepting connections on port {}", self.port);
+                // In a real implementation, we'd also check if the database exists
+                // For now, assume if PostgreSQL is up, setup can proceed
+                Ok(true)
+            }
+            Err(e) => {
+                info!("PostgreSQL not ready on port {}: {}", self.port, e);
+                Ok(false)
+            }
+        }
+    }
+
+    async fn perform_setup(&self) -> Result<()> {
+        info!(
+            "Performing PostgreSQL setup for database '{}'",
+            self.db_name
+        );
+
+        // In local-network, the postgres run.sh script:
+        // 1. Creates the graph-node database if it doesn't exist
+        // 2. Sets up the graph user with proper permissions
+        // 3. Ensures the database is ready for graph-node to connect
+
+        // This would execute:
+        // CREATE DATABASE IF NOT EXISTS graph_node;
+        // CREATE USER IF NOT EXISTS graph WITH PASSWORD 'let-me-in';
+        // GRANT ALL PRIVILEGES ON DATABASE graph_node TO graph;
+
+        Ok(())
+    }
+
+    async fn validate_setup(&self) -> Result<()> {
+        info!("Validating PostgreSQL setup");
+
+        // Validate that:
+        // 1. Database exists and is accessible
+        // 2. Required extensions are installed (if any)
+        // 3. Connection parameters are correct
+
+        Ok(())
+    }
+}
+
 impl Default for IpfsService {
     fn default() -> Self {
         Self {
@@ -562,183 +689,85 @@ impl Service for IpfsService {
     }
 }
 
-/// Graph Contracts service that handles protocol contract deployment
+/// ServiceSetup implementation for IpfsService
 ///
-/// This service implements the setup patterns from local-network/graph-contracts/run.sh
-#[derive(Default)]
-pub struct GraphContractsService {
-    /// Contract addresses after deployment (None until setup is complete)
-    deployed_addresses: Option<std::collections::HashMap<String, String>>,
-}
-
-impl GraphContractsService {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-/// Actions for Graph Contracts service
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum GraphContractsAction {
-    /// Deploy all Graph Protocol contracts
-    DeployContracts,
-    /// Verify deployed contract addresses
-    VerifyAddresses,
-    /// Get deployment status
-    GetStatus,
-}
-
-/// Events from Graph Contracts service
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "event")]
-pub enum GraphContractsEvent {
-    /// Contract deployment started
-    DeploymentStarted,
-    /// Contract deployed
-    ContractDeployed { name: String, address: String },
-    /// All contracts deployed
-    DeploymentCompleted {
-        addresses: std::collections::HashMap<String, String>,
-    },
-    /// Address verification completed
-    AddressesVerified,
-    /// Subgraph deployed
-    SubgraphDeployed { deployment_id: String },
-    /// Error occurred
-    Error { message: String },
-}
-
+/// IPFS setup involves initializing the repository and configuring CORS for graph-node
 #[async_trait]
-impl Service for GraphContractsService {
-    type Action = GraphContractsAction;
-    type Event = GraphContractsEvent;
+impl ServiceSetup for IpfsService {
+    async fn is_setup_complete(&self) -> Result<bool> {
+        info!(
+            "Checking if IPFS setup is complete on API port {} and gateway port {}",
+            self.api_port, self.gateway_port
+        );
 
-    fn service_type() -> &'static str {
-        "graph-contracts"
-    }
+        // Check if IPFS API and gateway are responding using TCP connections
+        use std::net::TcpStream;
+        use std::time::Duration;
 
-    fn name(&self) -> &str {
-        "graph-contracts"
-    }
+        // Check API port
+        let api_addr = format!("127.0.0.1:{}", self.api_port);
+        match TcpStream::connect_timeout(
+            &api_addr.parse::<std::net::SocketAddr>().unwrap(),
+            Duration::from_secs(1),
+        ) {
+            Ok(_) => {
+                info!(
+                    "IPFS API is accepting connections on port {}",
+                    self.api_port
+                );
 
-    fn description(&self) -> &str {
-        "Graph Protocol contract deployment service"
-    }
-
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
-        let (tx, rx) = async_channel::unbounded();
-
-        match action {
-            GraphContractsAction::DeployContracts => {
-                info!("Starting Graph Protocol contract deployment");
-
-                let _ = tx.send(GraphContractsEvent::DeploymentStarted).await;
-
-                // Simulate deploying each contract (based on local-network script)
-                let contracts = vec![
-                    "Controller",
-                    "EpochManager",
-                    "GraphToken",
-                    "DisputeManager",
-                    "L1Staking",
-                    "StakingExtension",
-                    "Curation",
-                    "RewardsManager",
-                    "ServiceRegistry",
-                    "L1GNS",
-                    "SubgraphNFT",
-                    "L1GraphTokenGateway",
-                ];
-
-                let mut addresses = std::collections::HashMap::new();
-                for contract in contracts {
-                    let address = format!("0x{:040x}", contract.len()); // Mock address
-                    addresses.insert(contract.to_string(), address.clone());
-
-                    let _ = tx
-                        .send(GraphContractsEvent::ContractDeployed {
-                            name: contract.to_string(),
-                            address,
-                        })
-                        .await;
-
-                    // Small delay to simulate deployment time
-                    smol::Timer::after(Duration::from_millis(100)).await;
+                // Also check the gateway
+                let gateway_addr = format!("127.0.0.1:{}", self.gateway_port);
+                match TcpStream::connect_timeout(
+                    &gateway_addr.parse::<std::net::SocketAddr>().unwrap(),
+                    Duration::from_secs(1),
+                ) {
+                    Ok(_) => {
+                        info!(
+                            "IPFS gateway is accepting connections on port {}",
+                            self.gateway_port
+                        );
+                        // In a real implementation, we'd send API requests to verify IPFS is working
+                        Ok(true)
+                    }
+                    Err(e) => {
+                        info!(
+                            "IPFS gateway not ready on port {}: {}",
+                            self.gateway_port, e
+                        );
+                        Ok(false)
+                    }
                 }
-
-                let _ = tx
-                    .send(GraphContractsEvent::DeploymentCompleted {
-                        addresses: addresses.clone(),
-                    })
-                    .await;
-
-                // Simulate subgraph deployment
-                let _ = tx
-                    .send(GraphContractsEvent::SubgraphDeployed {
-                        deployment_id: "QmGraphNetwork123".to_string(),
-                    })
-                    .await;
             }
-
-            GraphContractsAction::VerifyAddresses => {
-                info!("Verifying contract addresses");
-
-                // In real implementation, this would verify against contracts.json
-                let _ = tx.send(GraphContractsEvent::AddressesVerified).await;
-            }
-
-            GraphContractsAction::GetStatus => {
-                info!("Getting deployment status");
-
-                if let Some(addresses) = &self.deployed_addresses {
-                    let _ = tx
-                        .send(GraphContractsEvent::DeploymentCompleted {
-                            addresses: addresses.clone(),
-                        })
-                        .await;
-                }
+            Err(e) => {
+                info!("IPFS API not ready on port {}: {}", self.api_port, e);
+                Ok(false)
             }
         }
-
-        Ok(rx)
-    }
-}
-
-/// ServiceSetup implementation for GraphContractsService
-///
-/// This implements the complex setup logic from local-network/graph-contracts/run.sh
-#[async_trait]
-impl ServiceSetup for GraphContractsService {
-    async fn is_setup_complete(&self) -> Result<bool> {
-        info!("Checking if Graph Protocol contracts are already deployed");
-
-        // Check if graph-network subgraph exists (idempotency check from script)
-        // In real implementation: curl http://graph-node:8030/subgraphs/name/graph-network
-
-        // For now, check if we have deployed addresses
-        Ok(self.deployed_addresses.is_some())
     }
 
     async fn perform_setup(&self) -> Result<()> {
-        info!("Deploying Graph Protocol contracts and subgraph");
+        info!("Performing IPFS setup");
 
-        // This would implement the script logic:
-        // 1. Deploy contracts using hardhat
-        // 2. Verify addresses match expected
-        // 3. Build and deploy graph-network subgraph
-        // 4. Store addresses for future reference
+        // In local-network, the IPFS run.sh script:
+        // 1. Initializes IPFS if not already done (ipfs init)
+        // 2. Configures CORS headers for graph-node access:
+        //    ipfs config --json API.HTTPHeaders.Access-Control-Allow-Origin '["*"]'
+        //    ipfs config --json API.HTTPHeaders.Access-Control-Allow-Methods '["GET", "POST"]'
+        // 3. Configures API address to listen on all interfaces
+        //    ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
+        // 4. Starts the IPFS daemon
 
         Ok(())
     }
 
     async fn validate_setup(&self) -> Result<()> {
-        info!("Validating Graph Protocol contract deployment");
+        info!("Validating IPFS setup");
 
-        // This would verify:
-        // 1. All contract addresses match expected values in contracts.json
-        // 2. Graph-network subgraph is deployed and healthy
-        // 3. Contracts are accessible and responding
+        // Validate that:
+        // 1. IPFS API is responding on expected port
+        // 2. CORS headers are properly configured
+        // 3. Can add and retrieve test content
 
         Ok(())
     }
@@ -750,5 +779,9 @@ pub enum GraphTestStack {
     Anvil(AnvilService),
     Postgres(PostgresService),
     Ipfs(IpfsService),
-    GraphContracts(GraphContractsService),
+}
+
+#[cfg(test)]
+mod tests {
+    // Add tests for remaining services as needed
 }

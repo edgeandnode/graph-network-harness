@@ -35,10 +35,8 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
         .await
         .context("Failed to create service manager")?;
 
-    // Get registry from service manager
-    // For now, we'll create a new one (this will be refactored)
-    let registry =
-        Registry::with_persistence(data_dir.join("registry.json").to_string_lossy()).await;
+    // Create in-memory registry
+    let registry = Registry::new().await;
 
     // Create daemon state
     let state = Arc::new(DaemonState {

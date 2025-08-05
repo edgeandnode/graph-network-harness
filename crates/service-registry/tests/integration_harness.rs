@@ -17,9 +17,7 @@ mod common;
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
 async fn test_full_service_deployment() {
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let registry =
-        Registry::with_persistence(temp_dir.path().join("registry.json").to_string_lossy()).await;
+    let registry = Registry::new().await;
 
     // Create a test service
     let service = ServiceEntry::new(
@@ -407,6 +405,8 @@ async fn test_multi_node_coordination() {
     assert!(matches!(worker.location, Location::Remote { .. }));
 }
 
+// Persistence has been removed - registry is now in-memory only
+/*
 /// Test persistence across registry restarts
 #[smol_potat::test]
 #[cfg(feature = "integration-tests")]
@@ -466,3 +466,4 @@ async fn test_registry_persistence() {
         }
     }
 }
+*/

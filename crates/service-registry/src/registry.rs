@@ -2,14 +2,13 @@
 
 use crate::{
     backend::RegistryBackend,
-    backend::sled::SledBackend,
+    backend::memory::MemoryBackend,
     error::{Error, Result},
     models::*,
 };
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info};
 
@@ -32,27 +31,9 @@ pub struct EventSubscription {
 use std::collections::HashSet;
 
 impl Registry {
-    /// Create a new registry with in-memory sled backend
+    /// Create a new registry with in-memory backend
     pub async fn new() -> Self {
-        // Create in-memory backend
-        let backend = SledBackend::in_memory()
-            .await
-            .expect("Failed to create in-memory backend");
-
-        Self {
-            backend: Arc::new(Box::new(backend)),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    /// Create a registry with persistent sled backend
-    pub async fn with_persistence(path: impl Into<String>) -> Self {
-        let path = path.into();
-        // Create persistent backend
-        let backend = SledBackend::new(&path)
-            .await
-            .expect("Failed to create persistent backend");
-
+        let backend = MemoryBackend::new();
         Self {
             backend: Arc::new(Box::new(backend)),
             subscribers: Arc::new(Mutex::new(HashMap::new())),
@@ -65,21 +46,6 @@ impl Registry {
             backend: Arc::new(backend),
             subscribers: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    /// Load registry from file (creates persistent sled backend)
-    pub async fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        info!("Loading registry from {:?}", path);
-
-        // Create backend
-        let backend = SledBackend::new(path).await?;
-        backend.init().await?;
-
-        Ok(Self {
-            backend: Arc::new(Box::new(backend)),
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
-        })
     }
 
     /// Register a new service
@@ -512,6 +478,8 @@ mod tests {
         assert_eq!(events.len(), 0);
     }
 
+    // Persistence has been removed - registry is now in-memory only
+    /*
     #[smol_potat::test]
     async fn test_persistence() {
         use tempfile::tempdir;
@@ -554,4 +522,5 @@ mod tests {
             assert!(names.contains(&"service-2".to_string()));
         }
     }
+    */
 }

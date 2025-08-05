@@ -60,20 +60,20 @@ impl ServiceResolver {
         match (&from.location, &to.location) {
             // Both services are local - use host/Docker IP
             (NetworkLocation::Local, NetworkLocation::Local) => to.host_ip.ok_or_else(|| {
-                Error::Package(format!("Service {} has no host IP", to.service_name))
+                Error::Operation(format!("Service {} has no host IP", to.service_name))
             }),
 
             // Both services on LAN - use LAN IP
             (NetworkLocation::RemoteLAN { .. }, NetworkLocation::RemoteLAN { .. }) => {
                 to.lan_ip.ok_or_else(|| {
-                    Error::Package(format!("Service {} has no LAN IP", to.service_name))
+                    Error::Operation(format!("Service {} has no LAN IP", to.service_name))
                 })
             }
 
             // From local to LAN - use LAN IP if available
             (NetworkLocation::Local, NetworkLocation::RemoteLAN { .. }) => {
                 to.lan_ip.ok_or_else(|| {
-                    Error::Package(format!("Service {} has no LAN IP", to.service_name))
+                    Error::Operation(format!("Service {} has no LAN IP", to.service_name))
                 })
             }
 
@@ -85,7 +85,7 @@ impl ServiceResolver {
                 } else {
                     // Otherwise use host IP and hope for routing
                     to.host_ip.ok_or_else(|| {
-                        Error::Package(format!("Service {} has no accessible IP", to.service_name))
+                        Error::Operation(format!("Service {} has no accessible IP", to.service_name))
                     })
                 }
             }
@@ -93,7 +93,7 @@ impl ServiceResolver {
             // Any WireGuard endpoint - must use WireGuard IP
             (_, NetworkLocation::WireGuard { .. }) | (NetworkLocation::WireGuard { .. }, _) => {
                 to.wireguard_ip.ok_or_else(|| {
-                    Error::Package(format!("Service {} has no WireGuard IP", to.service_name))
+                    Error::Operation(format!("Service {} has no WireGuard IP", to.service_name))
                 })
             }
         }

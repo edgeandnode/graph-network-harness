@@ -28,9 +28,9 @@ Transform the test harness from a Docker-only system into a **heterogeneous serv
 3. **Transparent Discovery**: Services find each other by name:
    - Automatically routes to correct IP based on caller location
 
-4. **Zero-Config Deployment**: Package and deploy to remote machines:
-   - Bundle service + config + setup script
-   - Deploy via SSH with automatic network setup
+4. **Remote Service Orchestration**: Orchestrate services across multiple machines:
+   - Execute commands on remote machines via SSH
+   - Manage already-deployed binaries and services
 
 ## Implementation Summary
 
@@ -52,7 +52,7 @@ Transform the test harness from a Docker-only system into a **heterogeneous serv
 - Nested Launcher Architecture: Composable launcher pattern allows combining execution contexts
 - Runtime Agnostic: All components work with any async runtime
 - Event Streaming: Unified event system for process output, state changes, and health monitoring
-- Package-Based Deployment: Services deployed to remote nodes as self-contained tarballs
+- SSH-Based Remote Execution: Services executed on remote nodes via SSH with existing binaries
 
 ### Implementation Phases
 

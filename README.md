@@ -113,6 +113,8 @@ Core orchestration is complete (ADR-007 ~80% implemented). The framework is func
 
 **Note**: Built-in WireGuard management has been deprecated. Users should configure WireGuard networking separately and use Remote targets with WireGuard IPs. See [docs/WIREGUARD-DEPRECATION.md](docs/WIREGUARD-DEPRECATION.md) for migration guidance.
 
+**Architecture**: The harness focuses on **service orchestration** rather than deployment. Users deploy binaries themselves (via CI/CD, manual deployment, etc.), and the harness orchestrates these already-deployed services across local and remote environments via SSH.
+
 ## License
 
 Licensed under MIT or Apache-2.0, at your option.

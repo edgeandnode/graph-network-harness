@@ -205,8 +205,6 @@ pub enum Action {
     ServiceAction,
     /// List all endpoints
     ListEndpoints,
-    /// Deploy a package
-    DeployPackage,
     /// Subscribe to events
     Subscribe,
     /// Unsubscribe from events
@@ -241,8 +239,6 @@ pub enum EventType {
     ServiceStateChanged,
     /// Endpoint was updated
     EndpointUpdated,
-    /// Deployment progress
-    DeploymentProgress,
     /// Health check result
     HealthCheckResult,
     /// Registry loaded from disk
@@ -271,14 +267,14 @@ impl ServiceEntry {
     ) -> crate::Result<Self> {
         // Validate service name
         if name.trim().is_empty() {
-            return Err(crate::Error::Package(
+            return Err(crate::Error::Operation(
                 "Service name cannot be empty".to_string(),
             ));
         }
 
         // Validate version
         if version.trim().is_empty() {
-            return Err(crate::Error::Package(
+            return Err(crate::Error::Operation(
                 "Service version cannot be empty".to_string(),
             ));
         }

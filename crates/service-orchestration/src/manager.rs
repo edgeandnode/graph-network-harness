@@ -8,7 +8,6 @@ use crate::{
     config::{HealthCheck, ServiceConfig, ServiceStatus},
     executors::{DockerExecutor, ProcessExecutor, RunningService, ServiceExecutor},
     health::{HealthChecker, HealthMonitor, HealthStatus},
-    package::{DeployedPackage, PackageDeployer, RemoteTarget},
 };
 use service_registry::{
     network::{NetworkConfig, NetworkManager},
@@ -30,8 +29,6 @@ pub struct ServiceManager {
     active_services: Arc<RwLock<HashMap<String, RunningService>>>,
     /// Service health monitors
     health_monitors: Arc<RwLock<HashMap<String, HealthMonitor>>>,
-    /// Package deployer for remote services
-    package_deployer: PackageDeployer,
 }
 
 impl ServiceManager {
@@ -76,7 +73,6 @@ impl ServiceManager {
             executors,
             active_services: Arc::new(RwLock::new(HashMap::new())),
             health_monitors: Arc::new(RwLock::new(HashMap::new())),
-            package_deployer: PackageDeployer::new(),
         })
     }
 
@@ -207,19 +203,6 @@ impl ServiceManager {
         Ok(())
     }
 
-    /// Deploy a package to a remote target
-    pub async fn deploy_package(
-        &self,
-        target: RemoteTarget,
-        package_path: &str,
-    ) -> std::result::Result<DeployedPackage, Error> {
-        info!("Deploying package {} to {}", package_path, target.host);
-
-        let deployed = self.package_deployer.deploy(package_path, target).await?;
-
-        info!("Successfully deployed package: {}", deployed.manifest.name);
-        Ok(deployed)
-    }
 
     /// Get the status of a service
     pub async fn get_service_status(

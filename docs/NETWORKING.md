@@ -36,10 +36,12 @@ Services running on remote machines accessible via SSH.
    services:
      remote-service:
        target:
-         Remote:
-           host: "10.42.0.10"  # WireGuard IP
-           port: 22
-           working_dir: "/app"
+         type: remote-ssh
+         host: "10.42.0.10"  # WireGuard IP
+         user: "appuser"
+         binary: "myapp"
+         args: []
+         env: {}
    ```
 
 3. **Benefits**:
@@ -73,10 +75,12 @@ services:
 services:
   api-server:
     target:
-      Remote:
-        host: "192.168.1.100"
-        port: 22
-        working_dir: "/app"
+      type: remote-ssh
+      host: "192.168.1.100"
+      user: "deploy"
+      binary: "api-server"
+      args: []
+      env: {}
 ```
 
 ### WireGuard Mesh (Manual Setup)
@@ -85,10 +89,12 @@ services:
 services:
   secure-service:
     target:
-      Remote:
-        host: "10.42.0.5"  # WireGuard IP
-        port: 22
-        working_dir: "/app"
+      type: remote-ssh
+      host: "10.42.0.5"  # WireGuard IP
+      user: "secure"
+      binary: "secure-service"
+      args: []
+      env: {}
 ```
 
 ## Migration from Built-in WireGuard

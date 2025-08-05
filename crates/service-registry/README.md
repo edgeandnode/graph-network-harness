@@ -46,7 +46,6 @@ All communication happens over TLS-secured WebSocket connections using a request
 - `get_service` - Get specific service by name
 - `list_endpoints` - Get all service endpoints
 - `subscribe` - Subscribe to event types
-- `deploy_package` - Deploy service package to remote host
 
 ### Event Types
 - `ServiceRegistered` - New service added

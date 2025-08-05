@@ -8,7 +8,6 @@ The service registry requires a real-time communication mechanism for:
 - Service state updates and notifications
 - Event subscriptions and delivery
 - Remote service control and monitoring
-- Package deployment coordination
 
 Initial implementation included placeholder WebSocket tests that were disabled via non-existent feature flags, creating a false impression of functionality.
 
@@ -144,4 +143,4 @@ handle.subscribe(vec![EventType::ServiceStateChanged]).await?;
 2. Reconnection logic for clients
 3. Rate limiting and backpressure
 4. Authentication and authorization
-5. Binary message support for package transfers
+5. Message compression for large payloads

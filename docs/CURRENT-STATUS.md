@@ -55,7 +55,6 @@ The Graph Network Harness has a solid foundation with core orchestration functio
 **Missing**:
 - ⬜ SshExecutor implementation
 - ⬜ SystemdExecutor
-- ⬜ Package deployment system
 - ⬜ Advanced health check types
 
 ### ✅ harness-config (95% Complete)

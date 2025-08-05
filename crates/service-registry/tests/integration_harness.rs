@@ -334,7 +334,7 @@ health:
 
     // Test that load_manifest works (build will fail due to unimplemented tarball creation)
     match builder.build().await {
-        Err(service_registry::Error::Package(msg))
+        Err(service_registry::Error::Operation(msg))
             if msg.contains("Tarball creation not yet implemented") =>
         {
             println!("Expected error: package building not fully implemented yet");

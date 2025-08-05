@@ -59,17 +59,6 @@ impl WebSocketTestClient {
         Ok(serde_json::to_value(endpoints)?)
     }
 
-    /// Deploy a package
-    pub async fn deploy_package(
-        &self,
-        package_path: &str,
-        target_node: Option<&str>,
-    ) -> Result<Value> {
-        self.handle
-            .deploy_package(package_path, target_node)
-            .await
-            .map_err(|e| anyhow::anyhow!("Deploy failed: {}", e))
-    }
 
     /// Start a service
     pub async fn start_service(&self, name: &str) -> Result<()> {

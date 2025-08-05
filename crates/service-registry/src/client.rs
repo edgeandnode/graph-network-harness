@@ -72,7 +72,7 @@ impl WsClient {
         // Establish TLS connection
         let connector = TlsConnector::from(tls_config.config);
         let server_name = rustls::pki_types::ServerName::try_from(server_name.to_owned())
-            .map_err(|e| Error::Package(format!("Invalid server name: {:?}", e)))?;
+            .map_err(|e| Error::Operation(format!("Invalid server name: {:?}", e)))?;
         let tls_stream = connector.connect(server_name, tcp_stream).await?;
 
         // WebSocket handshake over TLS
@@ -229,11 +229,11 @@ impl WsClient {
                 let mut pending = pending.lock().await;
                 if let Some(tx) = pending.remove(&id) {
                     if let Some(error) = error {
-                        let _ = tx.send(Err(Error::Package(error.message)));
+                        let _ = tx.send(Err(Error::Operation(error.message)));
                     } else if let Some(data) = data {
                         let _ = tx.send(Ok(data));
                     } else {
-                        let _ = tx.send(Err(Error::Package("Empty response".to_string())));
+                        let _ = tx.send(Err(Error::Operation("Empty response".to_string())));
                     }
                 }
             }
@@ -288,7 +288,7 @@ impl WsClientHandle {
 
         self.tx
             .unbounded_send(ClientMessage::Request(msg))
-            .map_err(|_| Error::Package("Failed to send request".to_string()))?;
+            .map_err(|_| Error::Operation("Failed to send request".to_string()))?;
 
         // Wait for response
         match rx.await {
@@ -297,7 +297,7 @@ impl WsClientHandle {
                 // Clean up if cancelled
                 let mut pending = self.pending_requests.lock().await;
                 pending.remove(&id);
-                Err(Error::Package("Request cancelled".to_string()))
+                Err(Error::Operation("Request cancelled".to_string()))
             }
         }
     }
@@ -346,7 +346,7 @@ impl WsClientHandle {
         if let Some(subscribed) = data.get("subscribed") {
             Ok(serde_json::from_value(subscribed.clone())?)
         } else {
-            Err(Error::Package("Invalid subscribe response".to_string()))
+            Err(Error::Operation("Invalid subscribe response".to_string()))
         }
     }
 
@@ -358,28 +358,16 @@ impl WsClientHandle {
         if let Some(subscribed) = data.get("subscribed") {
             Ok(serde_json::from_value(subscribed.clone())?)
         } else {
-            Err(Error::Package("Invalid unsubscribe response".to_string()))
+            Err(Error::Operation("Invalid unsubscribe response".to_string()))
         }
     }
 
-    /// Deploy a package
-    pub async fn deploy_package(
-        &self,
-        package_path: &str,
-        target_node: Option<&str>,
-    ) -> Result<serde_json::Value> {
-        let mut params = serde_json::json!({ "package_path": package_path });
-        if let Some(node) = target_node {
-            params["target_node"] = serde_json::json!(node);
-        }
-        self.request(Action::DeployPackage, params).await
-    }
 
     /// Close the connection
     pub async fn close(&self) -> Result<()> {
         self.tx
             .unbounded_send(ClientMessage::Close)
-            .map_err(|_| Error::Package("Failed to send close".to_string()))?;
+            .map_err(|_| Error::Operation("Failed to send close".to_string()))?;
         Ok(())
     }
 }

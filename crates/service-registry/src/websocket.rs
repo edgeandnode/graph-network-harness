@@ -213,7 +213,6 @@ macro_rules! impl_connection_handler {
                     Action::ListEndpoints => self.handle_list_endpoints().await,
                     Action::Subscribe => self.handle_subscribe(params).await,
                     Action::Unsubscribe => self.handle_unsubscribe(params).await,
-                    Action::DeployPackage => self.handle_deploy_package(params).await,
                 };
 
                 match response {
@@ -322,11 +321,6 @@ macro_rules! impl_connection_handler {
                 }))
             }
 
-            /// Handle deploy package request (stub for now)
-            async fn handle_deploy_package(&self, _params: serde_json::Value) -> Result<serde_json::Value> {
-                // TODO: Implement package deployment
-                Err(Error::Package("Package deployment not yet implemented".to_string()))
-            }
 
             /// Send a response
             async fn send_response(&mut self, id: &str, data: serde_json::Value) -> Result<()> {

@@ -77,8 +77,8 @@ pub enum ServiceTarget {
         /// Environment variables
         env: HashMap<String, String>,
     },
-    /// Remote execution via SSH (replaces RemoteLan/Wireguard)
-    #[serde(rename = "remote")]
+    /// Remote execution via SSH
+    #[serde(rename = "remote-ssh")]
     Remote {
         /// Remote host address
         host: String,
@@ -89,28 +89,6 @@ pub enum ServiceTarget {
         mode: RemoteMode,
         /// Environment variables
         env: HashMap<String, String>,
-    },
-    /// Remote LAN execution via SSH (deprecated, use Remote)
-    #[deprecated(note = "Use Remote variant instead")]
-    RemoteLan {
-        /// Remote host address
-        host: String,
-        /// SSH username
-        user: String,
-        /// Binary to execute on remote host
-        binary: String,
-        /// Command line arguments
-        args: Vec<String>,
-    },
-    /// WireGuard network execution with package deployment (deprecated, use Remote)
-    #[deprecated(note = "Use Remote variant instead")]
-    Wireguard {
-        /// WireGuard peer address
-        host: String,
-        /// SSH username
-        user: String,
-        /// Path to package tarball for deployment
-        package: String,
     },
 }
 
@@ -125,11 +103,6 @@ pub enum RemoteMode {
         /// Command line arguments
         args: Vec<String>,
     },
-    /// Deploy a package to the remote host
-    Package {
-        /// Path to package tarball
-        package: String,
-    },
 }
 
 impl ServiceTarget {
@@ -141,10 +114,6 @@ impl ServiceTarget {
             ServiceTarget::DockerAttach { env, .. } => env.clone(),
             ServiceTarget::ProcessAttach { env, .. } => env.clone(),
             ServiceTarget::Remote { env, .. } => env.clone(),
-            #[allow(deprecated)]
-            ServiceTarget::RemoteLan { .. } => HashMap::new(),
-            #[allow(deprecated)]
-            ServiceTarget::Wireguard { .. } => HashMap::new(),
         }
     }
 
@@ -191,28 +160,6 @@ impl ServiceTarget {
                 user: user.clone(),
                 mode: mode.clone(),
                 env: new_env,
-            },
-            #[allow(deprecated)]
-            ServiceTarget::RemoteLan {
-                host,
-                user,
-                binary,
-                args,
-            } => ServiceTarget::RemoteLan {
-                host: host.clone(),
-                user: user.clone(),
-                binary: binary.clone(),
-                args: args.clone(),
-            },
-            #[allow(deprecated)]
-            ServiceTarget::Wireguard {
-                host,
-                user,
-                package,
-            } => ServiceTarget::Wireguard {
-                host: host.clone(),
-                user: user.clone(),
-                package: package.clone(),
             },
         }
     }
@@ -423,7 +370,7 @@ dependencies:
         };
 
         let yaml = serde_yaml::to_string(&remote).expect("Failed to serialize");
-        assert!(yaml.contains("type: remote"));
+        assert!(yaml.contains("type: remote-ssh"));
         assert!(yaml.contains("host: example.com"));
         assert!(yaml.contains("binary: myapp"));
     }

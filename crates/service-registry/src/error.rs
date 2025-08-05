@@ -38,17 +38,14 @@ pub enum Error {
     #[error("YAML serialization error: {0}")]
     Yaml(#[from] serde_yaml::Error),
 
-    /// Package error
-    #[error("Package error: {0}")]
-    Package(String),
-
-    /// Deployment error
-    #[error("Deployment error: {0}")]
-    Deployment(String),
 
     /// Command execution error
     #[error("Command execution error: {0}")]
     CommandExecution(#[from] command_executor::Error),
+
+    /// Generic operation error
+    #[error("Operation error: {0}")]
+    Operation(String),
 }
 
 /// Result type alias

@@ -76,7 +76,7 @@ impl IpAllocator {
     pub fn allocate_specific(&mut self, service_name: &str, ip: IpAddr) -> Result<()> {
         // Check if IP is in subnet
         if !self.subnet.contains(&ip) {
-            return Err(Error::Package(format!(
+            return Err(Error::Operation(format!(
                 "IP {} is not in subnet {}",
                 ip, self.subnet
             )));
@@ -86,7 +86,7 @@ impl IpAllocator {
         if self.allocated_ips.contains(&ip) {
             if let Some(existing) = self.ip_to_service.get(&ip) {
                 if existing != service_name {
-                    return Err(Error::Package(format!(
+                    return Err(Error::Operation(format!(
                         "IP {} already allocated to {}",
                         ip, existing
                     )));
@@ -149,7 +149,7 @@ impl IpAllocator {
 
             // Check if we've wrapped around
             if current_ip == start_ip {
-                return Err(Error::Package("No available IPs in subnet".to_string()));
+                return Err(Error::Operation("No available IPs in subnet".to_string()));
             }
         }
     }

@@ -72,7 +72,6 @@ The service orchestration system provides heterogeneous service management throu
   - `DockerExecutor`: Docker container management using docker CLI
   - `SshExecutor`: Remote SSH execution (planned, not implemented)
   - `SystemdExecutor`: Systemd service management (planned)
-  - `PackageDeployer`: Deploy packages to remote targets (planned)
 - **Health Monitoring**: Configurable health checks with retry logic
 - **Event Streaming**: Real-time service output via `stream_events` API
 - **State Management**: Persistent service state with RwLock synchronization

@@ -40,10 +40,8 @@ This file tracks issues discovered during code audits. Issues are organized by p
 ### 3. Extensive incomplete implementation (41 TODOs)
 - **Major gaps**:
   - harness-core/src/client.rs: 6 TODOs - stub implementation
-  - service-orchestration/src/package.rs: 10 TODOs - package deployment missing
   - graph-test-daemon/src/actions.rs: 8 TODOs - action implementations incomplete
   - service-orchestration/src/executors/remote.rs: 5 TODOs - remote execution not implemented
-  - service-registry/src/websocket.rs: Package deployment handler missing
 - **Fix**: Create GitHub issues to track and prioritize implementation of missing features
 
 ## Medium Priority Issues

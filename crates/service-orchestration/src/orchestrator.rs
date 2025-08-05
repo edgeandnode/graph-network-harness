@@ -5,7 +5,8 @@
 
 use crate::{
     Error, config::Dependency, context::OrchestrationContext, 
-    discovery::ServiceDiscovery, task_config::StackConfig
+    discovery::ServiceDiscovery, task_config::StackConfig,
+    health_integration::HealthMonitoringExt
 };
 use chrono::Utc;
 use service_registry::{
@@ -414,6 +415,16 @@ fn create_service_handle(
             .update_state(&name, RegistryServiceState::Running)
             .await
             .map_err(|e| crate::Error::Registry(e))?;
+
+        // Start health monitoring if configured
+        if service_config.health_check.is_some() {
+            let health_manager = context.health_monitoring();
+            if let Err(e) = health_manager.start_monitoring(name.clone(), service_config.clone()) {
+                warn!("Failed to start health monitoring for '{}': {}", name, e);
+            } else {
+                info!("Health monitoring started for service '{}'", name);
+            }
+        }
 
         info!("Service '{}' is now running and ready", name);
         Ok(())

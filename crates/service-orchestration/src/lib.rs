@@ -39,6 +39,7 @@ mod context;
 mod discovery;
 mod executors;
 mod health;
+mod health_integration;
 mod manager;
 mod orchestrator;
 mod package;
@@ -54,6 +55,7 @@ pub use executors::{
     ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
+pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager};
 pub use manager::ServiceManager;
 pub use orchestrator::{DependencyGraph, DependencyNode, DependencyOrchestrator};
 pub use package::{

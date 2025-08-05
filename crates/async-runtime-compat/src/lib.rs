@@ -104,9 +104,12 @@ pub mod async_std;
 #[cfg(feature = "smol")]
 pub mod smol;
 
+pub mod runtime_utils;
+
 /// Prelude for common imports
 pub mod prelude {
     pub use crate::{SpawnHandle, Spawner, SpawnerWithHandle};
+    pub use crate::runtime_utils::sleep;
 
     #[cfg(feature = "tokio")]
     pub use crate::tokio::TokioSpawner;

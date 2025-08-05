@@ -38,17 +38,27 @@ impl OrchestrationContext {
     /// - `tokio` feature uses TokioSpawner
     /// - `async-std` feature uses AsyncStdSpawner
     pub fn new(config: StackConfig, registry: Registry) -> Self {
-        #[cfg(feature = "smol")]
-        let spawner: Arc<dyn Spawner> = Arc::new(async_runtime_compat::smol::SmolSpawner);
+        let spawner: Arc<dyn Spawner> = {
+            #[cfg(feature = "smol")]
+            {
+                Arc::new(async_runtime_compat::smol::SmolSpawner)
+            }
 
-        #[cfg(feature = "tokio")]
-        let spawner: Arc<dyn Spawner> = Arc::new(async_runtime_compat::tokio::TokioSpawner);
+            #[cfg(feature = "tokio")]
+            {
+                Arc::new(async_runtime_compat::tokio::TokioSpawner)
+            }
 
-        #[cfg(feature = "async-std")]
-        let spawner: Arc<dyn Spawner> = Arc::new(async_runtime_compat::async_std::AsyncStdSpawner);
+            #[cfg(feature = "async-std")]
+            {
+                Arc::new(async_runtime_compat::async_std::AsyncStdSpawner)
+            }
 
-        #[cfg(not(any(feature = "smol", feature = "tokio", feature = "async-std")))]
-        compile_error!("One of the runtime features must be enabled: smol, tokio, or async-std");
+            #[cfg(not(any(feature = "smol", feature = "tokio", feature = "async-std")))]
+            {
+                compile_error!("One of the runtime features must be enabled: smol, tokio, or async-std");
+            }
+        };
 
         Self {
             spawner,

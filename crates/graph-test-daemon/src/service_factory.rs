@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 
-
 /// Factory for creating services with setup capabilities
 pub struct ServiceFactory;
 

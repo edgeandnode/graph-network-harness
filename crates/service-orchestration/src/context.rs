@@ -59,7 +59,9 @@ impl OrchestrationContext {
 
             #[cfg(not(any(feature = "smol", feature = "tokio", feature = "async-std")))]
             {
-                compile_error!("One of the runtime features must be enabled: smol, tokio, or async-std");
+                compile_error!(
+                    "One of the runtime features must be enabled: smol, tokio, or async-std"
+                );
             }
         };
 

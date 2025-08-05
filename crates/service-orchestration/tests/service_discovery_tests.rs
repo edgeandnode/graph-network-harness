@@ -1,8 +1,8 @@
 //! Tests for service discovery and configuration injection
 
 use service_orchestration::{
-    DependencyOrchestrator, OrchestrationContext, ServiceConfig, ServiceInstanceConfig,
-    ServiceTarget, StackConfig, ServiceDiscovery,
+    DependencyOrchestrator, OrchestrationContext, ServiceConfig, ServiceDiscovery,
+    ServiceInstanceConfig, ServiceTarget, StackConfig,
 };
 use service_registry::Registry;
 use std::collections::HashMap;
@@ -45,7 +45,8 @@ fn create_discovery_test_stack() -> StackConfig {
                     binary: "sh".to_string(),
                     args: vec![
                         "-c".to_string(),
-                        "echo API connecting to postgres at $POSTGRES_HOST:$POSTGRES_PORT".to_string(),
+                        "echo API connecting to postgres at $POSTGRES_HOST:$POSTGRES_PORT"
+                            .to_string(),
                     ],
                     env: HashMap::new(), // This should be populated by discovery
                     working_dir: None,

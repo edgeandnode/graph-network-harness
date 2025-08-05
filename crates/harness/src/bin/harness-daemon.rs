@@ -22,9 +22,7 @@ struct Args {
 
 fn main() -> Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .init();
+    tracing_subscriber::fmt().with_target(false).init();
 
     let args = Args::parse();
 
@@ -35,7 +33,5 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&args.data_dir)?;
 
     // Run with smol
-    smol::block_on(async {
-        harness::daemon::run(&args.data_dir, args.port).await
-    })
+    smol::block_on(async { harness::daemon::run(&args.data_dir, args.port).await })
 }

@@ -53,16 +53,14 @@ impl TaskFactory {
                     ),
                 )))
             }
-            "subgraph" | "subgraph-deployment" => {
-                Some(TaskHandle::SubgraphDeploy(Arc::new(
-                    SubgraphDeployTask::new(
-                        "http://localhost:8000".to_string(),
-                        "http://localhost:5001".to_string(),
-                        "http://localhost:8545".to_string(),
-                        "./subgraph".to_string(),
-                    ),
-                )))
-            }
+            "subgraph" | "subgraph-deployment" => Some(TaskHandle::SubgraphDeploy(Arc::new(
+                SubgraphDeployTask::new(
+                    "http://localhost:8000".to_string(),
+                    "http://localhost:5001".to_string(),
+                    "http://localhost:8545".to_string(),
+                    "./subgraph".to_string(),
+                ),
+            ))),
             "tap-contracts" | "tap-contracts-deployment" => {
                 Some(TaskHandle::TapContracts(Arc::new(TapContractsTask::new(
                     "http://localhost:8545".to_string(),
@@ -131,7 +129,8 @@ impl TaskFactory {
                     .unwrap_or("./tap-contracts")
                     .to_string();
                 Some(TaskHandle::TapContracts(Arc::new(TapContractsTask::new(
-                    ethereum_url, working_dir,
+                    ethereum_url,
+                    working_dir,
                 ))))
             }
             _ => None,
@@ -154,11 +153,7 @@ mod tests {
 
         for task_type in tasks {
             let task = TaskFactory::create_task(task_type);
-            assert!(
-                task.is_some(),
-                "Failed to create task: {}",
-                task_type
-            );
+            assert!(task.is_some(), "Failed to create task: {}", task_type);
 
             // Verify we can call TaskHandle methods
             let task = task.unwrap();

@@ -8,15 +8,11 @@ use tracing::info;
 
 fn main() -> Result<()> {
     // Use smol runtime
-    smol::block_on(async {
-        run_daemon().await
-    })
+    smol::block_on(async { run_daemon().await })
 }
 
 async fn run_daemon() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .init();
+    tracing_subscriber::fmt().with_target(false).init();
 
     info!("🚀 Starting Demo Daemon");
     info!("📦 This simulates a simple microservices platform");

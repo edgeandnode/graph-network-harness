@@ -6,9 +6,9 @@
 
 use crate::{Error, ServiceConfig, TaskConfig, config::ServiceStatus};
 use chrono::{DateTime, Utc};
+use service_registry::ServiceState as RegistryServiceState;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use service_registry::ServiceState as RegistryServiceState;
 use uuid::Uuid;
 
 /// Deployment state tracking
@@ -347,9 +347,10 @@ impl StateManager {
     pub fn all_services_healthy(&self) -> bool {
         let current = self.current_deployment.read().unwrap();
         if let Some(deployment) = current.as_ref() {
-            deployment.services.values().all(|s| {
-                matches!(s.state, ServiceState::Running)
-            })
+            deployment
+                .services
+                .values()
+                .all(|s| matches!(s.state, ServiceState::Running))
         } else {
             true
         }
@@ -500,11 +501,7 @@ mod tests {
             .update_service_state("service1", ServiceState::Starting, None)
             .unwrap();
         state_manager
-            .update_service_state(
-                "service1",
-                ServiceState::Running,
-                Some(Uuid::new_v4()),
-            )
+            .update_service_state("service1", ServiceState::Running, Some(Uuid::new_v4()))
             .unwrap();
 
         // Update task state
@@ -573,7 +570,9 @@ mod tests {
             .update_task_state("task2", TaskState::Failed("error".to_string()))
             .unwrap();
 
-        state_manager.record_error("service2", "Failed to start".to_string()).unwrap();
+        state_manager
+            .record_error("service2", "Failed to start".to_string())
+            .unwrap();
 
         let summary = state_manager.get_deployment_summary().unwrap();
         assert_eq!(summary.total_services, 2);

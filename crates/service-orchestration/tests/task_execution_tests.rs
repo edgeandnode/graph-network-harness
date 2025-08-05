@@ -38,7 +38,11 @@ fn create_task_test_stack() -> StackConfig {
             task_type: "graph-contracts-deployment".to_string(),
             target: ServiceTarget::Process {
                 binary: "hardhat".to_string(),
-                args: vec!["deploy".to_string(), "--network".to_string(), "localhost".to_string()],
+                args: vec![
+                    "deploy".to_string(),
+                    "--network".to_string(),
+                    "localhost".to_string(),
+                ],
                 env: HashMap::new(),
                 working_dir: Some("./contracts".to_string()),
             },
@@ -47,8 +51,14 @@ fn create_task_test_stack() -> StackConfig {
             }],
             config: {
                 let mut config = HashMap::new();
-                config.insert("ethereum_url".to_string(), serde_json::Value::String("http://localhost:8545".to_string()));
-                config.insert("working_dir".to_string(), serde_json::Value::String("./contracts".to_string()));
+                config.insert(
+                    "ethereum_url".to_string(),
+                    serde_json::Value::String("http://localhost:8545".to_string()),
+                );
+                config.insert(
+                    "working_dir".to_string(),
+                    serde_json::Value::String("./contracts".to_string()),
+                );
                 config
             },
         },
@@ -70,8 +80,14 @@ fn create_task_test_stack() -> StackConfig {
             }],
             config: {
                 let mut config = HashMap::new();
-                config.insert("graph_node_url".to_string(), serde_json::Value::String("http://localhost:8000".to_string()));
-                config.insert("ipfs_url".to_string(), serde_json::Value::String("http://localhost:5001".to_string()));
+                config.insert(
+                    "graph_node_url".to_string(),
+                    serde_json::Value::String("http://localhost:8000".to_string()),
+                );
+                config.insert(
+                    "ipfs_url".to_string(),
+                    serde_json::Value::String("http://localhost:5001".to_string()),
+                );
                 config
             },
         },
@@ -132,7 +148,11 @@ async fn test_task_only_execution() {
     let orchestrator = DependencyOrchestrator::new(context, &config);
 
     let result = orchestrator.execute().await;
-    assert!(result.is_ok(), "Task-only orchestration failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Task-only orchestration failed: {:?}",
+        result.err()
+    );
 }
 
 #[cfg(feature = "smol")]
@@ -168,5 +188,8 @@ async fn test_unknown_task_type_fails() {
     let orchestrator = DependencyOrchestrator::new(context, &config);
 
     let result = orchestrator.execute().await;
-    assert!(result.is_err(), "Expected orchestration to fail with unknown task type");
+    assert!(
+        result.is_err(),
+        "Expected orchestration to fail with unknown task type"
+    );
 }

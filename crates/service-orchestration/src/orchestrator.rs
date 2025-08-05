@@ -4,9 +4,8 @@
 //! service and task dependencies to execute them in the correct order.
 
 use crate::{
-    Error, config::Dependency, context::OrchestrationContext, 
-    discovery::ServiceDiscovery, task_config::StackConfig,
-    health_integration::HealthMonitoringExt
+    Error, config::Dependency, context::OrchestrationContext, discovery::ServiceDiscovery,
+    health_integration::HealthMonitoringExt, task_config::StackConfig,
 };
 use chrono::Utc;
 use service_registry::{
@@ -210,9 +209,10 @@ impl DependencyOrchestrator {
         info!("Starting dependency-driven orchestration");
 
         // Start deployment tracking
-        let deployment_id = self.context.state_manager().start_deployment(
-            self.context.config().name.clone()
-        );
+        let deployment_id = self
+            .context
+            .state_manager()
+            .start_deployment(self.context.config().name.clone());
         info!("Started deployment: {}", deployment_id);
 
         // Verify we can execute in dependency order
@@ -330,24 +330,42 @@ fn create_service_handle(
         // Create service discovery client
         let registry_arc = context.registry.clone();
         let discovery = ServiceDiscovery::new(registry_arc);
-        
+
         // Wait for dependencies to be available
         for dep_name in &dependencies {
-            info!("Waiting for dependency '{}' to be available for service '{}'", dep_name, name);
-            discovery.wait_for_service(dep_name, 30).await
-                .map_err(|e| crate::Error::Other(format!("Failed waiting for dependency '{}': {}", dep_name, e)))?;
+            info!(
+                "Waiting for dependency '{}' to be available for service '{}'",
+                dep_name, name
+            );
+            discovery
+                .wait_for_service(dep_name, 30)
+                .await
+                .map_err(|e| {
+                    crate::Error::Other(format!(
+                        "Failed waiting for dependency '{}': {}",
+                        dep_name, e
+                    ))
+                })?;
         }
-        
+
         // Build configuration based on discovered services
-        let discovered_config = discovery.build_service_config(&service_config).await
-            .map_err(|e| crate::Error::Other(format!("Failed to build config for '{}': {}", name, e)))?;
-        
+        let discovered_config = discovery
+            .build_service_config(&service_config)
+            .await
+            .map_err(|e| {
+                crate::Error::Other(format!("Failed to build config for '{}': {}", name, e))
+            })?;
+
         // Create a modified service config with injected environment variables
         let mut modified_config = service_config.clone();
         if let crate::config::ServiceTarget::Process { env, .. } = &mut modified_config.target {
             // Merge discovered config into environment
             env.extend(discovered_config);
-            info!("Injected {} configuration values into service '{}'", env.len(), name);
+            info!(
+                "Injected {} configuration values into service '{}'",
+                env.len(),
+                name
+            );
         }
 
         // Find the appropriate executor
@@ -539,48 +557,55 @@ async fn perform_service_setup(
 }
 
 /// Create a task execution handle
-fn create_task_handle(name: String, task_config: crate::task_config::TaskConfig) -> OrchestrationHandle {
+fn create_task_handle(
+    name: String,
+    task_config: crate::task_config::TaskConfig,
+) -> OrchestrationHandle {
     Box::pin(async move {
-        info!("Starting task execution for '{}' of type '{}'", name, task_config.task_type);
+        info!(
+            "Starting task execution for '{}' of type '{}'",
+            name, task_config.task_type
+        );
 
         // Execute the task based on its type and target
         match task_config.task_type.as_str() {
             "graph-contracts" | "graph-contracts-deployment" => {
                 info!("Executing Graph contracts deployment task '{}'", name);
-                
+
                 // For now, we'll use the target to execute the command directly
                 // This can be extended later to use the actual DeploymentTask implementations
                 match &task_config.target {
                     crate::config::ServiceTarget::Process { binary, args, .. } => {
                         info!("Running process: {} {:?}", binary, args);
-                        
+
                         // Simulate task execution time
                         #[cfg(feature = "smol")]
                         smol::Timer::after(std::time::Duration::from_millis(1000)).await;
-                        
+
                         info!("Graph contracts deployment task '{}' completed", name);
                     }
                     _ => {
                         return Err(crate::Error::Config(format!(
-                            "Unsupported target type for task '{}'", name
+                            "Unsupported target type for task '{}'",
+                            name
                         )));
                     }
                 }
             }
             "subgraph" | "subgraph-deployment" => {
                 info!("Executing subgraph deployment task '{}'", name);
-                
+
                 #[cfg(feature = "smol")]
                 smol::Timer::after(std::time::Duration::from_millis(800)).await;
-                
+
                 info!("Subgraph deployment task '{}' completed", name);
             }
             "tap-contracts" | "tap-contracts-deployment" => {
                 info!("Executing TAP contracts deployment task '{}'", name);
-                
+
                 #[cfg(feature = "smol")]
                 smol::Timer::after(std::time::Duration::from_millis(600)).await;
-                
+
                 info!("TAP contracts deployment task '{}' completed", name);
             }
             _ => {

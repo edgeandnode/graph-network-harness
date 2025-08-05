@@ -38,6 +38,8 @@ async-channel = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 smol-potat = { workspace = true }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
 
 [[bin]]
 name = "graph-test-daemon"

@@ -276,6 +276,7 @@ fn process_hardhat_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono;
     use command_executor::{ProcessEvent, ProcessEventType};
 
     #[test]
@@ -490,6 +491,108 @@ mod tests {
     }
 
     #[test]
+    fn test_subgraph_deploy_task_creation() {
+        let task = SubgraphDeployTask::new(
+            "http://localhost:8000".to_string(),
+            "http://localhost:5001".to_string(),
+            "http://localhost:8545".to_string(),
+            "./subgraph".to_string(),
+        );
+
+        assert_eq!(task.name(), "subgraph-deploy");
+        assert_eq!(task.description(), "Deploy subgraphs to Graph Node");
+        assert_eq!(SubgraphDeployTask::task_type(), "subgraph-deployment");
+    }
+
+    #[test]
+    fn test_extract_deployment_id() {
+        let line = "Build completed: QmXYZ123abc456def789ghi";
+        let result = SubgraphDeployTask::extract_deployment_id(line);
+        assert_eq!(result, Some("QmXYZ123abc456def789ghi".to_string()));
+
+        let line = "No hash here";
+        let result = SubgraphDeployTask::extract_deployment_id(line);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_extract_progress() {
+        let tests = vec![
+            ("Compile subgraph", Some("Compiling subgraph")),
+            (
+                "Write compiled subgraph to build/",
+                Some("Writing compiled subgraph"),
+            ),
+            ("Upload subgraph to IPFS", Some("Uploading to IPFS")),
+            (
+                "Deploy subgraph to Graph Node",
+                Some("Deploying to Graph Node"),
+            ),
+            (
+                "Deployed to http://localhost:8000",
+                Some("Deployment complete"),
+            ),
+            ("Random output", None),
+        ];
+
+        for (input, expected) in tests {
+            let result = SubgraphDeployTask::extract_progress(input);
+            assert_eq!(result, expected.map(|s| s.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_process_subgraph_event() {
+        let mut ipfs_hash = None;
+
+        // Test build completion
+        let event = ProcessEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: ProcessEventType::Stdout,
+            data: Some("Build completed: QmTest123456789abc".to_string()),
+        };
+
+        let result = process_subgraph_event(&event, &mut ipfs_hash);
+        match result {
+            Some(SubgraphDeployEvent::BuildCompleted { ipfs_hash: hash }) => {
+                assert_eq!(hash, "QmTest123456789abc");
+            }
+            _ => panic!("Expected BuildCompleted event"),
+        }
+        assert_eq!(ipfs_hash, Some("QmTest123456789abc".to_string()));
+
+        // Test progress event
+        let event = ProcessEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: ProcessEventType::Stdout,
+            data: Some("Compile subgraph".to_string()),
+        };
+
+        let result = process_subgraph_event(&event, &mut ipfs_hash);
+        match result {
+            Some(SubgraphDeployEvent::BuildProgress { status }) => {
+                assert_eq!(status, "Compiling subgraph");
+            }
+            _ => panic!("Expected BuildProgress event"),
+        }
+
+        // Test error event
+        let event = ProcessEvent {
+            timestamp: chrono::Utc::now(),
+            event_type: ProcessEventType::Stderr,
+            data: Some("Error: Failed to connect to IPFS".to_string()),
+        };
+
+        let result = process_subgraph_event(&event, &mut ipfs_hash);
+        match result {
+            Some(SubgraphDeployEvent::Error { message }) => {
+                assert!(message.contains("Failed to connect to IPFS"));
+            }
+            _ => panic!("Expected Error event"),
+        }
+    }
+
+    #[test]
     fn test_multiple_deployments() {
         let mut deployed = HashMap::new();
         let mut completed = 0;
@@ -635,4 +738,291 @@ impl DeploymentTask for TapContractsTask {
 
         Ok(rx)
     }
+}
+
+/// Subgraph deployment task
+pub struct SubgraphDeployTask {
+    /// Graph Node endpoint URL
+    graph_node_url: String,
+    /// IPFS endpoint URL
+    ipfs_url: String,
+    /// Ethereum RPC URL
+    ethereum_url: String,
+    /// Working directory for subgraph
+    working_dir: String,
+    /// Command executor
+    executor: Executor<LocalLauncher>,
+}
+
+impl SubgraphDeployTask {
+    /// Create a new subgraph deployment task
+    pub fn new(
+        graph_node_url: String,
+        ipfs_url: String,
+        ethereum_url: String,
+        working_dir: String,
+    ) -> Self {
+        Self {
+            graph_node_url,
+            ipfs_url,
+            ethereum_url,
+            working_dir,
+            executor: Executor::new("subgraph-deploy".to_string(), LocalLauncher),
+        }
+    }
+
+    /// Extract deployment ID from graph CLI output
+    fn extract_deployment_id(line: &str) -> Option<String> {
+        // Example: "Build completed: QmXYZ..."
+        if line.contains("Build completed:") {
+            if let Some(start) = line.find("Qm") {
+                let hash: String = line[start..]
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric())
+                    .collect();
+                if hash.len() > 10 {
+                    return Some(hash);
+                }
+            }
+        }
+        None
+    }
+
+    /// Extract deployment progress
+    fn extract_progress(line: &str) -> Option<String> {
+        // Various progress indicators from graph-cli
+        if line.contains("Compile subgraph") {
+            Some("Compiling subgraph".to_string())
+        } else if line.contains("Write compiled subgraph") {
+            Some("Writing compiled subgraph".to_string())
+        } else if line.contains("Upload subgraph to IPFS") {
+            Some("Uploading to IPFS".to_string())
+        } else if line.contains("Deploy subgraph") {
+            Some("Deploying to Graph Node".to_string())
+        } else if line.contains("Deployed to") {
+            Some("Deployment complete".to_string())
+        } else {
+            None
+        }
+    }
+}
+
+/// Actions for subgraph deployment
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type")]
+pub enum SubgraphDeployAction {
+    /// Deploy a subgraph from source
+    Deploy {
+        /// Subgraph name (e.g., "org/subgraph-name")
+        name: String,
+        /// Optional version label
+        version_label: Option<String>,
+    },
+    /// Build subgraph without deploying
+    Build,
+    /// Create a new subgraph from template
+    Create {
+        /// Template to use (e.g., "scaffold-eth", "compound-v2")
+        template: String,
+    },
+}
+
+/// Events from subgraph deployment
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "event")]
+pub enum SubgraphDeployEvent {
+    /// Build started
+    BuildStarted,
+    /// Build progress
+    BuildProgress { status: String },
+    /// Build completed with IPFS hash
+    BuildCompleted { ipfs_hash: String },
+    /// Deployment started
+    DeploymentStarted { name: String },
+    /// Deployment completed
+    DeploymentCompleted {
+        name: String,
+        ipfs_hash: String,
+        endpoints: Vec<String>,
+    },
+    /// Error occurred
+    Error { message: String },
+}
+
+#[async_trait]
+impl DeploymentTask for SubgraphDeployTask {
+    type Action = SubgraphDeployAction;
+    type Event = SubgraphDeployEvent;
+
+    fn task_type() -> &'static str {
+        "subgraph-deployment"
+    }
+
+    fn name(&self) -> &str {
+        "subgraph-deploy"
+    }
+
+    fn description(&self) -> &str {
+        "Deploy subgraphs to Graph Node"
+    }
+
+    async fn is_completed(&self) -> Result<bool> {
+        // Check if subgraph.yaml exists and deployment was successful
+        let subgraph_file = std::path::Path::new(&self.working_dir).join("subgraph.yaml");
+        let deployed_file = std::path::Path::new(&self.working_dir).join(".deployment");
+
+        Ok(subgraph_file.exists() && deployed_file.exists())
+    }
+
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+        let (tx, rx) = async_channel::unbounded();
+
+        match action {
+            SubgraphDeployAction::Deploy {
+                name,
+                version_label,
+            } => {
+                info!("Deploying subgraph '{}'", name);
+
+                let _ = tx
+                    .send(SubgraphDeployEvent::DeploymentStarted { name: name.clone() })
+                    .await;
+
+                // Build the graph deploy command
+                let mut cmd = Command::new("npx");
+                let mut args = vec![
+                    "graph",
+                    "deploy",
+                    "--node",
+                    &self.graph_node_url,
+                    "--ipfs",
+                    &self.ipfs_url,
+                ];
+
+                if let Some(label) = version_label.as_ref() {
+                    args.push("--version-label");
+                    args.push(label);
+                }
+
+                args.push(&name);
+
+                cmd.args(&args)
+                    .current_dir(&self.working_dir)
+                    .env("ETHEREUM_URL", &self.ethereum_url);
+
+                // Launch the command
+                let (mut event_stream, _handle) = self
+                    .executor
+                    .launch(&Target::Command, cmd)
+                    .await
+                    .map_err(|e| Error::daemon(format!("Failed to launch graph-cli: {}", e)))?;
+
+                // Process events
+                let tx_clone = tx.clone();
+                let name_clone = name.clone();
+                let graph_node_url = self.graph_node_url.clone();
+
+                smol::spawn(async move {
+                    let mut ipfs_hash = None;
+
+                    while let Some(event) = event_stream.next().await {
+                        if let Some(translated) = process_subgraph_event(&event, &mut ipfs_hash) {
+                            let _ = tx_clone.send(translated).await;
+                        }
+                    }
+
+                    // Send completion event
+                    if let Some(hash) = ipfs_hash {
+                        let _ = tx_clone
+                            .send(SubgraphDeployEvent::DeploymentCompleted {
+                                name: name_clone.clone(),
+                                ipfs_hash: hash.clone(),
+                                endpoints: vec![
+                                    format!("{}/subgraphs/name/{}", graph_node_url, name_clone),
+                                    format!("{}/subgraphs/id/{}", graph_node_url, hash),
+                                ],
+                            })
+                            .await;
+                    }
+                })
+                .detach();
+            }
+
+            SubgraphDeployAction::Build => {
+                info!("Building subgraph");
+
+                let _ = tx.send(SubgraphDeployEvent::BuildStarted).await;
+
+                // Build command
+                let mut cmd = Command::new("npx");
+                cmd.args(["graph", "build"]).current_dir(&self.working_dir);
+
+                // Similar event processing for build
+                let _ = tx
+                    .send(SubgraphDeployEvent::Error {
+                        message: "Build action not fully implemented".to_string(),
+                    })
+                    .await;
+            }
+
+            SubgraphDeployAction::Create { template } => {
+                info!("Creating subgraph from template: {}", template);
+
+                // Create command would scaffold a new subgraph
+                let _ = tx
+                    .send(SubgraphDeployEvent::Error {
+                        message: "Create action not implemented".to_string(),
+                    })
+                    .await;
+            }
+        }
+
+        Ok(rx)
+    }
+}
+
+/// Process graph-cli output events
+fn process_subgraph_event(
+    event: &ProcessEvent,
+    ipfs_hash: &mut Option<String>,
+) -> Option<SubgraphDeployEvent> {
+    match &event.event_type {
+        ProcessEventType::Stdout => {
+            if let Some(data) = &event.data {
+                debug!("Graph CLI output: {}", data);
+
+                // Extract IPFS hash if found
+                if let Some(hash) = SubgraphDeployTask::extract_deployment_id(data) {
+                    *ipfs_hash = Some(hash.clone());
+                    return Some(SubgraphDeployEvent::BuildCompleted { ipfs_hash: hash });
+                }
+
+                // Extract progress
+                if let Some(status) = SubgraphDeployTask::extract_progress(data) {
+                    return Some(SubgraphDeployEvent::BuildProgress { status });
+                }
+            }
+        }
+        ProcessEventType::Stderr => {
+            if let Some(data) = &event.data {
+                if data.contains("Error") || data.contains("error") {
+                    return Some(SubgraphDeployEvent::Error {
+                        message: data.clone(),
+                    });
+                }
+            }
+        }
+        ProcessEventType::Exited { code, .. } => {
+            if let Some(code) = code {
+                if *code != 0 {
+                    return Some(SubgraphDeployEvent::Error {
+                        message: format!("Graph CLI failed with exit code {}", code),
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+
+    None
 }

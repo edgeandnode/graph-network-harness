@@ -12,6 +12,10 @@ default = []
 ssh-tests = ["command-executor/ssh-tests"]
 docker-tests = ["command-executor/docker-tests"]
 test-utils = []
+# Runtime features (select one)
+smol = ["async-runtime-compat/smol", "dep:smol"]
+tokio = ["async-runtime-compat/tokio", "dep:tokio"]
+async-std = ["async-runtime-compat/async-std", "dep:async-std"]
 
 [dependencies]
 # Workspace dependencies
@@ -24,10 +28,12 @@ serde_yaml = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
+chrono = { workspace = true }
 
 # Internal crates
 command-executor = { workspace = true, features = ["ssh"] }
 service-registry = { workspace = true }
+async-runtime-compat = { path = "../async-runtime-compat" }
 
 # Additional dependencies for orchestration
 tokio = { version = "1.0", features = ["full"], optional = true }
@@ -47,4 +53,8 @@ tempfile = { workspace = true }
 # Use smol for runtime-agnostic tests
 smol = "2.0"
 smol-potat = { workspace = true }
+# Enable smol feature for tests
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+# Enable smol feature for self during tests
+service-orchestration = { path = ".", features = ["smol"] }
 

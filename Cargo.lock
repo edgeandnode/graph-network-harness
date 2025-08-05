@@ -2490,8 +2490,10 @@ name = "service-orchestration"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-runtime-compat",
  "async-std",
  "async-trait",
+ "chrono",
  "command-executor",
  "dirs",
  "flate2",
@@ -2499,6 +2501,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "service-orchestration",
  "service-registry",
  "smol",
  "smol-potat",

@@ -35,21 +35,25 @@
 #![warn(unsafe_code)]
 
 mod config;
+mod context;
 mod executors;
 mod health;
 mod manager;
+mod orchestrator;
 mod package;
 mod task_config;
 
 pub use config::{
     Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
 };
+pub use context::OrchestrationContext;
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
     ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 pub use manager::ServiceManager;
+pub use orchestrator::{DependencyGraph, DependencyNode, DependencyOrchestrator};
 pub use package::{
     DeployedPackage, PackageBuilder, PackageDeployer, PackageHealthCheck, PackageManifest,
     PackageService, RemoteTarget,

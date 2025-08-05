@@ -41,9 +41,6 @@ tempfile = { workspace = true }
 # Networking
 ipnet = { workspace = true }
 
-# Database
-sled = { workspace = true }
-
 # Command execution
 command-executor = { path = "../command-executor" }
 

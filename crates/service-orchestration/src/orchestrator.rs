@@ -209,6 +209,12 @@ impl DependencyOrchestrator {
     pub async fn execute(&self) -> std::result::Result<(), Error> {
         info!("Starting dependency-driven orchestration");
 
+        // Start deployment tracking
+        let deployment_id = self.context.state_manager().start_deployment(
+            self.context.config().name.clone()
+        );
+        info!("Started deployment: {}", deployment_id);
+
         // Verify we can execute in dependency order
         let execution_order = self.graph.topological_sort()?;
         info!("Execution order: {:?}", execution_order);

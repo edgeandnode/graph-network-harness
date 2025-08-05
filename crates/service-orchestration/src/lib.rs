@@ -43,6 +43,7 @@ mod health_integration;
 mod manager;
 mod orchestrator;
 mod package;
+mod state;
 mod task_config;
 
 pub use config::{
@@ -61,6 +62,10 @@ pub use orchestrator::{DependencyGraph, DependencyNode, DependencyOrchestrator};
 pub use package::{
     DeployedPackage, PackageBuilder, PackageDeployer, PackageHealthCheck, PackageManifest,
     PackageService, RemoteTarget,
+};
+pub use state::{
+    DeploymentState, DeploymentStatus, DeploymentSummary, ServiceDeploymentState, ServiceState,
+    ServiceStateFilter, StateManager, TaskExecutionState, TaskState, TaskStateFilter,
 };
 pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
 

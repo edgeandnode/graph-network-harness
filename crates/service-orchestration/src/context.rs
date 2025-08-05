@@ -8,7 +8,7 @@ use async_runtime_compat::Spawner;
 use service_registry::Registry;
 use std::sync::Arc;
 
-use crate::{StackConfig, executors::ExecutorRegistry};
+use crate::{StackConfig, StateManager, executors::ExecutorRegistry};
 
 /// Context object for service orchestration
 ///
@@ -28,6 +28,9 @@ pub struct OrchestrationContext {
 
     /// Executor registry for service execution
     pub executors: Arc<ExecutorRegistry>,
+
+    /// State manager for tracking deployment state
+    pub state_manager: Arc<StateManager>,
 }
 
 impl OrchestrationContext {
@@ -65,6 +68,7 @@ impl OrchestrationContext {
             registry: Arc::new(registry),
             config: Arc::new(config),
             executors: Arc::new(ExecutorRegistry::new()),
+            state_manager: Arc::new(StateManager::new()),
         }
     }
 
@@ -81,6 +85,7 @@ impl OrchestrationContext {
             registry: Arc::new(registry),
             config: Arc::new(config),
             executors: Arc::new(ExecutorRegistry::new()),
+            state_manager: Arc::new(StateManager::new()),
         }
     }
 
@@ -107,6 +112,11 @@ impl OrchestrationContext {
     /// Get a reference to the executor registry
     pub fn executors(&self) -> &ExecutorRegistry {
         &self.executors
+    }
+
+    /// Get a reference to the state manager
+    pub fn state_manager(&self) -> &StateManager {
+        &self.state_manager
     }
 }
 

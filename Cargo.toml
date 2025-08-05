@@ -48,8 +48,7 @@ schemars = "1.0.4"
 # New dependencies for distributed features
 wireguard-control = "1.5"
 
-# Database
-sled = "0.34"
+# Utilities
 dirs = "6.0"
 
 # Service registry dependencies

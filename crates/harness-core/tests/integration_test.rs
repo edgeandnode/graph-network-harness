@@ -27,7 +27,7 @@ fn create_test_builder() -> DaemonBuilder {
     // Leak the tempdir so it doesn't get cleaned up during the test
     let path = temp_dir.into_path();
 
-    DaemonBuilder::new().with_registry_path(path.join("registry").to_string_lossy().to_string())
+    DaemonBuilder::new().with_state_dir(path)
 }
 
 #[derive(Debug)]

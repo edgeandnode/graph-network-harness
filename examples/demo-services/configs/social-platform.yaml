@@ -1,0 +1,235 @@
+name: social-media-platform
+description: Demo microservices simulating a social media platform
+
+services:
+  database:
+    service_type: demo-database
+    orchestration:
+      name: database
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[DB] PostgreSQL starting...' &&
+            sleep 3 &&
+            touch /tmp/demo-db-ready &&
+            echo '[DB] Database ready!' &&
+            while true; do
+              echo \"[DB] Connections: $((RANDOM % 50 + 10))/100\";
+              sleep 3;
+            done
+          "]
+      health_check:
+        command: test
+        args: ["-f", "/tmp/demo-db-ready"]
+        interval: 2
+        retries: 5
+        timeout: 5
+
+  cache:
+    service_type: demo-cache
+    orchestration:
+      name: cache
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[CACHE] Redis starting...' &&
+            nc -l -k -p 6379 2>/dev/null &
+            echo '[CACHE] Ready on port 6379' &&
+            while true; do
+              echo \"[CACHE] GET user:$((RANDOM % 1000)) (hit)\";
+              sleep 1;
+            done
+          "]
+      dependencies:
+        - Service:
+            service: database
+      health_check:
+        command: nc
+        args: ["-z", "localhost", "6379"]
+        interval: 2
+        retries: 3
+        timeout: 5
+
+  api-gateway:
+    service_type: demo-api-gateway
+    orchestration:
+      name: api-gateway
+      target:
+        Docker:
+          image: alpine:latest
+          command: ["sh", "-c"]
+          args: ["
+            echo '{\"level\":\"info\",\"service\":\"api-gateway\",\"message\":\"Starting\"}' &&
+            nc -l -p 8080 &
+            while true; do
+              METHOD=$(shuf -n1 -e GET POST PUT DELETE);
+              STATUS=$(shuf -n1 -e 200 200 201 400 404 500);
+              echo \"{\\\"method\\\":\\\"$METHOD\\\",\\\"status\\\":$STATUS}\";
+              sleep 0.$((RANDOM % 9 + 1));
+            done
+          "]
+          ports: ["8080:8080"]
+      dependencies:
+        - Service:
+            service: database
+        - Service:
+            service: cache
+      health_check:
+        command: nc
+        args: ["-z", "localhost", "8080"]
+        interval: 3
+        retries: 3
+        timeout: 5
+
+  user-service:
+    service_type: demo-user-service
+    orchestration:
+      name: user-service
+      target:
+        Docker:
+          image: alpine:latest
+          command: ["sh", "-c"]
+          args: ["
+            echo '[USER] Service starting...' &&
+            while true; do
+              ACTION=$(shuf -n1 -e login register update_profile logout);
+              USER_ID=$((RANDOM % 10000));
+              echo \"[USER] Action: $ACTION, user_id: $USER_ID\";
+              sleep 2;
+            done
+          "]
+      dependencies:
+        - Service:
+            service: database
+        - Service:
+            service: cache
+        - Service:
+            service: api-gateway
+
+  feed-service:
+    service_type: demo-feed-service
+    orchestration:
+      name: feed-service
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[FEED] Feed service starting...' &&
+            while true; do
+              USER_ID=$((RANDOM % 1000));
+              POSTS=$((RANDOM % 50 + 10));
+              TIME=$((RANDOM % 100 + 50));
+              echo \"[FEED] Generated feed for user:$USER_ID - $POSTS posts in ${TIME}ms\";
+              if [ $TIME -gt 100 ]; then
+                echo '[WARN] [FEED] Slow feed generation detected!';
+              fi;
+              sleep 1;
+            done
+          "]
+      dependencies:
+        - Service:
+            service: database
+        - Service:
+            service: cache
+        - Service:
+            service: user-service
+
+  notification-service:
+    service_type: demo-notification-service
+    orchestration:
+      name: notification-service
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[NOTIF] Notification service starting...' &&
+            FAIL_COUNT=0 &&
+            while true; do
+              if [ $((RANDOM % 10)) -eq 0 ] && [ $FAIL_COUNT -lt 3 ]; then
+                FAIL_COUNT=$((FAIL_COUNT + 1));
+                echo '[ERROR] [NOTIF] Failed to connect to push service!';
+                sleep 2;
+              else
+                FAIL_COUNT=0;
+                TYPE=$(shuf -n1 -e like comment follow message);
+                echo \"[NOTIF] Sent push notification: $TYPE to user:$((RANDOM % 1000))\";
+              fi;
+              sleep 1;
+            done
+          "]
+      dependencies:
+        - Service:
+            service: user-service
+        - Service:
+            service: feed-service
+      health_check:
+        command: sh
+        args: ["-c", "ps aux | grep -v grep | grep -q notification-service"]
+        interval: 5
+        retries: 2
+        timeout: 5
+
+tasks:
+  db-migration:
+    task_type: demo-db-migration
+    orchestration:
+      name: db-migration
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[MIGRATION] Starting database migration v1.2.3...' &&
+            sleep 1 &&
+            echo '[MIGRATION] Creating table: user_preferences' &&
+            sleep 1 &&
+            echo '[MIGRATION] Adding index on posts.created_at' &&
+            sleep 1 &&
+            echo '[MIGRATION] Updating schema version' &&
+            sleep 1 &&
+            echo '[MIGRATION] ✅ Migration completed successfully!'
+          "]
+      dependencies:
+        - Service:
+            service: database
+
+  cache-warmer:
+    task_type: demo-cache-warmer
+    orchestration:
+      name: cache-warmer
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[CACHE-WARM] Starting cache warming...' &&
+            for i in $(seq 0 10 100); do
+              echo \"[CACHE-WARM] Progress: $i% - Loading popular users\";
+              sleep 0.5;
+            done &&
+            echo '[CACHE-WARM] ✅ Cache warmed with 1000 entries!'
+          "]
+      dependencies:
+        - Service:
+            service: database
+        - Service:
+            service: cache
+
+  deploy-assets:
+    task_type: demo-deploy-assets
+    orchestration:
+      name: deploy-assets
+      target:
+        Process:
+          binary: sh
+          args: ["-c", "
+            echo '[DEPLOY] Deploying static assets to CDN...' &&
+            echo '[DEPLOY] Uploading: js/bundle.min.js (2.3MB)' &&
+            sleep 1 &&
+            echo '[DEPLOY] Uploading: css/styles.min.css (156KB)' &&
+            sleep 1 &&
+            echo '[DEPLOY] Uploading: images/* (45 files)' &&
+            sleep 2 &&
+            echo '[DEPLOY] ✅ Assets deployed to CDN!'
+          "]
+      dependencies: []

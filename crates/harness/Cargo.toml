@@ -11,6 +11,10 @@ description = "CLI for graph-network-harness"
 name = "harness"
 path = "src/main.rs"
 
+[[bin]]
+name = "harness-daemon"
+path = "src/bin/harness-daemon.rs"
+
 [dependencies]
 # Workspace dependencies
 clap = { workspace = true }
@@ -18,7 +22,8 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Runtime-agnostic async runtime
-smol = "2.0"
+smol = { workspace = true }
+smol-potat = { workspace = true }
 async-net = { workspace = true }
 async-tungstenite = { workspace = true }
 futures = { workspace = true }
@@ -27,7 +32,8 @@ async-io = "2.0"
 
 # Internal dependencies
 harness-config = { path = "../harness-config" }
-service-orchestration = { path = "../service-orchestration" }
+harness-core = { path = "../harness-core" }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
 service-registry = { path = "../service-registry" }
 
 # For table output
@@ -48,6 +54,12 @@ chrono = { workspace = true }
 base64 = "0.22"
 rustls = { workspace = true }
 rustls-pemfile = { workspace = true }
+
+# For demo daemon example
+async-trait = { workspace = true }
+schemars = { workspace = true }
+rand = "0.8"
+async-channel = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

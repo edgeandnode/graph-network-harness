@@ -3,7 +3,10 @@
 //! This module implements the core orchestration logic that processes
 //! service and task dependencies to execute them in the correct order.
 
-use crate::{Error, config::Dependency, context::OrchestrationContext, task_config::StackConfig};
+use crate::{
+    Error, config::Dependency, context::OrchestrationContext, 
+    discovery::ServiceDiscovery, task_config::StackConfig
+};
 use chrono::Utc;
 use service_registry::{
     ExecutionInfo, Location, ServiceEntry, ServiceState as RegistryServiceState,
@@ -317,16 +320,39 @@ fn create_service_handle(
     dependencies: Vec<String>,
 ) -> OrchestrationHandle {
     Box::pin(async move {
+        // Create service discovery client
+        let registry_arc = context.registry.clone();
+        let discovery = ServiceDiscovery::new(registry_arc);
+        
+        // Wait for dependencies to be available
+        for dep_name in &dependencies {
+            info!("Waiting for dependency '{}' to be available for service '{}'", dep_name, name);
+            discovery.wait_for_service(dep_name, 30).await
+                .map_err(|e| crate::Error::Other(format!("Failed waiting for dependency '{}': {}", dep_name, e)))?;
+        }
+        
+        // Build configuration based on discovered services
+        let discovered_config = discovery.build_service_config(&service_config).await
+            .map_err(|e| crate::Error::Other(format!("Failed to build config for '{}': {}", name, e)))?;
+        
+        // Create a modified service config with injected environment variables
+        let mut modified_config = service_config.clone();
+        if let crate::config::ServiceTarget::Process { env, .. } = &mut modified_config.target {
+            // Merge discovered config into environment
+            env.extend(discovered_config);
+            info!("Injected {} configuration values into service '{}'", env.len(), name);
+        }
+
         // Find the appropriate executor
         let executor = context
             .executors()
-            .find_executor(&service_config)
+            .find_executor(&modified_config)
             .map_err(|e| crate::Error::Other(format!("Failed to find executor: {}", e)))?;
 
         info!("Starting service '{}' with executor", name);
 
-        // Start the service using the executor
-        let running_service = executor.start(service_config.clone()).await.map_err(|e| {
+        // Start the service using the executor with modified config
+        let running_service = executor.start(modified_config).await.map_err(|e| {
             crate::Error::Other(format!("Failed to start service '{}': {}", name, e))
         })?;
 

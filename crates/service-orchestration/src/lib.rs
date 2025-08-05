@@ -36,6 +36,7 @@
 
 mod config;
 mod context;
+mod discovery;
 mod executors;
 mod health;
 mod manager;
@@ -47,6 +48,7 @@ pub use config::{
     Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
 };
 pub use context::OrchestrationContext;
+pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
     ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,

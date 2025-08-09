@@ -259,8 +259,7 @@ impl TaskStack {
     {
         if self.tasks.contains_key(&instance_name) {
             return Err(Error::service_type(format!(
-                "Task instance '{}' already registered",
-                instance_name
+                "Task instance '{instance_name}' already registered"
             )));
         }
 
@@ -298,7 +297,7 @@ impl TaskStack {
         spawner: &S,
     ) -> Result<Receiver<Value>> {
         let task = self.get(instance_name).ok_or_else(|| {
-            Error::service_type(format!("Task instance '{}' not found", instance_name))
+            Error::service_type(format!("Task instance '{instance_name}' not found"))
         })?;
 
         let (rx, converter) = task.execute_json(input).await?;
@@ -312,7 +311,7 @@ impl TaskStack {
     /// Check if a task is completed
     pub async fn is_completed(&self, instance_name: &str) -> Result<bool> {
         let task = self.get(instance_name).ok_or_else(|| {
-            Error::service_type(format!("Task instance '{}' not found", instance_name))
+            Error::service_type(format!("Task instance '{instance_name}' not found"))
         })?;
 
         task.is_completed().await
@@ -576,14 +575,10 @@ mod tests {
                     }
                 }
                 ProcessEventType::Exited { code, .. } => {
-                    if let Some(code) = code {
-                        Some(TranslatingEvent {
-                            event_type: "exit".to_string(),
-                            message: format!("Process exited with code {}", code),
-                        })
-                    } else {
-                        None
-                    }
+                    code.map(|code| TranslatingEvent {
+                        event_type: "exit".to_string(),
+                        message: format!("Process exited with code {code}"),
+                    })
                 }
                 _ => None,
             }

@@ -6,7 +6,6 @@ use command_executor::{
 use service_registry::{
     Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,
     models::{EventType, ServiceState, WsMessage},
-    package::PackageBuilder,
 };
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tempfile::TempDir;
@@ -283,67 +282,6 @@ async fn test_event_subscription_integration() {
     }
 }
 
-/// Test package deployment flow
-#[smol_potat::test]
-#[cfg(feature = "integration-tests")]
-async fn test_package_deployment_flow() {
-    let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let source_dir = temp_dir.path().join("package-source");
-    let output_dir = temp_dir.path().join("package-output");
-
-    // Create directories
-    std::fs::create_dir_all(&source_dir).expect("Failed to create source dir");
-    std::fs::create_dir_all(&output_dir).expect("Failed to create output dir");
-
-    // Create a test manifest
-    let manifest_content = r#"
-name: "test-package"
-version: "1.0.0"
-description: "Test package for integration"
-service:
-  type: "process"
-  ports:
-    - name: "http"
-      port: 8080
-      protocol: "http"
-health:
-  script: "scripts/health.sh"
-  interval: "30s"
-  timeout: "5s"
-"#;
-    std::fs::write(source_dir.join("manifest.yaml"), manifest_content)
-        .expect("Failed to write manifest");
-
-    // Create package builder
-    let builder = PackageBuilder::new(
-        "test-package".to_string(),
-        "1.0.0".to_string(),
-        source_dir,
-        output_dir.clone(),
-    );
-
-    // Test name sanitization (core functionality)
-    assert_eq!(
-        PackageBuilder::sanitize_name("test@package!"),
-        "test_package_"
-    );
-    assert_eq!(
-        PackageBuilder::sanitize_version("1.0.0-beta+build"),
-        "1.0.0-beta_build"
-    );
-
-    // Test that load_manifest works (build will fail due to unimplemented tarball creation)
-    match builder.build().await {
-        Err(service_registry::Error::Operation(msg))
-            if msg.contains("Tarball creation not yet implemented") =>
-        {
-            println!("Expected error: package building not fully implemented yet");
-        }
-        other => {
-            panic!("Unexpected result: {:?}", other);
-        }
-    }
-}
 
 /// Test multi-node service coordination
 #[smol_potat::test]

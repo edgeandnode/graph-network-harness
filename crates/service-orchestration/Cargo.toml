@@ -54,4 +54,7 @@ smol-potat = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 # Enable smol feature for self during tests
 service-orchestration = { path = ".", features = ["smol"] }
+# For SSH integration tests
+signal-hook = "0.3"
+libc = "0.2"
 

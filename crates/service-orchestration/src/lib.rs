@@ -46,13 +46,14 @@ mod state;
 mod task_config;
 
 pub use config::{
-    Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+    CommandSpec, Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
 };
 pub use context::OrchestrationContext;
 pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
-    ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
+    LayeredServiceExecutor, ManagedService, ProcessExecutor, RemoteSshExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
+    layered::LayerConfig,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager};

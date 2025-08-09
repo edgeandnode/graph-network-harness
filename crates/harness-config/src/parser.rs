@@ -203,22 +203,28 @@ pub fn convert_to_orchestrator_with_context(
             args,
             working_dir,
         } => {
-            // For MVP, assume LAN network for remote services
-            // In Phase 6, we'll properly handle network types
-            ServiceTarget::RemoteLan {
+            ServiceTarget::Remote {
                 host: host.clone(),
                 user: "root".to_string(), // Default for MVP
-                binary: binary.clone(),
-                args: args.clone(),
+                mode: service_orchestration::RemoteMode::Process {
+                    binary: binary.clone(),
+                    args: args.clone(),
+                },
+                env: std::collections::HashMap::new(),
             }
         }
 
         ServiceType::Package { host, package, .. } => {
-            // Map to WireGuard target for MVP
-            ServiceTarget::Wireguard {
+            // Package management has been removed - convert to remote process
+            // Users should deploy packages manually
+            ServiceTarget::Remote {
                 host: host.clone(),
                 user: "root".to_string(), // Default for MVP
-                package: package.clone(),
+                mode: service_orchestration::RemoteMode::Process {
+                    binary: package.clone(), // Assume package name is the binary
+                    args: vec![],
+                },
+                env: std::collections::HashMap::new(),
             }
         }
     };

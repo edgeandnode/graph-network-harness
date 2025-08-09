@@ -3,9 +3,8 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, PackageHealthCheck, PackageManifest,
-    PackageService, ProcessExecutor, RemoteTarget, ServiceConfig, ServiceExecutor, ServiceManager,
-    ServiceStatus, ServiceTarget,
+    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, ProcessExecutor, RemoteSshExecutor,
+    ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -81,14 +80,17 @@ fn test_docker_service_config() {
 }
 
 #[test]
-fn test_remote_lan_service_config() {
+fn test_remote_ssh_service_config() {
     let config = ServiceConfig {
         name: "remote-api".to_string(),
-        target: ServiceTarget::RemoteLan {
+        target: ServiceTarget::Remote {
             host: "192.168.1.100".to_string(),
             user: "deploy".to_string(),
-            binary: "./api-server".to_string(),
-            args: vec!["--port".to_string(), "3000".to_string()],
+            mode: service_orchestration::RemoteMode::Process {
+                binary: "./api-server".to_string(),
+                args: vec!["--port".to_string(), "3000".to_string()],
+            },
+            env: HashMap::new(),
         },
         dependencies: vec![service_orchestration::Dependency::Service {
             service: "database".to_string(),
@@ -96,35 +98,15 @@ fn test_remote_lan_service_config() {
         health_check: None,
     };
 
-    // TODO: Remote executor not yet implemented
-    // Test that Remote executor can handle this config
-    // let executor = RemoteExecutor::new();
-    // assert!(executor.can_handle(&config));
+    // Test that RemoteSSH executor can handle this config
+    let remote_executor = RemoteSshExecutor::new();
+    assert!(remote_executor.can_handle(&config));
 
     // Test that other executors cannot handle this config
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
     assert!(!process_executor.can_handle(&config));
     assert!(!docker_executor.can_handle(&config));
-}
-
-#[test]
-fn test_wireguard_service_config() {
-    let config = ServiceConfig {
-        name: "wg-service".to_string(),
-        target: ServiceTarget::Wireguard {
-            host: "10.0.0.10".to_string(),
-            user: "ubuntu".to_string(),
-            package: "/path/to/service.tar.gz".to_string(),
-        },
-        dependencies: vec![],
-        health_check: None,
-    };
-
-    // TODO: Remote executor not yet implemented
-    // Test that Remote executor can handle WireGuard config
-    // let executor = RemoteExecutor::new();
-    // assert!(executor.can_handle(&config));
 }
 
 #[test]
@@ -182,64 +164,6 @@ async fn test_health_checker_basic_functionality() {
     assert!(matches!(result, HealthStatus::Unhealthy(_)));
 }
 
-#[test]
-fn test_package_manifest_serialization() {
-    let manifest = PackageManifest {
-        name: "my-service".to_string(),
-        version: "1.2.3".to_string(),
-        service: PackageService {
-            executable: "./bin/my-service".to_string(),
-            args: vec!["--config".to_string(), "config.yaml".to_string()],
-            working_dir: Some("./".to_string()),
-            health_check: Some(PackageHealthCheck {
-                command: "./health-check.sh".to_string(),
-                args: vec![],
-                timeout: 30,
-            }),
-        },
-        dependencies: vec!["redis".to_string(), "postgres".to_string()],
-        environment: HashMap::from([
-            ("LOG_LEVEL".to_string(), "info".to_string()),
-            (
-                "DATABASE_URL".to_string(),
-                "postgres://localhost/mydb".to_string(),
-            ),
-        ]),
-    };
-
-    // Test YAML serialization
-    let yaml = serde_yaml::to_string(&manifest).expect("Failed to serialize manifest");
-    let deserialized: PackageManifest =
-        serde_yaml::from_str(&yaml).expect("Failed to deserialize manifest");
-
-    assert_eq!(manifest.name, deserialized.name);
-    assert_eq!(manifest.version, deserialized.version);
-    assert_eq!(manifest.dependencies, deserialized.dependencies);
-    assert_eq!(manifest.service.executable, deserialized.service.executable);
-}
-
-#[test]
-fn test_remote_target_install_paths() {
-    let target = RemoteTarget {
-        service_name: "my-app".to_string(),
-        host: "example.com".to_string(),
-        user: "deployer".to_string(),
-        install_dir: None,
-    };
-
-    // Test default install path
-    assert_eq!(target.install_path(), "/opt/harness/my-app");
-
-    let custom_target = RemoteTarget {
-        service_name: "my-app".to_string(),
-        host: "example.com".to_string(),
-        user: "deployer".to_string(),
-        install_dir: Some("/custom/install/path".to_string()),
-    };
-
-    // Test custom install path
-    assert_eq!(custom_target.install_path(), "/custom/install/path");
-}
 
 #[smol_potat::test]
 async fn test_service_manager_initialization() {
@@ -308,8 +232,7 @@ fn test_service_status_serialization() {
 fn test_executor_type_detection() {
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
-    // TODO: Remote executor not yet implemented
-    // let remote_executor = RemoteExecutor::new();
+    let remote_executor = RemoteSshExecutor::new();
 
     let process_config = ServiceConfig {
         name: "test".to_string(),
@@ -359,9 +282,9 @@ fn test_executor_type_detection() {
     assert!(docker_executor.can_handle(&docker_config));
     assert!(!docker_executor.can_handle(&remote_config));
 
-    // assert!(!remote_executor.can_handle(&process_config));
-    // assert!(!remote_executor.can_handle(&docker_config));
-    // assert!(remote_executor.can_handle(&remote_config));
+    assert!(!remote_executor.can_handle(&process_config));
+    assert!(!remote_executor.can_handle(&docker_config));
+    assert!(remote_executor.can_handle(&remote_config));
 }
 
 #[test]

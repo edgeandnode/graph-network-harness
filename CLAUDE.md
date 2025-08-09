@@ -56,7 +56,7 @@ cargo test --workspace
 # Check dependency constraints
 cargo deny check
 
-# Format code
+# Format code - ALWAYS run after changes to ensure formatting is consistent
 cargo fmt --all
 
 # Run clippy
@@ -250,7 +250,9 @@ error_set! {
 
 ## Development Practices
 
-- ALWAYS use cargo to build, don't revert to using rustc directly for testing.
+- ALWAYS use cargo to build, don't revert to using rustc directly for testing
+- NEVER create examples or new binary targets unless directed to do so
+- Don't use the std::thread api because we want to use the futures/async/await api instead. There are exceptions but rare and should be confirmed
 
 ## Workflow Guidance
 

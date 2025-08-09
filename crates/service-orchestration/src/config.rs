@@ -90,6 +90,24 @@ pub enum ServiceTarget {
         /// Environment variables
         env: HashMap<String, String>,
     },
+    
+    /// Layered execution with composed execution contexts
+    #[serde(rename = "layered")]
+    Layered {
+        /// Execution layers to apply (in order)
+        layers: Vec<crate::executors::layered::LayerConfig>,
+        /// Command to execute through the layers
+        command: CommandSpec,
+    },
+}
+
+/// Command specification for layered execution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommandSpec {
+    /// Binary to execute
+    pub binary: String,
+    /// Command line arguments
+    pub args: Vec<String>,
 }
 
 /// Remote execution mode
@@ -114,6 +132,7 @@ impl ServiceTarget {
             ServiceTarget::DockerAttach { env, .. } => env.clone(),
             ServiceTarget::ProcessAttach { env, .. } => env.clone(),
             ServiceTarget::Remote { env, .. } => env.clone(),
+            ServiceTarget::Layered { .. } => HashMap::new(), // Layers have their own env
         }
     }
 
@@ -160,6 +179,10 @@ impl ServiceTarget {
                 user: user.clone(),
                 mode: mode.clone(),
                 env: new_env,
+            },
+            ServiceTarget::Layered { layers, command } => ServiceTarget::Layered {
+                layers: layers.clone(),
+                command: command.clone(),
             },
         }
     }

@@ -5,14 +5,18 @@
 
 pub mod attached;
 pub mod docker;
+pub mod layered;
 pub mod process;
 pub mod registry;
+pub mod remote_ssh;
 pub mod stream_utils;
 pub mod traits;
 
 pub use attached::{DockerAttachedExecutor, LocalProcessAttachedExecutor, SystemdAttachedExecutor};
 pub use docker::DockerExecutor;
+pub use layered::LayeredServiceExecutor;
 pub use process::ProcessExecutor;
+pub use remote_ssh::RemoteSshExecutor;
 pub use registry::ExecutorRegistry;
 pub use traits::{
     AttachedService, EventStream as TraitEventStream, EventStreamable, ManagedService,

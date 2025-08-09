@@ -68,24 +68,24 @@ impl WsServer {
 
                 debug!("New WebSocket connection from {} (TLS)", addr);
 
-                Ok(ConnectionHandler::Tls(TlsConnectionHandler {
+                Ok(ConnectionHandler::Tls(Box::new(TlsConnectionHandler {
                     ws: ws_stream,
                     addr,
                     registry: self.registry.clone(),
                     subscriptions: HashSet::new(),
-                }))
+                })))
             }
             None => {
                 let ws_stream = accept_async(tcp_stream).await?;
 
                 debug!("New WebSocket connection from {} (plain)", addr);
 
-                Ok(ConnectionHandler::Plain(PlainConnectionHandler {
+                Ok(ConnectionHandler::Plain(Box::new(PlainConnectionHandler {
                     ws: ws_stream,
                     addr,
                     registry: self.registry.clone(),
                     subscriptions: HashSet::new(),
-                }))
+                })))
             }
         }
     }
@@ -99,9 +99,9 @@ impl WsServer {
 /// WebSocket connection handler
 pub enum ConnectionHandler {
     /// Plain TCP connection
-    Plain(PlainConnectionHandler),
+    Plain(Box<PlainConnectionHandler>),
     /// TLS connection
-    Tls(TlsConnectionHandler),
+    Tls(Box<TlsConnectionHandler>),
 }
 
 impl ConnectionHandler {
@@ -268,7 +268,7 @@ macro_rules! impl_connection_handler {
                     "service": params.name,
                     "old_state": old_state,
                     "new_state": new_state,
-                }))
+                })))
             }
 
             /// Handle list endpoints request
@@ -296,7 +296,7 @@ macro_rules! impl_connection_handler {
 
                 Ok(serde_json::json!({
                     "subscribed": self.subscriptions.iter().collect::<Vec<_>>(),
-                }))
+                })))
             }
 
             /// Handle unsubscribe request
@@ -318,7 +318,7 @@ macro_rules! impl_connection_handler {
 
                 Ok(serde_json::json!({
                     "subscribed": self.subscriptions.iter().collect::<Vec<_>>(),
-                }))
+                })))
             }
 
 
@@ -342,7 +342,7 @@ macro_rules! impl_connection_handler {
                         code: "error".to_string(),
                         message: error.to_string(),
                         details: None,
-                    }),
+                    })),
                 };
 
                 self.send_message(&msg).await

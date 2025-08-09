@@ -27,7 +27,7 @@ pub enum WsClient {
     /// Plain TCP connection
     Plain {
         /// The WebSocket stream over plain TCP
-        ws: WebSocketStream<TcpStream>,
+        ws: Box<WebSocketStream<TcpStream>>,
         /// The server address
         addr: SocketAddr,
         /// Map of pending request IDs to response channels
@@ -36,7 +36,7 @@ pub enum WsClient {
     /// TLS connection
     Tls {
         /// The WebSocket stream over TLS
-        ws: WebSocketStream<futures_rustls::client::TlsStream<TcpStream>>,
+        ws: Box<WebSocketStream<futures_rustls::client::TlsStream<TcpStream>>>,
         /// The server address
         addr: SocketAddr,
         /// Map of pending request IDs to response channels
@@ -54,7 +54,7 @@ impl WsClient {
         info!("Connected to WebSocket server at {} (no TLS)", addr);
 
         Ok(Self::Plain {
-            ws,
+            ws: Box::new(ws),
             addr,
             pending_requests: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -81,7 +81,7 @@ impl WsClient {
         info!("Connected to WebSocket server at {} (with TLS)", addr);
 
         Ok(Self::Tls {
-            ws,
+            ws: Box::new(ws),
             addr,
             pending_requests: Arc::new(Mutex::new(HashMap::new())),
         })

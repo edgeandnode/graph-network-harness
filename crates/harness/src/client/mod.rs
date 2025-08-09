@@ -13,8 +13,8 @@ use tracing::debug;
 
 /// Daemon client for sending requests
 pub enum DaemonClient {
-    Plain(WebSocketStream<TcpStream>),
-    Tls(WebSocketStream<TlsStream<TcpStream>>),
+    Plain(Box<WebSocketStream<TcpStream>>),
+    Tls(Box<WebSocketStream<TlsStream<TcpStream>>>),
 }
 
 impl DaemonClient {
@@ -33,7 +33,7 @@ impl DaemonClient {
 
         debug!("Connected to daemon at {} (no TLS)", addr);
 
-        Ok(Self::Plain(ws))
+        Ok(Self::Plain(Box::new(ws)))
     }
 
     /// Connect with TLS
@@ -95,7 +95,7 @@ impl DaemonClient {
 
         debug!("Connected to daemon at {} (TLS)", addr);
 
-        Ok(Self::Tls(ws))
+        Ok(Self::Tls(Box::new(ws)))
     }
 
     /// Send a request to the daemon and get response

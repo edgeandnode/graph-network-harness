@@ -379,6 +379,7 @@ where
     S::Action: JsonSchema,
     S::Event: JsonSchema,
 {
+    /// Create a new schema-aware service wrapper
     pub fn new(service: S) -> Self {
         let action_schema = schemars::schema_for!(S::Action);
         let event_schema = schemars::schema_for!(S::Event);

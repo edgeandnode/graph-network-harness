@@ -27,32 +27,46 @@ pub enum LayerConfig {
     /// Local execution layer
     #[serde(rename = "local")]
     Local {
+        /// Environment variables for the local execution
         #[serde(default)]
         env: HashMap<String, String>,
+        /// Working directory for the local execution
         working_dir: Option<String>,
     },
     /// SSH execution layer
     #[serde(rename = "ssh")]
     Ssh {
+        /// SSH host to connect to
         host: String,
+        /// SSH user to connect as
         user: String,
+        /// Environment variables for the SSH session
         #[serde(default)]
         env: HashMap<String, String>,
+        /// SSH port (defaults to 22)
         port: Option<u16>,
+        /// Path to SSH identity file (private key)
         identity_file: Option<String>,
+        /// Additional SSH options
         #[serde(default)]
         options: Vec<String>,
     },
     /// Docker execution layer
     #[serde(rename = "docker")]
     Docker {
+        /// Docker container name or ID
         container: String,
+        /// User to run commands as in the container
         user: Option<String>,
+        /// Working directory inside the container
         working_dir: Option<String>,
+        /// Environment variables for the container
         #[serde(default)]
         env: HashMap<String, String>,
+        /// Whether to run in interactive mode
         #[serde(default)]
         interactive: bool,
+        /// Whether to allocate a pseudo-TTY
         #[serde(default)]
         tty: bool,
     },

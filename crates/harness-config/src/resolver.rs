@@ -66,11 +66,18 @@ impl ResolutionContext {
 pub enum Variable {
     /// Environment variable with optional default
     EnvVar {
+        /// Name of the environment variable
         name: String,
+        /// Default value if the environment variable is not set
         default: Option<String>,
     },
     /// Service reference
-    ServiceRef { service: String, property: String },
+    ServiceRef { 
+        /// Name of the service being referenced
+        service: String, 
+        /// Property of the service being accessed
+        property: String 
+    },
 }
 
 /// Parse an uppercase environment variable name

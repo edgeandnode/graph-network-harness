@@ -464,17 +464,29 @@ impl TaskStateFilter {
 /// Deployment summary information
 #[derive(Debug, Clone)]
 pub struct DeploymentSummary {
+    /// Unique identifier for this deployment
     pub deployment_id: Uuid,
+    /// Name of the deployment stack
     pub stack_name: String,
+    /// Current deployment status
     pub status: DeploymentStatus,
+    /// Timestamp when the deployment started
     pub started_at: DateTime<Utc>,
+    /// How long the deployment has been running
     pub duration: chrono::Duration,
+    /// Total number of services in the deployment
     pub total_services: usize,
+    /// Number of currently running services
     pub running_services: usize,
+    /// Number of failed services
     pub failed_services: usize,
+    /// Total number of tasks in the deployment
     pub total_tasks: usize,
+    /// Number of completed tasks
     pub completed_tasks: usize,
+    /// Number of failed tasks
     pub failed_tasks: usize,
+    /// Total number of errors encountered
     pub error_count: usize,
 }
 

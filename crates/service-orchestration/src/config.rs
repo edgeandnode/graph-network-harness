@@ -8,12 +8,18 @@ use std::collections::HashMap;
 
 /// Dependency specification for services and tasks
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(untagged)]
+#[serde(untagged, rename_all = "kebab-case")]
 pub enum Dependency {
     /// Dependency on a service
-    Service { service: String },
+    Service { 
+        /// Name of the service this depends on
+        service: String 
+    },
     /// Dependency on a task
-    Task { task: String },
+    Task { 
+        /// Name of the task this depends on
+        task: String 
+    },
 }
 
 /// Configuration for a service to be managed by the orchestrator

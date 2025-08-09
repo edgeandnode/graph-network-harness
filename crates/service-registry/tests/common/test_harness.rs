@@ -39,7 +39,7 @@ impl TestHarness {
 
         Ok(ServiceDeployment {
             name: service_name,
-            registry: Arc::new(&self.registry),
+            registry: &self.registry,
             events_received: events.len(),
         })
     }
@@ -119,7 +119,7 @@ impl TestHarness {
 /// Represents a deployed service in the test harness
 pub struct ServiceDeployment<'a> {
     pub name: String,
-    registry: Arc<&'a Registry>,
+    registry: &'a Registry,
     pub events_received: usize,
 }
 

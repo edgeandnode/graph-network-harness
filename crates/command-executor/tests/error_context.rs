@@ -78,7 +78,7 @@ async fn test_docker_error_context() {
 
     if let Err(err) = result {
         let err_str = err.to_string();
-        println!("Docker error with context: {}", err_str);
+        println!("Docker error with context: {err_str}");
 
         // Should mention Docker in the error
         assert!(err_str.contains("Docker") || err_str.contains("docker"));

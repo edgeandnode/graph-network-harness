@@ -65,7 +65,7 @@ pub async fn run(
     if !affected.is_empty() && !force {
         eprintln!("\n⚠️  WARNING: Stopping these services will affect:");
         for service in &affected {
-            eprintln!("  - {}", service);
+            eprintln!("  - {service}");
         }
         eprint!("\nDo you want to continue? [y/N] ");
         io::stdout().flush()?;
@@ -95,13 +95,12 @@ pub async fn run(
     for service_name in &ordered_services {
         if !config.services.contains_key(service_name) {
             eprintln!(
-                "Warning: Service '{}' not found in configuration",
-                service_name
+                "Warning: Service '{service_name}' not found in configuration"
             );
             continue;
         }
 
-        print!("Stopping {}...", service_name);
+        print!("Stopping {service_name}...");
         io::stdout().flush()?;
 
         // Send stop request to daemon
@@ -143,7 +142,7 @@ pub async fn run(
             }
             Ok(Response::Error { message }) => {
                 println!(" ✗");
-                eprintln!("  Error: {}", message);
+                eprintln!("  Error: {message}");
                 failures.push((service_name.clone(), message));
 
                 if !force {
@@ -158,7 +157,7 @@ pub async fn run(
             }
             Err(e) => {
                 println!(" ✗");
-                eprintln!("  Error: {}", e);
+                eprintln!("  Error: {e}");
                 failures.push((service_name.clone(), e.to_string()));
 
                 if !force {
@@ -171,12 +170,12 @@ pub async fn run(
 
     // Print summary
     let stopped_count = ordered_services.len() - failures.len();
-    println!("\n{} services stopped successfully", stopped_count);
+    println!("\n{stopped_count} services stopped successfully");
 
     if !failures.is_empty() {
         eprintln!("\n{} services failed to stop:", failures.len());
         for (service, error) in &failures {
-            eprintln!("  - {}: {}", service, error);
+            eprintln!("  - {service}: {error}");
         }
     }
 

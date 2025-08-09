@@ -7,7 +7,6 @@
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use async_trait::async_trait;
-use command_executor::ProcessEventType;
 use command_executor::event::ProcessEvent;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -146,7 +145,7 @@ where
     pub async fn execute_json(&self, input: Value) -> Result<Receiver<T::Event>> {
         // Deserialize JSON to typed action
         let action: T::Action = serde_json::from_value(input)
-            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {}", e)))?;
+            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
 
         // Execute the typed action and return the event receiver directly
         self.inner.execute(action).await

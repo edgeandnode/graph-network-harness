@@ -104,8 +104,7 @@ impl ActionRegistry {
 
         if self.actions.contains_key(&name) {
             return Err(Error::action(format!(
-                "Action '{}' already registered",
-                name
+                "Action '{name}' already registered"
             )));
         }
 
@@ -141,7 +140,7 @@ impl ActionRegistry {
         let action = self
             .actions
             .get(name)
-            .ok_or_else(|| Error::action(format!("Action '{}' not found", name)))?;
+            .ok_or_else(|| Error::action(format!("Action '{name}' not found")))?;
 
         action(params).await
     }

@@ -72,7 +72,7 @@ async fn run_watch_mode(config_path: &Path, format: &str, detailed: bool) -> Res
         print!("\x1B[2J\x1B[1;1H");
 
         if let Err(e) = run_once(config_path, format, detailed).await {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
         }
 
         // Wait 2 seconds before next refresh
@@ -109,7 +109,7 @@ fn display_basic_table(
         ]);
     }
 
-    println!("{}", table);
+    println!("{table}");
     Ok(())
 }
 
@@ -165,7 +165,7 @@ fn display_detailed_table(
 
         let process_info = if let Some(info) = service_info {
             if let Some(pid) = info.pid {
-                format!("PID {}", pid)
+                format!("PID {pid}")
             } else if let Some(container) = &info.container_id {
                 format!("Container {}", &container[..12])
             } else {
@@ -188,7 +188,7 @@ fn display_detailed_table(
             } else {
                 info.endpoints
                     .iter()
-                    .map(|(k, v)| format!("{}:{}", k, v))
+                    .map(|(k, v)| format!("{k}:{v}"))
                     .collect::<Vec<_>>()
                     .join(", ")
             }
@@ -206,6 +206,6 @@ fn display_detailed_table(
         ]);
     }
 
-    println!("{}", table);
+    println!("{table}");
     Ok(())
 }

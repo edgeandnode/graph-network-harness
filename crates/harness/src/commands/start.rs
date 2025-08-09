@@ -30,7 +30,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
         })?;
 
         // Show progress
-        print!("Starting {}...", service_name);
+        print!("Starting {service_name}...");
         io::stdout().flush()?;
 
         // Convert from harness_config types to service_orchestration types with resolution context
@@ -42,7 +42,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
             Ok(config) => config,
             Err(e) => {
                 println!(" ✗");
-                eprintln!("  Error: Failed to convert service config: {}", e);
+                eprintln!("  Error: Failed to convert service config: {e}");
                 failures.push((service_name.clone(), e.to_string()));
                 continue;
             }
@@ -100,7 +100,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                                     }
                                     service_orchestration::ServiceStatus::Failed(msg) => {
                                         println!(" ✗");
-                                        eprintln!("    Service failed: {}", msg);
+                                        eprintln!("    Service failed: {msg}");
                                         break;
                                     }
                                     service_orchestration::ServiceStatus::Unhealthy => {
@@ -128,7 +128,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                     service_name.clone(),
                     "127.0.0.1".to_string(),
                     None,
-                    format!("{}.local", service_name),
+                    format!("{service_name}.local"),
                 );
 
                 // Wait for service to be running if it has a health check
@@ -161,7 +161,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                                     }
                                     service_orchestration::ServiceStatus::Failed(msg) => {
                                         println!(" ✗");
-                                        eprintln!("    Service failed: {}", msg);
+                                        eprintln!("    Service failed: {msg}");
                                         break;
                                     }
                                     service_orchestration::ServiceStatus::Unhealthy => {
@@ -181,7 +181,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
             }
             Ok(Response::Error { message }) => {
                 println!(" ✗");
-                eprintln!("  Error: {}", message);
+                eprintln!("  Error: {message}");
                 failures.push((service_name.clone(), message));
 
                 // Stop on failure - dependencies won't work
@@ -195,7 +195,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
             }
             Err(e) => {
                 println!(" ✗");
-                eprintln!("  Error: {}", e);
+                eprintln!("  Error: {e}");
                 failures.push((service_name.clone(), e.to_string()));
                 break;
             }
@@ -208,7 +208,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
     if !failures.is_empty() {
         eprintln!("\n{} services failed to start:", failures.len());
         for (service, error) in &failures {
-            eprintln!("  - {}: {}", service, error);
+            eprintln!("  - {service}: {error}");
         }
 
         // Show which services were not started due to failures
@@ -225,7 +225,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                 not_started.len()
             );
             for service in &not_started {
-                eprintln!("  - {}", service);
+                eprintln!("  - {service}");
             }
         }
     }
@@ -240,11 +240,11 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                         for port in ports {
                             match port {
                                 harness_config::PortMapping::Simple(p) => {
-                                    println!("  {}: http://localhost:{}", service_name, p);
+                                    println!("  {service_name}: http://localhost:{p}");
                                 }
                                 harness_config::PortMapping::Full(mapping) => {
                                     if let Some((host, _)) = mapping.split_once(':') {
-                                        println!("  {}: http://localhost:{}", service_name, host);
+                                        println!("  {service_name}: http://localhost:{host}");
                                     }
                                 }
                             }
@@ -255,7 +255,7 @@ pub async fn run(config_path: &Path, services: Vec<String>) -> Result<()> {
                         if let Some(health_check) = &service_def.health_check {
                             match &health_check.check_type {
                                 harness_config::HealthCheckType::Http { http } => {
-                                    println!("  {}: {}", service_name, http);
+                                    println!("  {service_name}: {http}");
                                 }
                                 harness_config::HealthCheckType::Tcp { tcp } => {
                                     println!("  {}: tcp://localhost:{}", service_name, tcp.port);

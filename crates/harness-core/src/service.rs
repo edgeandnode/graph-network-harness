@@ -226,7 +226,7 @@ where
     ) -> Result<Receiver<S::Event>> {
         // Deserialize JSON to typed action
         let action: S::Action = serde_json::from_value(input)
-            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {}", e)))?;
+            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
 
         // Execute the typed action and return the event receiver directly
         self.inner.dispatch_action(action).await
@@ -423,7 +423,7 @@ where
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
         // Deserialize JSON to typed action
         let action: S::Action = serde_json::from_value(input)
-            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {}", e)))?;
+            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
 
         // Execute the typed action
         let event_rx = self.inner.dispatch_action(action).await?;
@@ -493,8 +493,7 @@ impl ServiceStack {
     {
         if self.services.contains_key(&instance_name) {
             return Err(Error::service_type(format!(
-                "Service instance '{}' already registered",
-                instance_name
+                "Service instance '{instance_name}' already registered"
             )));
         }
 
@@ -515,8 +514,7 @@ impl ServiceStack {
     {
         if self.services.contains_key(&instance_name) {
             return Err(Error::service_type(format!(
-                "Service instance '{}' already registered",
-                instance_name
+                "Service instance '{instance_name}' already registered"
             )));
         }
 
@@ -568,7 +566,7 @@ impl ServiceStack {
         spawner: &Sp,
     ) -> Result<Receiver<Value>> {
         let service = self.get(instance_name).ok_or_else(|| {
-            Error::service_type(format!("Service instance '{}' not found", instance_name))
+            Error::service_type(format!("Service instance '{instance_name}' not found"))
         })?;
 
         let (rx, converter) = service.dispatch_json(action_name, input).await?;

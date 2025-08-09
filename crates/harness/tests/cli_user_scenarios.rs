@@ -3,10 +3,6 @@
 //! These tests simulate real-world user workflows and scenarios
 
 use anyhow::Result;
-use std::path::PathBuf;
-use std::process::Command;
-use std::time::Duration;
-use tempfile::TempDir;
 
 mod common;
 use common::CliTestContext;

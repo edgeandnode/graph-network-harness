@@ -20,8 +20,8 @@ pub enum DaemonClient {
 impl DaemonClient {
     /// Connect to the daemon (without TLS)
     pub async fn connect(port: u16) -> Result<Self> {
-        let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
-        let url = format!("ws://{}/", addr);
+        let addr: SocketAddr = format!("127.0.0.1:{port}").parse()?;
+        let url = format!("ws://{addr}/");
 
         let stream = TcpStream::connect(addr)
             .await
@@ -38,8 +38,8 @@ impl DaemonClient {
 
     /// Connect with TLS
     pub async fn connect_tls(port: u16, verify_cert: bool) -> Result<Self> {
-        let addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
-        let url = format!("wss://{}/", addr);
+        let addr: SocketAddr = format!("127.0.0.1:{port}").parse()?;
+        let url = format!("wss://{addr}/");
 
         // Load the daemon's certificate
         let cert_path = dirs::data_local_dir()

@@ -1,7 +1,6 @@
 //! Integration tests for harness-config
 
-use harness_config::{Config, HealthCheck, HealthCheckType, Network, Service, ServiceType, parser};
-use std::collections::HashMap;
+use harness_config::{HealthCheckType, Network, ServiceType, parser};
 
 #[test]
 fn test_full_config_parsing() {

@@ -291,8 +291,7 @@ impl DaemonBuilder {
 
                     if !registered_types.contains(&service_type) {
                         return Err(Error::validation(format!(
-                            "Service '{}' references unknown service_type '{}'. Available types: {:?}",
-                            name, service_type, registered_types
+                            "Service '{name}' references unknown service_type '{service_type}'. Available types: {registered_types:?}"
                         )));
                     }
                 }
@@ -320,8 +319,7 @@ impl DaemonBuilder {
 
                     if !registered_types.contains(&task_type) {
                         return Err(Error::validation(format!(
-                            "Task '{}' references unknown task_type '{}'. Available types: {:?}",
-                            name, task_type, registered_types
+                            "Task '{name}' references unknown task_type '{task_type}'. Available types: {registered_types:?}"
                         )));
                     }
                 }
@@ -351,8 +349,7 @@ impl DaemonBuilder {
         if let Some(service_name) = dep.get("service").and_then(|s| s.as_str()) {
             if !services.contains_key(service_name) {
                 return Err(Error::validation(format!(
-                    "Dependency references unknown service '{}'",
-                    service_name
+                    "Dependency references unknown service '{service_name}'"
                 )));
             }
         }
@@ -361,14 +358,12 @@ impl DaemonBuilder {
             if let Some(tasks) = config.get("tasks").and_then(|t| t.as_object()) {
                 if !tasks.contains_key(task_name) {
                     return Err(Error::validation(format!(
-                        "Dependency references unknown task '{}'",
-                        task_name
+                        "Dependency references unknown task '{task_name}'"
                     )));
                 }
             } else {
                 return Err(Error::validation(format!(
-                    "Dependency references task '{}' but no tasks are defined",
-                    task_name
+                    "Dependency references task '{task_name}' but no tasks are defined"
                 )));
             }
         }

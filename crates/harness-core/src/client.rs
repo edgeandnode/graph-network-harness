@@ -130,8 +130,7 @@ impl TestClient {
         }
 
         Err(Error::client(format!(
-            "Timeout after {}ms waiting for condition",
-            timeout_ms
+            "Timeout after {timeout_ms}ms waiting for condition"
         )))
     }
 

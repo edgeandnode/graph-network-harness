@@ -24,7 +24,7 @@ async fn daemon_status() -> Result<()> {
         }
         Err(e) => {
             println!("✗ Daemon is not reachable");
-            println!("  Error: {}", e);
+            println!("  Error: {e}");
             println!();
             println!("To start the daemon:");
             println!("  harness-executor-daemon");

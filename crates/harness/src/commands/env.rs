@@ -30,7 +30,7 @@ pub async fn get(names: Vec<String>) -> Result<()> {
                 sorted.sort_by(|a, b| a.0.cmp(&b.0));
 
                 for (key, value) in sorted {
-                    println!("{}={}", key, value);
+                    println!("{key}={value}");
                 }
             }
             Ok(())

@@ -2,7 +2,6 @@
 
 use command_executor::{Command, Executor, Target, backends::LocalLauncher};
 use service_registry::{Registry, ServiceEntry};
-use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
 

@@ -15,7 +15,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     println!("  Version: {}", config.version);
 
     if let Some(name) = &config.name {
-        println!("  Name: {}", name);
+        println!("  Name: {name}");
     }
 
     println!("  Networks: {}", config.networks.len());
@@ -32,7 +32,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
             println!("  ✓ Service start order: {}", sorted.join(" → "));
         }
         Err(e) => {
-            validation_errors.push(format!("Circular dependency detected: {}", e));
+            validation_errors.push(format!("Circular dependency detected: {e}"));
         }
     }
 
@@ -41,27 +41,24 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     let mut port_usage: HashMap<u16, Vec<String>> = HashMap::new();
 
     for (name, service) in &config.services {
-        match &service.service_type {
-            ServiceType::Docker { ports, .. } => {
-                for port_mapping in ports {
-                    let port = match port_mapping {
-                        harness_config::PortMapping::Simple(p) => *p,
-                        harness_config::PortMapping::Full(mapping) => {
-                            // Parse host:container format
-                            if let Some((host_port, _)) = mapping.split_once(':') {
-                                host_port.parse::<u16>().unwrap_or(0)
-                            } else {
-                                0
-                            }
+        if let ServiceType::Docker { ports, .. } = &service.service_type {
+            for port_mapping in ports {
+                let port = match port_mapping {
+                    harness_config::PortMapping::Simple(p) => *p,
+                    harness_config::PortMapping::Full(mapping) => {
+                        // Parse host:container format
+                        if let Some((host_port, _)) = mapping.split_once(':') {
+                            host_port.parse::<u16>().unwrap_or(0)
+                        } else {
+                            0
                         }
-                    };
-
-                    if port > 0 {
-                        port_usage.entry(port).or_default().push(name.clone());
                     }
+                };
+
+                if port > 0 {
+                    port_usage.entry(port).or_default().push(name.clone());
                 }
             }
-            _ => {}
         }
     }
 
@@ -97,30 +94,28 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
                     // Validate HTTP URL format
                     if !http.starts_with("http://") && !http.starts_with("https://") {
                         warnings.push(format!(
-                            "Service '{}' health check URL should start with http:// or https://",
-                            name
+                            "Service '{name}' health check URL should start with http:// or https://"
                         ));
                     }
                 }
                 HealthCheckType::Tcp { tcp } => {
                     if tcp.port == 0 {
                         validation_errors.push(format!(
-                            "Service '{}' has invalid TCP health check port: 0",
-                            name
+                            "Service '{name}' has invalid TCP health check port: 0"
                         ));
                     }
                 }
                 HealthCheckType::Command { command, .. } => {
                     if command.is_empty() {
                         validation_errors
-                            .push(format!("Service '{}' has empty health check command", name));
+                            .push(format!("Service '{name}' has empty health check command"));
                     }
                 }
             }
 
             // Check health check parameters
             if health_check.interval == 0 {
-                warnings.push(format!("Service '{}' has health check interval of 0", name));
+                warnings.push(format!("Service '{name}' has health check interval of 0"));
             }
             if health_check.timeout >= health_check.interval {
                 warnings.push(format!(
@@ -134,7 +129,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     if health_check_count == 0 {
         println!("  ⚠ No health checks configured");
     } else {
-        println!("  ✓ {} health checks configured", health_check_count);
+        println!("  ✓ {health_check_count} health checks configured");
     }
 
     // Check environment variables and service references
@@ -157,15 +152,13 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
                         ServiceType::Docker { ports, .. } => {
                             if ports.is_empty() {
                                 warnings.push(format!(
-                                    "Reference '{}' used but service has no ports configured",
-                                    service_ref
+                                    "Reference '{service_ref}' used but service has no ports configured"
                                 ));
                             }
                         }
                         _ => {
                             warnings.push(format!(
-                                "Reference '{}' used but service type doesn't expose ports",
-                                service_ref
+                                "Reference '{service_ref}' used but service type doesn't expose ports"
                             ));
                         }
                     }
@@ -227,8 +220,7 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
     for network_name in config.networks.keys() {
         if !services_per_network.contains_key(network_name) {
             warnings.push(format!(
-                "Network '{}' is defined but not used by any service",
-                network_name
+                "Network '{network_name}' is defined but not used by any service"
             ));
         }
     }
@@ -244,14 +236,14 @@ pub async fn run(config_path: &Path, strict: bool) -> Result<()> {
         if !validation_errors.is_empty() {
             println!("\n❌ Errors ({}):", validation_errors.len());
             for error in &validation_errors {
-                println!("  - {}", error);
+                println!("  - {error}");
             }
         }
 
         if !warnings.is_empty() {
             println!("\n⚠️  Warnings ({}):", warnings.len());
             for warning in &warnings {
-                println!("  - {}", warning);
+                println!("  - {warning}");
             }
         }
 

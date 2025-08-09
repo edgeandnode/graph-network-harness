@@ -210,13 +210,12 @@ pub fn get_certificate_info(data_dir: &Path) -> Result<String> {
     let status = if days < 0 {
         format!("EXPIRED {} days ago", -days)
     } else if days < 30 {
-        format!("Valid for {} more days (expires soon!)", days)
+        format!("Valid for {days} more days (expires soon!)")
     } else {
-        format!("Valid for {} more days", days)
+        format!("Valid for {days} more days")
     };
 
     Ok(format!(
-        "Certificate status: {}\nLocation: {:?}",
-        status, cert_path
+        "Certificate status: {status}\nLocation: {cert_path:?}"
     ))
 }

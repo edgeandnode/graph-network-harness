@@ -33,7 +33,7 @@ impl CliTestContext {
 
         // Start the daemon
         let mut cmd = Command::new(&harness_binary);
-        cmd.args(&[
+        cmd.args([
             "daemon",
             "start",
             "--port",
@@ -106,18 +106,17 @@ impl CliTestContext {
 
     /// Create a test service configuration file
     pub fn create_test_config(&self, name: &str) -> Result<PathBuf> {
-        let config_path = self.test_dir.path().join(format!("{}.yaml", name));
+        let config_path = self.test_dir.path().join(format!("{name}.yaml"));
         let config_content = format!(
             r#"
-name: {}
+name: {name}
 services:
   echo-service:
     binary: echo
-    args: ["Hello from {}"]
+    args: ["Hello from {name}"]
     env:
       TEST_VAR: "test_value"
-"#,
-            name, name
+"#
         );
         std::fs::write(&config_path, config_content)?;
         Ok(config_path)
@@ -143,7 +142,7 @@ impl Drop for CliTestContext {
             // Try graceful shutdown first
             let _ = Command::new(&self.harness_binary)
                 .env("HARNESS_DAEMON_PORT", self.daemon_port.to_string())
-                .args(&["daemon", "stop"])
+                .args(["daemon", "stop"])
                 .output();
 
             // Give it time to shut down gracefully

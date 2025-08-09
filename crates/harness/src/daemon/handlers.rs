@@ -30,7 +30,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                         ServiceNetworkInfo {
                             ip: "127.0.0.1".to_string(),
                             port: None,
-                            hostname: format!("{}.local", name),
+                            hostname: format!("{name}.local"),
                             ports: Vec::new(),
                         }
                     };
@@ -41,7 +41,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                     })
                 }
                 Err(e) => Ok(Response::Error {
-                    message: format!("Failed to start service: {}", e),
+                    message: format!("Failed to start service: {e}"),
                 }),
             }
         }
@@ -51,7 +51,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
             match state.service_manager.stop_service(&name).await {
                 Ok(_) => Ok(Response::Success),
                 Err(e) => Ok(Response::Error {
-                    message: format!("Failed to stop service: {}", e),
+                    message: format!("Failed to stop service: {e}"),
                 }),
             }
         }
@@ -60,7 +60,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
             match state.service_manager.get_service_status(&name).await {
                 Ok(status) => Ok(Response::ServiceStatus { status }),
                 Err(e) => Ok(Response::Error {
-                    message: format!("Failed to get service status: {}", e),
+                    message: format!("Failed to get service status: {e}"),
                 }),
             }
         }
@@ -71,7 +71,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                 Ok(services) => services,
                 Err(e) => {
                     return Ok(Response::Error {
-                        message: format!("Failed to list services: {}", e),
+                        message: format!("Failed to list services: {e}"),
                     });
                 }
             };
@@ -103,7 +103,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                 Ok(services) => services,
                 Err(e) => {
                     return Ok(Response::Error {
-                        message: format!("Failed to list services: {}", e),
+                        message: format!("Failed to list services: {e}"),
                     });
                 }
             };
@@ -161,7 +161,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
                                     service.clone()
                                 }
                                 service_orchestration::Dependency::Task { task } => {
-                                    format!("task:{}", task)
+                                    format!("task:{task}")
                                 }
                             })
                             .collect(),
@@ -192,14 +192,14 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
             Ok(results) => {
                 let results_str = results
                     .into_iter()
-                    .map(|(k, v)| (k, format!("{:?}", v)))
+                    .map(|(k, v)| (k, format!("{v:?}")))
                     .collect();
                 Ok(Response::HealthCheckResults {
                     results: results_str,
                 })
             }
             Err(e) => Ok(Response::Error {
-                message: format!("Failed to run health checks: {}", e),
+                message: format!("Failed to run health checks: {e}"),
             }),
         },
 

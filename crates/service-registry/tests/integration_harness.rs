@@ -1,14 +1,5 @@
 //! Integration tests for service registry with real harness deployments
 
-use command_executor::{
-    Command, Executor, Target, backends::LocalLauncher, target::DockerContainer,
-};
-use service_registry::{
-    Endpoint, ExecutionInfo, Location, Protocol, Registry, ServiceEntry,
-    models::{EventType, ServiceState, WsMessage},
-};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use tempfile::TempDir;
 
 mod common;
 

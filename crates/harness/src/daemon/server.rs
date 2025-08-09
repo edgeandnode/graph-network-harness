@@ -71,7 +71,7 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
 
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("127.0.0.1:{port}");
     let listener = TcpListener::bind(&addr)
         .await
         .context("Failed to bind to address")?;
@@ -127,7 +127,7 @@ async fn handle_connection(
         .await
         .context("Failed to accept WebSocket connection")?;
 
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    let (ws_sender, mut ws_receiver) = ws_stream.split();
 
     while let Some(msg) = ws_receiver.next().await {
         match msg {
@@ -138,7 +138,7 @@ async fn handle_connection(
                     Err(e) => {
                         error!("Failed to parse request: {}", e);
                         let error_response = Response::Error {
-                            message: format!("Invalid request format: {}", e),
+                            message: format!("Invalid request format: {e}"),
                         };
                         let response_text = serde_json::to_string(&error_response)?;
                         ws_sender.send(Message::Text(response_text.into())).await?;

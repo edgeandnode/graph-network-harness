@@ -268,7 +268,7 @@ macro_rules! impl_connection_handler {
                     "service": params.name,
                     "old_state": old_state,
                     "new_state": new_state,
-                })))
+                }))
             }
 
             /// Handle list endpoints request
@@ -296,7 +296,7 @@ macro_rules! impl_connection_handler {
 
                 Ok(serde_json::json!({
                     "subscribed": self.subscriptions.iter().collect::<Vec<_>>(),
-                })))
+                }))
             }
 
             /// Handle unsubscribe request
@@ -318,7 +318,7 @@ macro_rules! impl_connection_handler {
 
                 Ok(serde_json::json!({
                     "subscribed": self.subscriptions.iter().collect::<Vec<_>>(),
-                })))
+                }))
             }
 
 
@@ -342,7 +342,7 @@ macro_rules! impl_connection_handler {
                         code: "error".to_string(),
                         message: error.to_string(),
                         details: None,
-                    })),
+                    }),
                 };
 
                 self.send_message(&msg).await

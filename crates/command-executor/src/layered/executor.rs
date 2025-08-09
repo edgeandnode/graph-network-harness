@@ -183,19 +183,11 @@ mod tests {
                 // Basic verification that we got results
                 use futures::StreamExt;
 
-                // Try to get at least one event or wait for completion
-                let timeout = std::time::Duration::from_secs(1);
-                let start = std::time::Instant::now();
-
-                while start.elapsed() < timeout {
-                    if let Some(event) = event_stream.next().await {
-                        // Got an event, test passes
-                        break;
-                    }
-
-                    // For now, just break after getting some events
+                // Try to get at least one event
+                // TODO: Implement proper timeout logic for waiting on events
+                if let Some(event) = event_stream.next().await {
+                    // Got an event, test passes
                     // Real process management would use handle.wait() etc.
-                    break;
                 }
             }
             Err(e) => {

@@ -223,7 +223,7 @@ fn test_service_status_serialization() {
             (ServiceStatus::Failed(msg1), ServiceStatus::Failed(msg2)) => {
                 assert_eq!(msg1, msg2);
             }
-            _ => panic!("Status mismatch: {:?} != {:?}", status, deserialized),
+            _ => panic!("Status mismatch: {status:?} != {deserialized:?}"),
         }
     }
 }

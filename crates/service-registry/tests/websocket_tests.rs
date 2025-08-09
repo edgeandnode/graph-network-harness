@@ -1,10 +1,7 @@
 //! WebSocket integration tests
 
-use service_registry::{EventType, Registry, ServiceState, WsServer};
-use std::time::Duration;
 
 mod common;
-use common::{test_services::*, websocket_client::WebSocketTestClient};
 
 /// Test basic WebSocket connection and operations
 #[cfg(feature = "integration-tests")]

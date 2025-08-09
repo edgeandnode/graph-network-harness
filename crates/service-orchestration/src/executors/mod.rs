@@ -12,14 +12,14 @@ pub mod remote_ssh;
 pub mod stream_utils;
 pub mod traits;
 
-pub use attached::{DockerAttachedExecutor, LocalProcessAttachedExecutor, SystemdAttachedExecutor};
+pub use attached::{DockerAttachedExecutor, SystemdAttachedExecutor};
 pub use docker::DockerExecutor;
 pub use layered::LayeredServiceExecutor;
 pub use process::ProcessExecutor;
 pub use remote_ssh::RemoteSshExecutor;
 pub use registry::ExecutorRegistry;
 pub use traits::{
-    AttachedService, EventStream as TraitEventStream, EventStreamable, ManagedService,
+    AttachedService, EventStreamable, ManagedService,
 };
 
 use crate::{Error, config::ServiceConfig, health::HealthStatus};

@@ -45,8 +45,7 @@ fn validate_config(config: &Config) -> Result<()> {
         for dep in &service.dependencies {
             if !config.services.contains_key(dep) {
                 return Err(ConfigError::ValidationError(format!(
-                    "Service '{}' depends on unknown service '{}'",
-                    name, dep
+                    "Service '{name}' depends on unknown service '{dep}'"
                 )));
             }
         }
@@ -232,7 +231,7 @@ pub fn convert_to_orchestrator_with_context(
     let health_check = service
         .health_check
         .as_ref()
-        .map(|hc| convert_health_check(hc));
+        .map(convert_health_check);
 
     Ok(ServiceConfig {
         name: service_name.to_string(),
@@ -290,13 +289,13 @@ mod tests {
             assert_eq!(result, home);
 
             let result = substitute_env_vars("prefix-${HOME}-suffix").unwrap();
-            assert_eq!(result, format!("prefix-{}-suffix", home));
+            assert_eq!(result, format!("prefix-{home}-suffix"));
         } else if let Ok(user) = std::env::var("USER") {
             let result = substitute_env_vars("${USER}").unwrap();
             assert_eq!(result, user);
 
             let result = substitute_env_vars("prefix-${USER}-suffix").unwrap();
-            assert_eq!(result, format!("prefix-{}-suffix", user));
+            assert_eq!(result, format!("prefix-{user}-suffix"));
         } else {
             // Skip test if no suitable env var is available
             println!("Skipping test - no suitable environment variable found");

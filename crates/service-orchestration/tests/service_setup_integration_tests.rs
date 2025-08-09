@@ -141,7 +141,6 @@ async fn test_setup_retry_logic() {
     // Should have waited for retries (simulated 3 attempts with 1 second delays)
     assert!(
         duration.as_secs() >= 2,
-        "Setup completed too quickly: {:?}",
-        duration
+        "Setup completed too quickly: {duration:?}"
     );
 }

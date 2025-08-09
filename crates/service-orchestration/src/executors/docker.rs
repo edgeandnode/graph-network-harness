@@ -40,7 +40,7 @@ impl DockerExecutor {
         &self,
         name: &str,
     ) -> std::result::Result<Option<ContainerState>, Error> {
-        let container_name = format!("orchestrator-{}-harness-test", name);
+        let container_name = format!("orchestrator-{name}-harness-test");
 
         // Check if container exists
         let mut ps_cmd = Command::new("docker");
@@ -48,7 +48,7 @@ impl DockerExecutor {
             "ps",
             "-a",
             "--filter",
-            &format!("name={}", container_name),
+            &format!("name={container_name}"),
             "--format",
             "{{.ID}}|{{.State}}|{{.Status}}",
             "--no-trunc",

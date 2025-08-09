@@ -80,7 +80,7 @@ impl Attacher for LocalAttacher {
 
         let mut log_child = log_cmd
             .spawn()
-            .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {}", e)))?;
+            .map_err(|e| Error::spawn_failed(format!("Failed to start log streaming: {e}")))?;
 
         let stdout = log_child.stdout.take().map(|s| BufReader::new(s).lines());
 
@@ -175,7 +175,7 @@ async fn check_service_status(service: &AttachedService) -> Result<ServiceStatus
     let output = cmd
         .output()
         .await
-        .map_err(|e| Error::spawn_failed(format!("Failed to check service status: {}", e)))?;
+        .map_err(|e| Error::spawn_failed(format!("Failed to check service status: {e}")))?;
 
     // Most service managers return 0 for running, non-zero for not running
     if output.status.success() {

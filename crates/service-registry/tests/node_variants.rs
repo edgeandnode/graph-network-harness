@@ -1,11 +1,7 @@
 //! Integration tests for different node execution variants
 
-use command_executor::{Command, Target, target::DockerContainer};
-use service_registry::ServiceEntry;
-use service_registry::models::{EventType, ServiceState};
 
 mod common;
-use common::{test_harness::*, test_services::*};
 
 /// Test local process execution variant
 #[smol_potat::test]

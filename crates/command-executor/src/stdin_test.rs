@@ -56,7 +56,7 @@ mod tests {
                 if matches!(event.event_type, ProcessEventType::Stdout) {
                     got_output = true;
                     if let Some(data) = event.data {
-                        println!("Got stdout: {}", data);
+                        println!("Got stdout: {data}");
                     }
                 }
             }
@@ -67,7 +67,7 @@ mod tests {
 
         // Check the file was written
         if let Ok(contents) = std::fs::read_to_string(&temp_file) {
-            println!("File contents: {:?}", contents);
+            println!("File contents: {contents:?}");
             assert!(
                 contents.contains("Test line 1"),
                 "File should contain test line 1"

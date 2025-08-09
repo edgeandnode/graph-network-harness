@@ -4,7 +4,6 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
@@ -33,27 +32,27 @@ impl TlsServerConfig {
         // Read certificate file
         let mut cert_file = File::open(cert_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open certificate file: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to open certificate file: {e}")))?;
         let mut cert_bytes = Vec::new();
         cert_file
             .read_to_end(&mut cert_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read certificate: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to read certificate: {e}")))?;
 
         // Read key file
         let mut key_file = File::open(key_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open key file: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to open key file: {e}")))?;
         let mut key_bytes = Vec::new();
         key_file
             .read_to_end(&mut key_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read key: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to read key: {e}")))?;
 
         // Parse certificates
         let certs = rustls_pemfile::certs(&mut cert_bytes.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| Error::Operation(format!("Failed to parse certificates: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to parse certificates: {e}")))?;
 
         if certs.is_empty() {
             return Err(Error::Operation("No certificates found in file".to_string()));
@@ -61,7 +60,7 @@ impl TlsServerConfig {
 
         // Parse private key
         let key_der = rustls_pemfile::private_key(&mut key_bytes.as_slice())
-            .map_err(|e| Error::Operation(format!("Failed to parse private key: {}", e)))?
+            .map_err(|e| Error::Operation(format!("Failed to parse private key: {e}")))?
             .ok_or_else(|| Error::Operation("No private key found in file".to_string()))?;
 
         let key = key_der;
@@ -70,7 +69,7 @@ impl TlsServerConfig {
         let config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(certs, key)
-            .map_err(|e| Error::Operation(format!("Failed to create TLS config: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to create TLS config: {e}")))?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -196,23 +195,23 @@ impl TlsClientConfig {
         // Read CA certificate
         let mut ca_file = File::open(ca_cert_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open CA certificate file: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to open CA certificate file: {e}")))?;
         let mut ca_bytes = Vec::new();
         ca_file
             .read_to_end(&mut ca_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read CA certificate: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to read CA certificate: {e}")))?;
 
         // Parse CA certificates
         let ca_certs = rustls_pemfile::certs(&mut ca_bytes.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| Error::Operation(format!("Failed to parse CA certificates: {}", e)))?;
+            .map_err(|e| Error::Operation(format!("Failed to parse CA certificates: {e}")))?;
 
         let mut root_store = rustls::RootCertStore::empty();
         for cert in ca_certs {
             root_store
                 .add(cert)
-                .map_err(|e| Error::Operation(format!("Failed to add CA certificate: {}", e)))?;
+                .map_err(|e| Error::Operation(format!("Failed to add CA certificate: {e}")))?;
         }
 
         let config = ClientConfig::builder()

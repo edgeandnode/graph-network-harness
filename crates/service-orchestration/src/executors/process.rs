@@ -11,10 +11,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use command_executor::{
-    Command, Executor, ProcessHandle, backends::LocalLauncher, event::ProcessEvent, target::Target,
+    Command, Executor, ProcessHandle, backends::LocalLauncher, target::Target,
 };
 use futures::lock::Mutex;
-use futures::stream::{self, Stream, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -368,7 +367,7 @@ mod tests {
             let executor_clone = executor.clone();
             let handle = smol::spawn(async move {
                 let config = ServiceConfig {
-                    name: format!("concurrent-test-{}", i),
+                    name: format!("concurrent-test-{i}"),
                     target: ServiceTarget::Process {
                         binary: "sleep".to_string(),
                         args: vec!["0.1".to_string()],

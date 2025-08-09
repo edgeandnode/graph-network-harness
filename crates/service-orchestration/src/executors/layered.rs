@@ -12,7 +12,7 @@ use crate::{
 use async_trait::async_trait;
 use command_executor::{
     Command, ProcessHandle, backends::LocalLauncher,
-    layered::{LayeredExecutor as CmdLayeredExecutor, ExecutionLayer, SshLayer, DockerLayer, LocalLayer},
+    layered::{LayeredExecutor as CmdLayeredExecutor, SshLayer, DockerLayer, LocalLayer},
 };
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -110,7 +110,7 @@ impl LayeredServiceExecutor {
                 }
                 
                 LayerConfig::Ssh { host, user, env: layer_env, port, identity_file, options } => {
-                    let destination = format!("{}@{}", user, host);
+                    let destination = format!("{user}@{host}");
                     let mut ssh_layer = SshLayer::new(destination);
                     
                     // Apply layer-specific environment

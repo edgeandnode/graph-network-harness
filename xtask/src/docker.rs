@@ -37,7 +37,7 @@ pub async fn ensure_test_images() -> Result<()> {
     )];
 
     for (image_name, context_dir, dockerfile) in images {
-        print!("  Checking for {}... ", image_name);
+        print!("  Checking for {image_name}... ");
 
         if docker_image_exists(image_name).await? {
             println!("found");
@@ -48,9 +48,9 @@ pub async fn ensure_test_images() -> Result<()> {
                 println!("  Running in GitHub Actions, attempting to use build cache");
             }
 
-            println!("  Building {} from {}", image_name, dockerfile);
+            println!("  Building {image_name} from {dockerfile}");
             build_docker_image(image_name, context_dir, dockerfile).await?;
-            println!("  Built {} successfully", image_name);
+            println!("  Built {image_name} successfully");
         }
     }
 
@@ -68,9 +68,9 @@ async fn build_test_images() -> Result<()> {
     )];
 
     for (image_name, context_dir, dockerfile) in images {
-        println!("Building {}...", image_name);
+        println!("Building {image_name}...");
         build_docker_image(image_name, context_dir, dockerfile).await?;
-        println!("Built {} successfully\n", image_name);
+        println!("Built {image_name} successfully\n");
     }
 
     Ok(())
@@ -82,7 +82,7 @@ async fn clean_test_images() -> Result<()> {
     let images = vec!["command-executor-test-systemd:latest"];
 
     for image_name in images {
-        println!("Removing {}...", image_name);
+        println!("Removing {image_name}...");
         remove_docker_image(image_name).await?;
     }
 
@@ -135,7 +135,7 @@ async fn build_docker_image(image_name: &str, context_dir: &str, dockerfile: &st
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    println!("{}", data);
+                    println!("{data}");
                 }
             }
             _ => {}
@@ -160,7 +160,7 @@ async fn remove_docker_image(image: &str) -> Result<()> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    println!("{}", data);
+                    println!("{data}");
                 }
             }
             _ => {}
@@ -169,7 +169,7 @@ async fn remove_docker_image(image: &str) -> Result<()> {
 
     let status = handle.wait().await?;
     if !status.success() {
-        eprintln!("Warning: Failed to remove image {}", image);
+        eprintln!("Warning: Failed to remove image {image}");
     }
 
     Ok(())

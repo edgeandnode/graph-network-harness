@@ -4,7 +4,7 @@
 //! service lifecycle management patterns and event streaming capabilities.
 
 use super::RunningService;
-use crate::{Error, config::ServiceConfig, health::HealthStatus};
+use crate::{Error, config::ServiceConfig};
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
 use futures::stream::BoxStream;

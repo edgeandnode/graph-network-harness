@@ -270,7 +270,7 @@ impl ExecutionLayer for DockerLayer {
 
         // Add environment variables from this layer as docker -e flags
         for (key, value) in &self.env {
-            docker_cmd.arg("-e").arg(format!("{}={}", key, value));
+            docker_cmd.arg("-e").arg(format!("{key}={value}"));
         }
 
         // Add container

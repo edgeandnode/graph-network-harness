@@ -4,12 +4,8 @@
 
 use command_executor::error::Error;
 
-#[cfg(feature = "ssh")]
-use command_executor::backends::LocalLauncher;
 // TODO: SSH functionality moved to layered system - these tests need updating
 // use command_executor::layered::{LayeredExecutor, SshLayer};
-#[cfg(feature = "ssh")]
-use command_executor::{Command, Executor, Target};
 
 mod common;
 
@@ -90,17 +86,17 @@ fn test_error_debug_formatting() {
 
     // Create a deeply nested error chain
     for i in 0..1000 {
-        error = error.with_layer_context(format!("Layer{}", i));
+        error = error.with_layer_context(format!("Layer{i}"));
     }
 
     // This should not cause a stack overflow
-    let formatted = format!("{:?}", error);
+    let formatted = format!("{error:?}");
     println!(
         "Formatted error (truncated): {}...",
         &formatted[..formatted.len().min(100)]
     );
 
     // Also test Display formatting
-    let display = format!("{}", error);
-    println!("Display error: {}", display);
+    let display = format!("{error}");
+    println!("Display error: {display}");
 }

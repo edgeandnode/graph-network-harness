@@ -87,8 +87,7 @@ impl IpAllocator {
             if let Some(existing) = self.ip_to_service.get(&ip) {
                 if existing != service_name {
                     return Err(Error::Operation(format!(
-                        "IP {} already allocated to {}",
-                        ip, existing
+                        "IP {ip} already allocated to {existing}"
                     )));
                 }
             }
@@ -120,7 +119,7 @@ impl IpAllocator {
 
     /// Get the service using a specific IP
     pub fn get_service_by_ip(&self, ip: &IpAddr) -> Option<&str> {
-        self.ip_to_service.get(ip).map(|s| s.as_str())
+        self.ip_to_service.get(ip).map(std::string::String::as_str)
     }
 
     /// Find the next available IP address

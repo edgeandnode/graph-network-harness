@@ -4,7 +4,7 @@
 //! for the orchestration system, including deployment state, task execution
 //! tracking, and state validation.
 
-use crate::{Error, ServiceConfig, TaskConfig, config::ServiceStatus};
+use crate::Error;
 use chrono::{DateTime, Utc};
 use service_registry::ServiceState as RegistryServiceState;
 use std::collections::HashMap;

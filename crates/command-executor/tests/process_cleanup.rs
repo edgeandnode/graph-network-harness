@@ -135,7 +135,7 @@ fn test_cleanup_with_multiple_processes() {
         for pid in pids {
             let nix_pid = Pid::from_raw(pid as i32);
             let is_alive = signal::kill(nix_pid, None).is_ok();
-            assert!(!is_alive, "Process {} should be killed", pid);
+            assert!(!is_alive, "Process {pid} should be killed");
         }
     });
 }

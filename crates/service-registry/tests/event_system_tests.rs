@@ -3,14 +3,8 @@
 //! These tests validate the registry's event subscription and notification
 //! system which will be used by the WebSocket API once implemented.
 
-use service_registry::{
-    Registry, ServiceEntry,
-    models::{EventType, ServiceState},
-};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 mod common;
-use common::test_services::*;
 
 /// Test registry with WebSocket-style event handling
 #[smol_potat::test]

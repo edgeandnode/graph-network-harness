@@ -131,7 +131,7 @@ pub async fn create_test_package(
     name: &str,
     version: &str,
 ) -> anyhow::Result<PathBuf> {
-    let package_dir = temp_dir.path().join(format!("{}-{}", name, version));
+    let package_dir = temp_dir.path().join(format!("{name}-{version}"));
     let scripts_dir = package_dir.join("scripts");
     let bin_dir = package_dir.join("bin");
     let config_dir = package_dir.join("config");
@@ -144,8 +144,8 @@ pub async fn create_test_package(
     // Create manifest
     let manifest_content = format!(
         r#"
-name: "{}"
-version: "{}"
+name: "{name}"
+version: "{version}"
 description: "Test service package"
 service:
   type: "process"
@@ -161,8 +161,7 @@ health:
   script: "scripts/health.sh"
   interval: "30s"
   timeout: "5s"
-"#,
-        name, version
+"#
     );
 
     async_fs::write(package_dir.join("manifest.yaml"), manifest_content).await?;

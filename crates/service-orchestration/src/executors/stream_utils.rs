@@ -21,10 +21,7 @@ pub fn create_forwarding_stream(event_stream: SharedEventStream) -> EventStream 
             let mut stream = event_stream.lock().await;
             stream.next().await
         };
-        match next_event {
-            Some(event) => Some((event, event_stream)),
-            None => None,
-        }
+        next_event.map(|event| (event, event_stream))
     });
 
     Box::pin(log_stream)

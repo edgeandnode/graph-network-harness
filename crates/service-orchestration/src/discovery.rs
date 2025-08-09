@@ -35,7 +35,7 @@ impl ServiceDiscovery {
                 s.name.contains(service_type) ||
                 s.name == service_type ||
                 // Also check if it's a prefixed service like "postgres-1"
-                s.name.starts_with(&format!("{}-", service_type))
+                s.name.starts_with(&format!("{service_type}-"))
             })
             .filter(|s| matches!(s.state, RegistryServiceState::Running))
             .flat_map(|s| {
@@ -107,8 +107,7 @@ impl ServiceDiscovery {
         }
 
         Err(Error::Other(format!(
-            "Service '{}' did not become available after {} attempts",
-            name, max_attempts
+            "Service '{name}' did not become available after {max_attempts} attempts"
         )))
     }
 

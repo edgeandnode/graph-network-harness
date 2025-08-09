@@ -47,7 +47,7 @@ pub enum WsClient {
 impl WsClient {
     /// Connect to a WebSocket server (plain HTTP)
     pub async fn connect(addr: SocketAddr) -> Result<Self> {
-        let url = format!("ws://{}", addr);
+        let url = format!("ws://{addr}");
         let stream = TcpStream::connect(addr).await?;
         let (ws, _) = client_async(&url, stream).await?;
 
@@ -66,13 +66,13 @@ impl WsClient {
         tls_config: TlsClientConfig,
         server_name: &str,
     ) -> Result<Self> {
-        let url = format!("wss://{}", addr);
+        let url = format!("wss://{addr}");
         let tcp_stream = TcpStream::connect(addr).await?;
 
         // Establish TLS connection
         let connector = TlsConnector::from(tls_config.config);
         let server_name = rustls::pki_types::ServerName::try_from(server_name.to_owned())
-            .map_err(|e| Error::Operation(format!("Invalid server name: {:?}", e)))?;
+            .map_err(|e| Error::Operation(format!("Invalid server name: {e:?}")))?;
         let tls_stream = connector.connect(server_name, tcp_stream).await?;
 
         // WebSocket handshake over TLS

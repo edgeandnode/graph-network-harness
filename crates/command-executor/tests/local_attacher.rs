@@ -103,7 +103,7 @@ fn test_service_without_reload() {
             .unwrap();
 
         let config = AttachConfig::default();
-        let (_events, mut handle) = attacher.attach(&service, config).await.unwrap();
+        let (_events, handle) = attacher.attach(&service, config).await.unwrap();
 
         // Attached handles don't have reload capability
         // They are read-only interfaces to observe existing services
@@ -121,7 +121,7 @@ fn test_restart_fallback() {
             .unwrap();
 
         let config = AttachConfig::default();
-        let (_events, mut handle) = attacher.attach(&service, config).await.unwrap();
+        let (_events, handle) = attacher.attach(&service, config).await.unwrap();
 
         // Attached handles don't have restart capability
         // They are read-only interfaces to observe existing services
@@ -166,7 +166,7 @@ fn test_command_failure_handling() {
             .unwrap();
 
         let config = AttachConfig::default();
-        let (_events, mut handle) = attacher.attach(&service, config).await.unwrap();
+        let (_events, handle) = attacher.attach(&service, config).await.unwrap();
 
         // Attached handles cannot control service lifecycle
         // They are read-only interfaces

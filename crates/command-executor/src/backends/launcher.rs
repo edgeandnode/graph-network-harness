@@ -67,7 +67,7 @@ impl Launcher for LocalLauncher {
 
                 let mut child = async_cmd
                     .spawn()
-                    .map_err(|e| Error::spawn_failed(format!("Failed to spawn process: {}", e)))?;
+                    .map_err(|e| Error::spawn_failed(format!("Failed to spawn process: {e}")))?;
 
                 let child_id = child.id();
 
@@ -119,7 +119,7 @@ impl ProcessHandle for LocalProcessHandle {
             .child
             .status()
             .await
-            .map_err(|e| Error::spawn_failed(format!("Failed to wait for process: {}", e)))?;
+            .map_err(|e| Error::spawn_failed(format!("Failed to wait for process: {e}")))?;
 
         Ok(ExitStatus {
             code: status.code(),

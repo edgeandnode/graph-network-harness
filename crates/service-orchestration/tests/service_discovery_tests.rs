@@ -148,11 +148,11 @@ async fn test_multi_service_discovery() {
     // Create multiple postgres instances
     for i in 1..=3 {
         services.insert(
-            format!("postgres-{}", i),
+            format!("postgres-{i}"),
             ServiceInstanceConfig {
                 service_type: "postgres".to_string(),
                 orchestration: ServiceConfig {
-                    name: format!("postgres-{}", i),
+                    name: format!("postgres-{i}"),
                     target: ServiceTarget::Process {
                         binary: "echo".to_string(),
                         args: vec![format!("PostgreSQL instance {} on port {}", i, 5430 + i)],

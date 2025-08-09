@@ -51,7 +51,7 @@ impl RemoteSshExecutor {
 
     /// Create SSH layer from remote configuration with authentication support
     fn create_ssh_layer(host: &str, user: &str, env: &HashMap<String, String>) -> SshLayer {
-        let destination = format!("{}@{}", user, host);
+        let destination = format!("{user}@{host}");
         let mut ssh_layer = SshLayer::new(destination);
 
         // Add environment variables

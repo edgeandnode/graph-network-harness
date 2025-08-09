@@ -27,6 +27,12 @@ pub struct SystemdAttachedExecutor {
     attached_services: Arc<Mutex<HashMap<String, Box<dyn AttachedHandle>>>>,
 }
 
+impl Default for SystemdAttachedExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemdAttachedExecutor {
     /// Create a new systemd attached executor
     pub fn new() -> Self {
@@ -58,7 +64,7 @@ impl EventStreamable for SystemdAttachedExecutor {
 
                 // Use local executor to run journalctl
                 let executor = command_executor::Executor::new(
-                    format!("journald-{}", unit_name),
+                    format!("journald-{unit_name}"),
                     LocalLauncher,
                 );
 
@@ -163,6 +169,12 @@ pub struct DockerAttachedExecutor {
     attached_containers: Arc<Mutex<HashMap<String, String>>>,
 }
 
+impl Default for DockerAttachedExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DockerAttachedExecutor {
     /// Create a new Docker attached executor
     pub fn new() -> Self {
@@ -190,7 +202,7 @@ impl EventStreamable for DockerAttachedExecutor {
 
             // Use local executor to run docker logs
             let executor = command_executor::Executor::new(
-                format!("docker-logs-{}", container_id),
+                format!("docker-logs-{container_id}"),
                 LocalLauncher,
             );
 
@@ -296,8 +308,7 @@ impl LocalProcessAttachedExecutor {
                 .map_err(|_| Error::Config("Invalid PID format".to_string()))
         } else {
             Err(Error::Config(format!(
-                "Process '{}' not found",
-                process_name
+                "Process '{process_name}' not found"
             )))
         }
     }
@@ -323,7 +334,7 @@ impl EventStreamable for LocalProcessAttachedExecutor {
         if let Some(pid) = service.pid {
             // Use journalctl to follow logs for the process by PID
             let cmd = Command::new("journalctl")
-                .arg(format!("_PID={}", pid))
+                .arg(format!("_PID={pid}"))
                 .arg("-f") // Follow mode
                 .arg("-n")
                 .arg("0") // Start from end
@@ -367,8 +378,7 @@ impl AttachedService for LocalProcessAttachedExecutor {
         // Verify the process is running
         if !self.is_process_running(pid).await? {
             return Err(Error::Config(format!(
-                "Process with PID {} is not running",
-                pid
+                "Process with PID {pid} is not running"
             )));
         }
 

@@ -180,7 +180,7 @@ impl TestHarness {
                 }
             }
 
-            println!("Waiting for systemd... ({}/{})", attempts, max_attempts);
+            println!("Waiting for systemd... ({attempts}/{max_attempts})");
             smol::Timer::after(Duration::from_secs(1)).await;
         }
 
@@ -206,7 +206,7 @@ impl TestHarness {
                 }
             }
 
-            println!("Waiting for SSH... ({}/{})", attempts, max_attempts);
+            println!("Waiting for SSH... ({attempts}/{max_attempts})");
             smol::Timer::after(Duration::from_secs(1)).await;
         }
 

@@ -344,6 +344,6 @@ impl Endpoint {
 
     /// Get metadata value
     pub fn get_metadata(&self, key: &str) -> Option<&str> {
-        self.metadata.get(key).map(|s| s.as_str())
+        self.metadata.get(key).map(std::string::String::as_str)
     }
 }

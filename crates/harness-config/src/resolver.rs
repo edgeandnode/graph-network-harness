@@ -29,6 +29,12 @@ pub struct ResolutionContext {
     pub service_hosts: HashMap<String, String>,
 }
 
+impl Default for ResolutionContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResolutionContext {
     /// Create a new resolution context
     pub fn new() -> Self {
@@ -155,16 +161,14 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
                         Ok((
                             "",
                             Err(ConfigError::ValidationError(format!(
-                                "Invalid service name '{}' in reference '{}'",
-                                service, input
+                                "Invalid service name '{service}' in reference '{input}'"
                             ))),
                         ))
                     } else {
                         Ok((
                             "",
                             Err(ConfigError::ValidationError(format!(
-                                "Invalid service reference type '{}' in '{}'",
-                                property, input
+                                "Invalid service reference type '{property}' in '{input}'"
                             ))),
                         ))
                     }
@@ -172,8 +176,7 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
                     Ok((
                         "",
                         Err(ConfigError::ValidationError(format!(
-                            "Invalid service reference format: '{}'",
-                            input
+                            "Invalid service reference format: '{input}'"
                         ))),
                     ))
                 }
@@ -186,8 +189,7 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
             Err(_) => Ok((
                 "",
                 Err(ConfigError::ValidationError(format!(
-                    "Invalid environment variable name '{}'. Environment variables must be uppercase with underscores",
-                    input
+                    "Invalid environment variable name '{input}'. Environment variables must be uppercase with underscores"
                 ))),
             )),
         }
@@ -205,8 +207,7 @@ pub fn parse_variable(input: &str) -> IResult<&str, Result<Variable>> {
         Err(_) => Ok((
             input,
             Err(ConfigError::ValidationError(format!(
-                "Failed to parse variable expression: '{}'",
-                content
+                "Failed to parse variable expression: '{content}'"
             ))),
         )),
     }
@@ -278,25 +279,25 @@ pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String
                     if let Some(ip) = context.service_ips.get(&service) {
                         result.push_str(ip);
                     } else {
-                        errors.push(format!("{}.{}", service, property));
+                        errors.push(format!("{service}.{property}"));
                     }
                 }
                 "host" => {
                     if let Some(host) = context.service_hosts.get(&service) {
                         result.push_str(host);
                     } else {
-                        errors.push(format!("{}.{}", service, property));
+                        errors.push(format!("{service}.{property}"));
                     }
                 }
                 "port" => {
                     if let Some(port) = context.service_ports.get(&service) {
                         result.push_str(&port.to_string());
                     } else {
-                        errors.push(format!("{}.{}", service, property));
+                        errors.push(format!("{service}.{property}"));
                     }
                 }
                 _ => {
-                    errors.push(format!("{}.{}", service, property));
+                    errors.push(format!("{service}.{property}"));
                 }
             },
         }
@@ -346,7 +347,7 @@ pub fn find_all_references(config: &Config) -> Result<(HashSet<String>, HashSet<
                         env_vars.insert(name);
                     }
                     Variable::ServiceRef { service, property } => {
-                        service_refs.insert(format!("{}.{}", service, property));
+                        service_refs.insert(format!("{service}.{property}"));
                     }
                 }
             }
@@ -367,8 +368,7 @@ pub fn validate_references(config: &Config) -> Result<()> {
 
             if !config.services.contains_key(service_name) {
                 return Err(ConfigError::ValidationError(format!(
-                    "Service reference '{}' refers to unknown service",
-                    service_ref
+                    "Service reference '{service_ref}' refers to unknown service"
                 )));
             }
         }
@@ -402,7 +402,7 @@ mod tests {
         for case in valid_cases {
             let result = find_variables(case);
             assert_eq!(result.len(), 1);
-            assert!(result[0].is_ok(), "Should parse valid env var: {}", case);
+            assert!(result[0].is_ok(), "Should parse valid env var: {case}");
         }
 
         let invalid_cases = vec![
@@ -416,8 +416,7 @@ mod tests {
             assert_eq!(result.len(), 1);
             assert!(
                 result[0].is_err(),
-                "Should reject invalid env var: {}",
-                case
+                "Should reject invalid env var: {case}"
             );
         }
     }

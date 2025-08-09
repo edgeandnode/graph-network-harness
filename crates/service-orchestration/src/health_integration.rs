@@ -126,12 +126,12 @@ async fn monitor_service_health(
     );
 
     // Create a local health checker that doesn't need to be stored
-    let mut health_checker = crate::health::HealthChecker::new();
+    let health_checker = crate::health::HealthChecker::new();
     let health_config = {
         let monitors = monitors.lock().unwrap();
-        monitors.get(&service_name).and_then(|m| {
+        monitors.get(&service_name).map(|m| {
             let monitor = m.lock().unwrap();
-            Some(monitor.config.clone())
+            monitor.config.clone()
         })
     };
 

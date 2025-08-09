@@ -179,7 +179,7 @@ mod tests {
 
         // This should work for basic commands
         match executor.execute_command(command).await {
-            Ok((mut event_stream, mut handle)) => {
+            Ok((mut event_stream, handle)) => {
                 // Basic verification that we got results
                 use futures::StreamExt;
 
@@ -202,8 +202,7 @@ mod tests {
                 // Some test environments might not support process execution
                 // This is ok as long as the executor was created successfully
                 eprintln!(
-                    "Execution failed (may be expected in test environment): {}",
-                    e
+                    "Execution failed (may be expected in test environment): {e}"
                 );
             }
         }
@@ -215,7 +214,7 @@ mod tests {
             .with_layer(SshLayer::new("test@example.com"))
             .with_env("DEBUG", "1");
 
-        let debug_output = format!("{:?}", executor);
+        let debug_output = format!("{executor:?}");
         assert!(debug_output.contains("LayeredExecutor"));
         assert!(debug_output.contains("SSH to test@example.com"));
     }
@@ -333,7 +332,7 @@ mod tests {
             }
             Err(e) => {
                 // This might happen in some test environments, which is acceptable
-                eprintln!("Command execution failed (may be expected): {}", e);
+                eprintln!("Command execution failed (may be expected): {e}");
             }
         }
 

@@ -142,7 +142,7 @@ impl ServiceManager {
                 service_registry::models::ExecutionInfo::DockerContainer {
                     container_id: running_service.container_id.clone(),
                     image: image.clone(),
-                    name: Some(format!("orchestrator-{}", name)),
+                    name: Some(format!("orchestrator-{name}")),
                 }
             }
             _ => {

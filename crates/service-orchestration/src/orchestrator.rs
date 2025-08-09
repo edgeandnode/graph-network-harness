@@ -13,7 +13,7 @@ use service_registry::{
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 /// Represents a node in the dependency graph
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,11 +66,11 @@ impl DependencyGraph {
                 // dep_node -> node (dependency must come before this node)
                 edges
                     .entry(dep_node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node.clone());
                 reverse_edges
                     .entry(node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(dep_node.clone());
             }
         }
@@ -90,11 +90,11 @@ impl DependencyGraph {
                 // dep_node -> node (dependency must come before this node)
                 edges
                     .entry(dep_node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node.clone());
                 reverse_edges
                     .entry(node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(dep_node.clone());
             }
         }
@@ -178,7 +178,7 @@ impl DependencyGraph {
             let dependencies = self
                 .reverse_edges
                 .get(node)
-                .map(|v| v.as_slice())
+                .map(std::vec::Vec::as_slice)
                 .unwrap_or(&[]);
             if dependencies.iter().all(|dep| completed.contains(dep)) {
                 ready.push(node.clone());
@@ -257,8 +257,7 @@ impl DependencyOrchestrator {
                     Err(e) => {
                         warn!("Failed to execute {:?}: {}", node, e);
                         return Err(Error::Other(format!(
-                            "Execution failed for {:?}: {}",
-                            node, e
+                            "Execution failed for {node:?}: {e}"
                         )));
                     }
                 }
@@ -275,7 +274,7 @@ impl DependencyOrchestrator {
         let service_config = config
             .services
             .get(&name)
-            .ok_or_else(|| Error::Config(format!("Service '{}' not found", name)))?;
+            .ok_or_else(|| Error::Config(format!("Service '{name}' not found")))?;
 
         info!("Starting service: {}", name);
 
@@ -305,7 +304,7 @@ impl DependencyOrchestrator {
         let task_config = config
             .tasks
             .get(&name)
-            .ok_or_else(|| Error::Config(format!("Task '{}' not found", name)))?;
+            .ok_or_else(|| Error::Config(format!("Task '{name}' not found")))?;
 
         info!("Executing task: {}", name);
 
@@ -342,8 +341,7 @@ fn create_service_handle(
                 .await
                 .map_err(|e| {
                     crate::Error::Other(format!(
-                        "Failed waiting for dependency '{}': {}",
-                        dep_name, e
+                        "Failed waiting for dependency '{dep_name}': {e}"
                     ))
                 })?;
         }
@@ -353,7 +351,7 @@ fn create_service_handle(
             .build_service_config(&service_config)
             .await
             .map_err(|e| {
-                crate::Error::Other(format!("Failed to build config for '{}': {}", name, e))
+                crate::Error::Other(format!("Failed to build config for '{name}': {e}"))
             })?;
 
         // Create a modified service config with injected environment variables
@@ -372,18 +370,18 @@ fn create_service_handle(
         let executor = context
             .executors()
             .find_executor(&modified_config)
-            .map_err(|e| crate::Error::Other(format!("Failed to find executor: {}", e)))?;
+            .map_err(|e| crate::Error::Other(format!("Failed to find executor: {e}")))?;
 
         info!("Starting service '{}' with executor", name);
 
         // Start the service using the executor with modified config
         let running_service = executor.start(modified_config).await.map_err(|e| {
-            crate::Error::Other(format!("Failed to start service '{}': {}", name, e))
+            crate::Error::Other(format!("Failed to start service '{name}': {e}"))
         })?;
 
         // Register service in registry with Starting state
         let now = Utc::now();
-        let mut service_entry = ServiceEntry {
+        let service_entry = ServiceEntry {
             name: name.clone(),
             version: "0.1.0".to_string(),
             execution: match running_service.pid {
@@ -426,7 +424,7 @@ fn create_service_handle(
             .registry()
             .register(service_entry.clone())
             .await
-            .map_err(|e| crate::Error::Registry(e))?;
+            .map_err(crate::Error::Registry)?;
 
         info!("Service '{}' started, performing setup", name);
 
@@ -438,7 +436,7 @@ fn create_service_handle(
             .registry()
             .update_state(&name, RegistryServiceState::Running)
             .await
-            .map_err(|e| crate::Error::Registry(e))?;
+            .map_err(crate::Error::Registry)?;
 
         // Start health monitoring if configured
         if service_config.health_check.is_some() {
@@ -546,8 +544,7 @@ async fn perform_service_setup(
         }
 
         return Err(crate::Error::Other(format!(
-            "Service '{}' failed to become ready after {} attempts",
-            name, max_retries
+            "Service '{name}' failed to become ready after {max_retries} attempts"
         )));
     }
 
@@ -586,8 +583,7 @@ fn create_task_handle(
                     }
                     _ => {
                         return Err(crate::Error::Config(format!(
-                            "Unsupported target type for task '{}'",
-                            name
+                            "Unsupported target type for task '{name}'"
                         )));
                     }
                 }

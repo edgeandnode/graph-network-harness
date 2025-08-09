@@ -140,7 +140,7 @@ async fn test_stdin_forwarding_with_env_interpolation() {
     assert_eq!(exit_status.code, Some(0));
 
     // Verify environment variables were applied and stdin was processed
-    println!("Output: {}", output);
+    println!("Output: {output}");
     assert!(output.contains("TEST: input line :END"));
 }
 

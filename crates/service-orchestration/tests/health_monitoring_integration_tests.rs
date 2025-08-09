@@ -95,7 +95,7 @@ async fn test_service_with_health_monitoring() {
             service_orchestration::HealthStatus::Healthy => {
                 // Expected
             }
-            _ => panic!("Expected healthy-service to be healthy, got: {:?}", status),
+            _ => panic!("Expected healthy-service to be healthy, got: {status:?}"),
         }
     } else {
         panic!("No health status found for healthy-service");
@@ -107,7 +107,7 @@ async fn test_service_with_health_monitoring() {
             service_orchestration::HealthStatus::Unhealthy(_) => {
                 // Expected
             }
-            _ => panic!("Expected flaky-service to be unhealthy, got: {:?}", status),
+            _ => panic!("Expected flaky-service to be unhealthy, got: {status:?}"),
         }
     } else {
         panic!("No health status found for flaky-service");

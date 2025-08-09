@@ -163,7 +163,7 @@ impl AttachmentLayer for SshAttachmentLayer {
         use crate::Command;
 
         // Transform all commands to run over SSH
-        let ssh_prefix = vec!["ssh".to_string(), self.ssh_target.clone()];
+        let ssh_prefix = ["ssh".to_string(), self.ssh_target.clone()];
 
         // Transform status command
         let mut status_cmd = Command::new(&ssh_prefix[0]);
@@ -251,11 +251,9 @@ impl AttachmentLayer for DockerAttachmentLayer {
         use crate::Command;
 
         // Transform commands to use docker exec
-        let _docker_prefix = vec![
-            "docker".to_string(),
+        let _docker_prefix = ["docker".to_string(),
             "exec".to_string(),
-            self.container_id.clone(),
-        ];
+            self.container_id.clone()];
 
         // Transform status command - check if container is running
         target.status_command = Command::new("docker")
@@ -308,6 +306,12 @@ impl AttachedHandle for DockerWrappedHandle {
     }
 }
 
+impl Default for LocalAttachmentLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LocalAttachmentLayer {
     /// Create a new local attachment layer
     pub fn new() -> Self {
@@ -328,7 +332,7 @@ impl LocalAttachmentLayer {
 impl AttachmentLayer for LocalAttachmentLayer {
     fn description(&self) -> String {
         match &self.service_prefix {
-            Some(prefix) => format!("Local({})", prefix),
+            Some(prefix) => format!("Local({prefix})"),
             None => "Local".to_string(),
         }
     }

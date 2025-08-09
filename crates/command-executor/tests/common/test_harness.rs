@@ -213,22 +213,6 @@ impl TestHarness {
         Ok(())
     }
 
-    /// Get SSH configuration for connecting to the test container
-    // TODO: SSH functionality moved to layered system - this needs updating
-    /*
-    #[cfg(feature = "ssh")]
-    pub fn ssh_config(&self) -> command_executor::backends::ssh::SshConfig {
-        command_executor::backends::ssh::SshConfig::new("localhost")
-            .with_user("testuser")
-            .with_port(self.ssh_port)
-            .with_identity_file(&self.ssh_key_path)
-            .with_extra_arg("-o")
-            .with_extra_arg("StrictHostKeyChecking=no")
-            .with_extra_arg("-o")
-            .with_extra_arg("UserKnownHostsFile=/dev/null")
-    }
-    */
-
     /// Check if the container is running
     pub async fn is_running(&self) -> bool {
         let ps_cmd = Command::builder("docker")

@@ -68,7 +68,10 @@ pub enum GraphContractsAction {
     /// Deploy all Graph Protocol contracts
     DeployAll,
     /// Deploy a specific contract
-    DeployContract { name: String },
+    DeployContract {
+        /// Name of the contract to deploy
+        name: String,
+    },
     /// Verify deployment addresses
     VerifyDeployment,
 }
@@ -78,19 +81,46 @@ pub enum GraphContractsAction {
 #[serde(tag = "event")]
 pub enum GraphContractsEvent {
     /// Deployment process started
-    DeploymentStarted { total_contracts: usize },
+    DeploymentStarted {
+        /// Total number of contracts to deploy
+        total_contracts: usize,
+    },
     /// Compiling a contract
-    ContractCompiling { name: String },
+    ContractCompiling {
+        /// Name of the contract being compiled
+        name: String,
+    },
     /// Contract deployed successfully
-    ContractDeployed { name: String, address: String },
+    ContractDeployed {
+        /// Name of the deployed contract
+        name: String,
+        /// Ethereum address of the deployed contract
+        address: String,
+    },
     /// Deployment progress update
-    DeploymentProgress { completed: usize, total: usize },
+    DeploymentProgress {
+        /// Number of contracts deployed so far
+        completed: usize,
+        /// Total number of contracts to deploy
+        total: usize,
+    },
     /// All contracts deployed
-    DeploymentCompleted { addresses: HashMap<String, String> },
+    DeploymentCompleted {
+        /// Map of contract names to their deployed addresses
+        addresses: HashMap<String, String>,
+    },
     /// Verification result
-    VerificationResult { success: bool, message: String },
+    VerificationResult {
+        /// Whether verification succeeded
+        success: bool,
+        /// Verification message
+        message: String,
+    },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -688,11 +718,22 @@ pub enum TapContractsEvent {
     /// Deployment started
     DeploymentStarted,
     /// Contract deployed
-    ContractDeployed { name: String, address: String },
+    ContractDeployed {
+        /// Name of the deployed contract
+        name: String,
+        /// Ethereum address of the deployed contract
+        address: String,
+    },
     /// Deployment completed
-    DeploymentCompleted { addresses: HashMap<String, String> },
+    DeploymentCompleted {
+        /// Map of contract names to their deployed addresses
+        addresses: HashMap<String, String>,
+    },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -834,19 +875,34 @@ pub enum SubgraphDeployEvent {
     /// Build started
     BuildStarted,
     /// Build progress
-    BuildProgress { status: String },
+    BuildProgress {
+        /// Current build status message
+        status: String,
+    },
     /// Build completed with IPFS hash
-    BuildCompleted { ipfs_hash: String },
+    BuildCompleted {
+        /// IPFS hash of the built subgraph
+        ipfs_hash: String,
+    },
     /// Deployment started
-    DeploymentStarted { name: String },
+    DeploymentStarted {
+        /// Name of the subgraph being deployed
+        name: String,
+    },
     /// Deployment completed
     DeploymentCompleted {
+        /// Name of the deployed subgraph
         name: String,
+        /// IPFS hash of the deployed subgraph
         ipfs_hash: String,
+        /// GraphQL endpoints for querying the subgraph
         endpoints: Vec<String>,
     },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]

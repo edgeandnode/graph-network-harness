@@ -18,6 +18,7 @@ pub struct GraphNodeService {
 }
 
 impl GraphNodeService {
+    /// Create a new GraphNodeService with specified endpoint
     pub fn new(endpoint: String) -> Self {
         Self { endpoint }
     }
@@ -29,17 +30,25 @@ impl GraphNodeService {
 pub enum GraphNodeAction {
     /// Deploy a new subgraph
     DeploySubgraph {
+        /// Name of the subgraph
         name: String,
+        /// IPFS hash of the subgraph manifest
         ipfs_hash: String,
+        /// Optional version label for the deployment
         version_label: Option<String>,
     },
     /// Query a deployed subgraph
     QuerySubgraph {
+        /// Name of the subgraph to query
         subgraph_name: String,
+        /// GraphQL query string
         query: String,
     },
     /// Remove a subgraph deployment
-    RemoveSubgraph { deployment_id: String },
+    RemoveSubgraph {
+        /// ID of the deployment to remove
+        deployment_id: String,
+    },
 }
 
 /// Events emitted by Graph Node actions
@@ -48,24 +57,37 @@ pub enum GraphNodeAction {
 pub enum GraphNodeEvent {
     /// Deployment started
     DeploymentStarted {
+        /// ID of the deployment
         deployment_id: String,
+        /// Timestamp when deployment started
         timestamp: String,
     },
     /// Deployment progress
     DeploymentProgress {
+        /// ID of the deployment
         deployment_id: String,
+        /// Current status message
         status: String,
+        /// Progress percentage (0-100)
         percent: u8,
     },
     /// Deployment completed
     DeploymentCompleted {
+        /// ID of the deployment
         deployment_id: String,
+        /// List of GraphQL endpoints for the deployed subgraph
         endpoints: Vec<String>,
     },
     /// Query result
-    QueryResult { data: serde_json::Value },
+    QueryResult {
+        /// Query result data
+        data: serde_json::Value,
+    },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -220,6 +242,7 @@ pub struct AnvilService {
 }
 
 impl AnvilService {
+    /// Create a new AnvilService with specified chain ID and port
     pub fn new(chain_id: u64, port: u16) -> Self {
         Self { chain_id, port }
     }
@@ -240,14 +263,23 @@ impl Default for AnvilService {
 pub enum AnvilAction {
     /// Mine a number of blocks
     MineBlocks {
+        /// Number of blocks to mine
         count: u64,
+        /// Optional interval between blocks in seconds
         interval_secs: Option<u64>,
     },
     /// Set account balance
-    SetBalance { address: String, balance: String },
+    SetBalance {
+        /// Ethereum address
+        address: String,
+        /// New balance in wei
+        balance: String,
+    },
     /// Create a fork
     Fork {
+        /// URL of the network to fork
         url: String,
+        /// Optional block number to fork from
         block_number: Option<u64>,
     },
 }
@@ -258,21 +290,30 @@ pub enum AnvilAction {
 pub enum AnvilEvent {
     /// Block mined
     BlockMined {
+        /// Block number that was mined
         block_number: u64,
+        /// Hash of the mined block
         block_hash: String,
     },
     /// Balance updated
     BalanceUpdated {
+        /// Ethereum address that was updated
         address: String,
+        /// New balance in wei
         new_balance: String,
     },
     /// Fork created
     ForkCreated {
+        /// URL of the forked network
         fork_url: String,
+        /// Block number where fork was created
         forked_at_block: u64,
     },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -411,6 +452,7 @@ pub struct PostgresService {
 }
 
 impl PostgresService {
+    /// Create a new PostgresService with specified database name and port
     pub fn new(db_name: String, port: u16) -> Self {
         Self { db_name, port }
     }
@@ -430,11 +472,20 @@ impl Default for PostgresService {
 #[serde(tag = "type")]
 pub enum PostgresAction {
     /// Create a new database
-    CreateDatabase { name: String },
+    CreateDatabase {
+        /// Name of the database to create
+        name: String,
+    },
     /// Run a SQL query
-    ExecuteQuery { query: String },
+    ExecuteQuery {
+        /// SQL query to execute
+        query: String,
+    },
     /// Backup the database
-    Backup { backup_path: String },
+    Backup {
+        /// Path where backup should be saved
+        backup_path: String,
+    },
 }
 
 /// Events from PostgreSQL
@@ -442,13 +493,27 @@ pub enum PostgresAction {
 #[serde(tag = "event")]
 pub enum PostgresEvent {
     /// Database created
-    DatabaseCreated { name: String },
+    DatabaseCreated {
+        /// Name of the created database
+        name: String,
+    },
     /// Query executed
-    QueryExecuted { rows_affected: u64 },
+    QueryExecuted {
+        /// Number of rows affected by the query
+        rows_affected: u64,
+    },
     /// Backup completed
-    BackupCompleted { path: String, size_bytes: u64 },
+    BackupCompleted {
+        /// Path where backup was saved
+        path: String,
+        /// Size of the backup file in bytes
+        size_bytes: u64,
+    },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -514,6 +579,7 @@ pub struct IpfsService {
 }
 
 impl IpfsService {
+    /// Create a new IpfsService with specified API and gateway ports
     pub fn new(api_port: u16, gateway_port: u16) -> Self {
         Self {
             api_port,
@@ -604,13 +670,25 @@ impl Default for IpfsService {
 #[serde(tag = "type")]
 pub enum IpfsAction {
     /// Add content to IPFS
-    AddContent { content: String },
+    AddContent {
+        /// Content to add to IPFS
+        content: String,
+    },
     /// Pin a hash
-    Pin { hash: String },
+    Pin {
+        /// IPFS hash to pin
+        hash: String,
+    },
     /// Unpin a hash
-    Unpin { hash: String },
+    Unpin {
+        /// IPFS hash to unpin
+        hash: String,
+    },
     /// Get content by hash
-    Cat { hash: String },
+    Cat {
+        /// IPFS hash to retrieve
+        hash: String,
+    },
 }
 
 /// Events from IPFS
@@ -618,15 +696,34 @@ pub enum IpfsAction {
 #[serde(tag = "event")]
 pub enum IpfsEvent {
     /// Content added
-    ContentAdded { hash: String, size: u64 },
+    ContentAdded {
+        /// IPFS hash of the added content
+        hash: String,
+        /// Size of the content in bytes
+        size: u64,
+    },
     /// Hash pinned
-    Pinned { hash: String },
+    Pinned {
+        /// IPFS hash that was pinned
+        hash: String,
+    },
     /// Hash unpinned
-    Unpinned { hash: String },
+    Unpinned {
+        /// IPFS hash that was unpinned
+        hash: String,
+    },
     /// Content retrieved
-    ContentRetrieved { hash: String, content: String },
+    ContentRetrieved {
+        /// IPFS hash that was retrieved
+        hash: String,
+        /// Retrieved content
+        content: String,
+    },
     /// Error occurred
-    Error { message: String },
+    Error {
+        /// Error message
+        message: String,
+    },
 }
 
 #[async_trait]
@@ -778,9 +875,13 @@ impl ServiceSetup for IpfsService {
 
 /// Stack enum containing all available services
 pub enum GraphTestStack {
+    /// Graph Node service instance
     GraphNode(GraphNodeService),
+    /// Anvil blockchain service instance
     Anvil(AnvilService),
+    /// PostgreSQL database service instance
     Postgres(PostgresService),
+    /// IPFS service instance
     Ipfs(IpfsService),
 }
 

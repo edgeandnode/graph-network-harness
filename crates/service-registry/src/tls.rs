@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use rustls::{ClientConfig, ServerConfig};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
 /// TLS configuration for server
 #[derive(Clone)]

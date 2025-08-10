@@ -24,10 +24,10 @@ clap = { workspace = true }
 
 # Harness dependencies
 harness-core = { path = "../harness-core" }
-service-orchestration = { path = "../service-orchestration" }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
 service-registry = { path = "../service-registry" }
 command-executor = { path = "../command-executor" }
-async-runtime-compat = { path = "../async-runtime-compat" }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 # Graph Protocol specific dependencies
 reqwest = { workspace = true }

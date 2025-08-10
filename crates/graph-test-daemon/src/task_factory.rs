@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
+use harness_core::task::DeploymentTask;
 
 /// Task handle that can execute tasks
 pub enum TaskHandle {

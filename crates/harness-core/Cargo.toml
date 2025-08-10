@@ -46,7 +46,7 @@ harness-config = { path = "../harness-config" }
 command-executor = { path = "../command-executor" }
 
 # Runtime compatibility
-async-runtime-compat = { path = "../async-runtime-compat" }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 [dev-dependencies]
 smol = { workspace = true }

@@ -12,7 +12,7 @@ use std::time::Duration;
 use tracing::info;
 
 /// Graph Node service that can deploy and manage subgraphs
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct GraphNodeService {
     endpoint: String,
 }
@@ -213,6 +213,7 @@ impl ServiceSetup for GraphNodeService {
 }
 
 /// Anvil blockchain service for testing
+#[derive(Debug)]
 pub struct AnvilService {
     chain_id: u64,
     port: u16,
@@ -403,6 +404,7 @@ impl ServiceSetup for AnvilService {
 }
 
 /// PostgreSQL database service
+#[derive(Debug)]
 pub struct PostgresService {
     db_name: String,
     port: u16,
@@ -505,6 +507,7 @@ impl Service for PostgresService {
 }
 
 /// IPFS (InterPlanetary File System) service
+#[derive(Debug)]
 pub struct IpfsService {
     api_port: u16,
     gateway_port: u16,

@@ -24,7 +24,7 @@ pub enum Error {
 
     /// WebSocket error
     #[error("WebSocket error: {0}")]
-    WebSocket(#[from] tungstenite::Error),
+    WebSocket(Box<tungstenite::Error>),
 
     /// I/O error
     #[error("I/O error: {0}")]
@@ -46,6 +46,12 @@ pub enum Error {
     /// Generic operation error
     #[error("Operation error: {0}")]
     Operation(String),
+}
+
+impl From<tungstenite::Error> for Error {
+    fn from(err: tungstenite::Error) -> Self {
+        Error::WebSocket(Box::new(err))
+    }
 }
 
 /// Result type alias

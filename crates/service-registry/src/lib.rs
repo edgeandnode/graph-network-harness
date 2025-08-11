@@ -59,7 +59,6 @@ pub use websocket::{ConnectionHandler, WsServer};
 /// Re-export key types for convenience
 pub mod prelude {
     pub use crate::{
-        Endpoint, Error, ExecutionInfo, Location, Registry, ServiceEntry, ServiceState,
-        WsServer,
+        Endpoint, Error, ExecutionInfo, Location, Registry, ServiceEntry, ServiceState, WsServer,
     };
 }

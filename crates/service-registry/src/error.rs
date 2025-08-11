@@ -52,4 +52,3 @@ impl From<tungstenite::Error> for Error {
         Error::WebSocket(Box::new(err))
     }
 }
-

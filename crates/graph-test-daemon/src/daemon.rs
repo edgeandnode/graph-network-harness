@@ -26,7 +26,10 @@ pub struct GraphTestDaemon {
 
 impl GraphTestDaemon {
     /// Create a new Graph Test Daemon from configuration
-    pub async fn from_config<P: AsRef<Path>>(endpoint: SocketAddr, config_path: P) -> Result<Self, Error> {
+    pub async fn from_config<P: AsRef<Path>>(
+        endpoint: SocketAddr,
+        config_path: P,
+    ) -> Result<Self, Error> {
         // Load configuration from YAML file
         let config_content = std::fs::read_to_string(config_path.as_ref())
             .map_err(|e| Error::daemon(format!("Failed to read config file: {e}")))?;
@@ -38,7 +41,10 @@ impl GraphTestDaemon {
     }
 
     /// Create a new Graph Test Daemon from a stack configuration
-    pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self, Error> {
+    pub async fn from_stack_config(
+        endpoint: SocketAddr,
+        config: GraphStackConfig,
+    ) -> Result<Self, Error> {
         // Convert config to Value for validation
         let config_value = serde_json::to_value(&config)
             .map_err(|e| Error::daemon(format!("Failed to convert config: {e}")))?;

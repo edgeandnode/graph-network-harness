@@ -29,7 +29,11 @@ pub trait RegistryBackend: Send + Sync {
     async fn get_all_services(&self) -> Result<HashMap<String, ServiceEntry>, Error>;
 
     /// Store event subscription
-    async fn put_subscription(&self, addr: &str, subscription: &EventSubscription) -> Result<(), Error>;
+    async fn put_subscription(
+        &self,
+        addr: &str,
+        subscription: &EventSubscription,
+    ) -> Result<(), Error>;
 
     /// Get event subscription
     async fn get_subscription(&self, addr: &str) -> Result<Option<EventSubscription>, Error>;

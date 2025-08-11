@@ -29,7 +29,7 @@ pub trait Service: Send + Sync + 'static {
     type Action: DeserializeOwned + Send + JsonSchema;
 
     /// The event type emitted during action execution
-    type Event: Serialize + Send;
+    type Event: Serialize + Send + JsonSchema;
 
     /// The service type identifier that links this implementation to YAML service definitions.
     /// YAML services with matching `service_type` will use this implementation for actions.
@@ -51,8 +51,16 @@ pub trait Service: Send + Sync + 'static {
         serde_json::to_value(schemars::schema_for!(Self::Action)).unwrap_or(Value::Null)
     }
 
+    /// Get the JSON schema for this service's events 
+    fn event_schema() -> serde_json::Value
+    where
+        Self: Sized,
+    {
+        serde_json::to_value(schemars::schema_for!(Self::Event)).unwrap_or(Value::Null)
+    }
+
     /// Execute an action, returning a stream of events
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error>;
+    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error>;
 }
 
 /// Service state tracking the lifecycle and setup status

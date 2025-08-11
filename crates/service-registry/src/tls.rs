@@ -2,8 +2,8 @@
 
 use crate::error::Error;
 use std::path::Path;
-use std::sync::Arc;
 use std::result::Result;
+use std::sync::Arc;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, ServerConfig};

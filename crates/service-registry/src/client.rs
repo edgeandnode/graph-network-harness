@@ -1,17 +1,13 @@
 //! WebSocket client for service registry
 
-use crate::{
-    error::Error,
-    models::*,
-    tls::TlsClientConfig,
-};
-use std::result::Result;
+use crate::{error::Error, models::*, tls::TlsClientConfig};
 use async_net::TcpStream;
 use async_tungstenite::{WebSocketStream, client_async};
 use futures::StreamExt;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::result::Result;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 use tungstenite::Message;
@@ -20,8 +16,9 @@ use uuid::Uuid;
 use crate::tls::TlsConnector;
 
 /// Type alias for the pending requests map
-type PendingRequests =
-    Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>>;
+type PendingRequests = Arc<
+    Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>,
+>;
 
 /// WebSocket client for service registry
 pub enum WsClient {
@@ -255,8 +252,9 @@ impl WsClient {
 #[derive(Clone)]
 pub struct WsClientHandle {
     tx: futures::channel::mpsc::UnboundedSender<ClientMessage>,
-    pending_requests:
-        Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>>,
+    pending_requests: Arc<
+        Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>,
+    >,
 }
 
 enum ClientMessage {

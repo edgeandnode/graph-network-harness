@@ -5,7 +5,7 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::{prelude::*, Error, service::Service};
+use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

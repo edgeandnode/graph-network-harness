@@ -133,7 +133,11 @@ impl NetworkManager {
     }
 
     /// Resolve the best IP address for service-to-service communication
-    pub fn resolve_service_ip(&self, from_service: &str, to_service: &str) -> Result<IpAddr, Error> {
+    pub fn resolve_service_ip(
+        &self,
+        from_service: &str,
+        to_service: &str,
+    ) -> Result<IpAddr, Error> {
         self.resolver
             .resolve(from_service, to_service, &self.topology)
     }
@@ -149,7 +153,10 @@ impl NetworkManager {
     }
 
     /// Generate environment variables for a service
-    pub fn generate_environment(&self, service_name: &str) -> Result<HashMap<String, String>, Error> {
+    pub fn generate_environment(
+        &self,
+        service_name: &str,
+    ) -> Result<HashMap<String, String>, Error> {
         let mut env = HashMap::new();
 
         // Add all service addresses

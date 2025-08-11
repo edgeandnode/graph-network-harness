@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
-use harness_core::{task::DeploymentTask, Error};
+use harness_core::{Error, task::DeploymentTask};
 use std::result::Result;
 
 /// Task handle that can execute tasks

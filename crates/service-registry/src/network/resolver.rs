@@ -57,7 +57,11 @@ impl ServiceResolver {
     }
 
     /// Determine the best IP address based on network topology
-    fn determine_best_ip(&self, from: &ServiceNetwork, to: &ServiceNetwork) -> Result<IpAddr, Error> {
+    fn determine_best_ip(
+        &self,
+        from: &ServiceNetwork,
+        to: &ServiceNetwork,
+    ) -> Result<IpAddr, Error> {
         match (&from.location, &to.location) {
             // Both services are local - use host/Docker IP
             (NetworkLocation::Local, NetworkLocation::Local) => to.host_ip.ok_or_else(|| {

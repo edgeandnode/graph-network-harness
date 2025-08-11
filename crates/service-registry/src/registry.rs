@@ -1,15 +1,10 @@
 //! Core service registry implementation
 
-use crate::{
-    backend::RegistryBackend,
-    backend::memory::MemoryBackend,
-    error::Error,
-    models::*,
-};
-use std::result::Result;
+use crate::{backend::RegistryBackend, backend::memory::MemoryBackend, error::Error, models::*};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::result::Result;
 use std::sync::Arc;
 use tracing::{debug, info};
 
@@ -50,7 +45,10 @@ impl Registry {
     }
 
     /// Register a new service
-    pub async fn register(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
+    pub async fn register(
+        &self,
+        entry: ServiceEntry,
+    ) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
         // Check if service already exists
         if self.backend.get_service(&entry.name).await?.is_some() {
             return Err(Error::ServiceExists(entry.name.clone()));
@@ -249,7 +247,10 @@ impl Registry {
     }
 
     /// Add or update a service
-    pub async fn add_or_update(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
+    pub async fn add_or_update(
+        &self,
+        entry: ServiceEntry,
+    ) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
         info!("Adding/updating service: {} v{}", entry.name, entry.version);
 
         // Check if service exists

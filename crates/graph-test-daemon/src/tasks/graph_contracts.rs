@@ -12,9 +12,9 @@ use command_executor::{
 use futures::StreamExt;
 use harness_core::Error;
 use statig::prelude::*;
-use std::result::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::result::Result;
 use tracing::{debug, error, info, warn};
 
 /// States for the Graph contracts deployment state machine
@@ -561,7 +561,10 @@ fn extract_deployment_id(line: &str) -> Option<String> {
 }
 
 /// Run the Graph contracts deployment
-pub async fn deploy_graph_contracts(ethereum_url: String, working_dir: PathBuf) -> Result<(), Error> {
+pub async fn deploy_graph_contracts(
+    ethereum_url: String,
+    working_dir: PathBuf,
+) -> Result<(), Error> {
     let context = GraphContractsContext::new(ethereum_url, working_dir);
     let state_machine = GraphContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();

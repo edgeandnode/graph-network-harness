@@ -1,17 +1,12 @@
 //! WebSocket server implementation
 
-use crate::{
-    error::Error,
-    models::*,
-    registry::Registry,
-    tls::TlsServerConfig,
-};
-use std::result::Result;
+use crate::{error::Error, models::*, registry::Registry, tls::TlsServerConfig};
 use async_net::{TcpListener, TcpStream};
 use async_tungstenite::{WebSocketStream, accept_async};
 use futures::StreamExt;
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::result::Result;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use tungstenite::Message;

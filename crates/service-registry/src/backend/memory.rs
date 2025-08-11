@@ -4,8 +4,8 @@ use super::{EventSubscription, RegistryBackend};
 use crate::{error::Error, models::*};
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::sync::RwLock;
 use std::result::Result;
+use std::sync::RwLock;
 
 /// In-memory registry backend
 pub struct MemoryBackend {
@@ -64,7 +64,11 @@ impl RegistryBackend for MemoryBackend {
         Ok(services.clone())
     }
 
-    async fn put_subscription(&self, addr: &str, subscription: &EventSubscription) -> Result<(), Error> {
+    async fn put_subscription(
+        &self,
+        addr: &str,
+        subscription: &EventSubscription,
+    ) -> Result<(), Error> {
         let mut subscriptions = self.subscriptions.write().unwrap();
         subscriptions.insert(addr.to_string(), subscription.clone());
         Ok(())

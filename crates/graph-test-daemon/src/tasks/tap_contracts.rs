@@ -12,9 +12,9 @@ use command_executor::{
 use futures::StreamExt;
 use harness_core::Error;
 use statig::prelude::*;
-use std::result::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::result::Result;
 use tracing::{debug, error, info, warn};
 
 /// States for the TAP contracts deployment state machine

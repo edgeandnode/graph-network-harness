@@ -12,7 +12,7 @@ use command_executor::{
     Command, Executor, ProcessEvent, ProcessEventType, backends::LocalLauncher, target::Target,
 };
 use futures::StreamExt;
-use harness_core::{prelude::*, task::DeploymentTask, Error};
+use harness_core::{Error, prelude::*, task::DeploymentTask};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

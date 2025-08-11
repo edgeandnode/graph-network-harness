@@ -5,12 +5,11 @@
 
 use super::RunningService;
 use crate::{Error, config::ServiceConfig};
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
-use futures::stream::BoxStream;
-
-/// Event stream from a running service
-pub type EventStream = BoxStream<'static, ProcessEvent>;
+use std::result::Result;
 
 /// Trait for streaming events from services
 ///
@@ -24,7 +23,8 @@ pub trait EventStreamable: Send + Sync {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error>;
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<ProcessEvent>, Error>;
 }
 
 /// Trait for services we spawn and manage
@@ -39,12 +39,16 @@ pub trait ManagedService: EventStreamable {
     ///
     /// This spawns a new process/container and returns information
     /// about the running service.
-    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error>;
+    async fn start(
+        &self,
+        config: ServiceConfig,
+        spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error>;
 
     /// Stop a managed service instance
     ///
     /// This terminates the process/container we previously started.
-    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error>;
+    async fn stop(&self, service: &RunningService, spawner: &dyn Spawner) -> Result<(), Error>;
 
     /// Check if this executor can handle the given configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;
@@ -63,18 +67,26 @@ pub trait AttachedService: EventStreamable {
     ///
     /// This connects to a running service and returns information
     /// about it. The service must already be running.
-    async fn attach(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error>;
+    async fn attach(
+        &self,
+        config: ServiceConfig,
+        spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error>;
 
     /// Detach from the service
     ///
     /// This disconnects from the service but does NOT stop it.
     /// The service continues running after detachment.
-    async fn detach(&self, service: &RunningService) -> std::result::Result<(), Error>;
+    async fn detach(&self, service: &RunningService, spawner: &dyn Spawner) -> Result<(), Error>;
 
     /// Check if the attached service is still accessible
     ///
     /// This performs a connectivity check without full health checking.
-    async fn is_accessible(&self, service: &RunningService) -> std::result::Result<bool, Error>;
+    async fn is_accessible(
+        &self,
+        service: &RunningService,
+        spawner: &dyn Spawner,
+    ) -> Result<bool, Error>;
 
     /// Check if this attacher can handle the given configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

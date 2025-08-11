@@ -20,6 +20,7 @@ async-std = ["async-runtime-compat/async-std", "dep:async-std"]
 [dependencies]
 # Workspace dependencies
 anyhow = { workspace = true }
+async-channel = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }

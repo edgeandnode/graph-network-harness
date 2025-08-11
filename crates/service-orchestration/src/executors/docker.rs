@@ -1,12 +1,15 @@
 //! Docker executor for containerized service execution.
 
-use super::{EventStream, NetworkInfo, RunningService, ServiceExecutor};
+use super::{NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
     Error,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
 };
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
+use command_executor::event::ProcessEvent;
 use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
 use futures::stream::{self, StreamExt};
 use tracing::{info, warn};
@@ -164,7 +167,11 @@ impl Default for DockerExecutor {
 
 #[async_trait]
 impl ServiceExecutor for DockerExecutor {
-    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn start(
+        &self,
+        config: ServiceConfig,
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Docker {
             image,
             env,
@@ -267,7 +274,11 @@ impl ServiceExecutor for DockerExecutor {
         Ok(running_service)
     }
 
-    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn stop(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<(), Error> {
         info!("Stopping Docker service: {}", service.name);
 
         if let Some(container_id) = &service.container_id {
@@ -371,15 +382,41 @@ impl ServiceExecutor for DockerExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        spawner: &dyn Spawner,
+    ) -> std::result::Result<Receiver<ProcessEvent>, Error> {
         if let Some(container_id) = &service.container_id {
-            // TODO: Implement proper log streaming with docker logs -f
-            // For now, return empty stream
-            let stream = stream::empty().boxed();
-            Ok(stream)
+            // Create command to stream docker logs
+            let cmd = Command::new("docker")
+                .arg("logs")
+                .arg("-f") // Follow mode
+                .arg("--tail")
+                .arg("0") // Start from end
+                .arg(container_id)
+                .clone();
+
+            let (event_stream, _handle) = self.executor.launch(&Target::Command, cmd).await?;
+
+            // Convert stream to receiver
+            let (tx, rx) = async_channel::unbounded();
+
+            // Spawn task to forward events
+            let forward_task = async move {
+                use futures::StreamExt;
+                let mut stream = event_stream;
+                while let Some(event) = stream.next().await {
+                    if tx.send(event).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
+            };
+
+            spawner.spawn(Box::pin(forward_task));
+
+            Ok(rx)
         } else {
-            let stream = stream::empty().boxed();
-            Ok(stream)
+            // Return empty receiver
+            let (_tx, rx) = async_channel::unbounded();
+            Ok(rx)
         }
     }
 

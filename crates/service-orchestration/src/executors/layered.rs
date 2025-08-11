@@ -1,15 +1,15 @@
 //! Layered executor for flexible service execution with composed layers.
 
-use super::{
-    EventStream, RunningService, ServiceExecutor,
-    stream_utils::{SharedEventStream, create_forwarding_stream},
-};
+use super::{RunningService, ServiceExecutor};
 use crate::{
     Error,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
 };
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
+use command_executor::event::ProcessEvent;
 use command_executor::{
     Command, ProcessHandle,
     backends::LocalLauncher,
@@ -76,7 +76,7 @@ pub enum LayerConfig {
 /// Information about a running layered process
 struct LayeredProcessInfo {
     handle: Box<dyn ProcessHandle>,
-    event_stream: SharedEventStream,
+    event_receiver: Receiver<ProcessEvent>,
     layers: Vec<LayerConfig>,
 }
 
@@ -229,7 +229,11 @@ impl Default for LayeredServiceExecutor {
 
 #[async_trait]
 impl ServiceExecutor for LayeredServiceExecutor {
-    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn start(
+        &self,
+        config: ServiceConfig,
+        spawner: &dyn Spawner,
+    ) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Layered { layers, command } = &config.target else {
             return Err(Error::Config(
                 "LayeredServiceExecutor can only handle Layered targets".to_string(),
@@ -279,14 +283,30 @@ impl ServiceExecutor for LayeredServiceExecutor {
             running_service = running_service.with_pid(pid);
         }
 
-        // Store the process handle and event stream
+        // Convert stream to receiver
+        let (tx, rx) = async_channel::unbounded();
+
+        // Spawn task to forward events
+        let forward_task = async move {
+            use futures::StreamExt;
+            let mut stream = event_stream;
+            while let Some(event) = stream.next().await {
+                if tx.send(event).await.is_err() {
+                    break; // Receiver dropped
+                }
+            }
+        };
+
+        spawner.spawn(Box::pin(forward_task));
+
+        // Store the process handle and event receiver
         {
             let mut processes = self.running_processes.lock().await;
             processes.insert(
                 running_service.id.to_string(),
                 LayeredProcessInfo {
                     handle: Box::new(handle) as Box<dyn ProcessHandle>,
-                    event_stream: Arc::new(Mutex::new(Box::new(event_stream))),
+                    event_receiver: rx,
                     layers: layers.clone(),
                 },
             );
@@ -295,7 +315,11 @@ impl ServiceExecutor for LayeredServiceExecutor {
         Ok(running_service)
     }
 
-    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn stop(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<(), Error> {
         info!("Stopping layered service: {}", service.name);
 
         // Remove and get the process info
@@ -358,22 +382,21 @@ impl ServiceExecutor for LayeredServiceExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<Receiver<ProcessEvent>, Error> {
         debug!(
             "Creating event stream for layered service: {}",
             service.name
         );
 
-        // Get the event stream for this service
+        // Get the event receiver for this service
         let processes = self.running_processes.lock().await;
         let process_info = processes
             .get(&service.id.to_string())
             .ok_or_else(|| Error::ServiceNotFound(service.name.clone()))?;
 
-        let event_stream = process_info.event_stream.clone();
-        drop(processes); // Release the lock early
-
-        Ok(create_forwarding_stream(event_stream))
+        // Clone the receiver (async-channel receivers are cloneable)
+        Ok(process_info.event_receiver.clone())
     }
 
     fn can_handle(&self, config: &ServiceConfig) -> bool {

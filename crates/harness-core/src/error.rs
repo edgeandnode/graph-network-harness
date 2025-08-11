@@ -2,7 +2,6 @@
 
 use thiserror::Error;
 
-
 /// Core harness error types
 #[derive(Error, Debug)]
 pub enum Error {

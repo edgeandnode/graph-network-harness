@@ -48,14 +48,17 @@ impl harness_core::service::Service for GraphService {
         }
     }
 
-    async fn dispatch_action(
-        &self,
-        _action: Self::Action,
-    ) -> Result<async_channel::Receiver<Self::Event>, Error> {
-        // For the enum, we'd need to route actions to the appropriate service
+    fn event_stream(&self) -> async_channel::Receiver<Self::Event> {
+        // For the enum, we'd need to route to the appropriate service
         // For now, return an empty receiver
         let (_tx, rx) = async_channel::unbounded();
-        Ok(rx)
+        rx
+    }
+
+    async fn dispatch_action(&self, _action: Self::Action) -> Result<(), Error> {
+        // For the enum, we'd need to route actions to the appropriate service
+        // For now, just return Ok
+        Ok(())
     }
 }
 

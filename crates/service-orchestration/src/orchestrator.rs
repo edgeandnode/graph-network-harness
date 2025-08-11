@@ -372,7 +372,7 @@ fn create_service_handle(
 
         // Start the service using the executor with modified config
         let running_service = executor
-            .start(modified_config)
+            .start(modified_config, &*context.spawner)
             .await
             .map_err(|e| crate::Error::Other(format!("Failed to start service '{name}': {e}")))?;
 

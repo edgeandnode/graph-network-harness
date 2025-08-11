@@ -51,7 +51,7 @@ pub trait Service: Send + Sync + 'static {
         serde_json::to_value(schemars::schema_for!(Self::Action)).unwrap_or(Value::Null)
     }
 
-    /// Get the JSON schema for this service's events 
+    /// Get the JSON schema for this service's events
     fn event_schema() -> serde_json::Value
     where
         Self: Sized,
@@ -59,7 +59,10 @@ pub trait Service: Send + Sync + 'static {
         serde_json::to_value(schemars::schema_for!(Self::Event)).unwrap_or(Value::Null)
     }
 
-    /// Execute an action, returning a stream of events
+    /// Get the event stream for this service
+    fn event_stream(&self) -> Receiver<Self::Event>;
+
+    /// Execute an action (events are sent through the service's event channel)
     async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error>;
 }
 
@@ -237,8 +240,11 @@ where
         let action: S::Action = serde_json::from_value(input)
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
 
-        // Execute the typed action and return the event receiver directly
-        self.inner.dispatch_action(action).await
+        // Execute the typed action
+        self.inner.dispatch_action(action).await?;
+
+        // Return the event stream
+        Ok(self.inner.event_stream())
     }
 
     /// Get event schema for JSON conversion
@@ -435,7 +441,10 @@ where
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
 
         // Execute the typed action
-        let event_rx = self.inner.dispatch_action(action).await?;
+        self.inner.dispatch_action(action).await?;
+
+        // Get the event stream from the service
+        let event_rx = self.inner.event_stream();
 
         // Create channel for JSON events
         let (tx, rx) = async_channel::unbounded();
@@ -629,7 +638,10 @@ mod tests {
             "A test service"
         }
 
-        async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
+        async fn dispatch_action(
+            &self,
+            action: Self::Action,
+        ) -> Result<Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(1);
             tx.send(TestEvent {
                 response: format!("Echo: {}", action.message),

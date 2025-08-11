@@ -3,6 +3,7 @@
 use crate::daemon::server::DaemonState;
 use crate::protocol::{DetailedServiceInfo, Request, Response, ServiceNetworkInfo};
 use anyhow::Result;
+use async_runtime_compat::smol::SmolSpawner;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info};
@@ -15,8 +16,13 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
         Request::StartService { name, config } => {
             info!("Starting service: {}", name);
 
-            match state.service_manager.start_service(&name, config).await {
-                Ok(running_service) => {
+            let spawner = SmolSpawner;
+            match state
+                .service_manager
+                .launch_service(&name, config, &spawner)
+                .await
+            {
+                Ok((_event_receiver, running_service)) => {
                     // Get network information from the running service
                     let network_info = if let Some(net_info) = &running_service.network_info {
                         ServiceNetworkInfo {
@@ -48,7 +54,8 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
 
         Request::StopService { name } => {
             info!("Stopping service: {}", name);
-            match state.service_manager.stop_service(&name).await {
+            let spawner = SmolSpawner;
+            match state.service_manager.stop_service(&name, &spawner).await {
                 Ok(_) => Ok(Response::Success),
                 Err(e) => Ok(Response::Error {
                     message: format!("Failed to stop service: {e}"),

@@ -4,12 +4,15 @@
 //! spawning new ones.
 
 use super::RunningService;
-use super::traits::{AttachedService, EventStream, EventStreamable};
+use super::traits::{AttachedService, EventStreamable};
 use crate::{
     Error,
     config::{ServiceConfig, ServiceTarget},
 };
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
+use command_executor::event::ProcessEvent;
 use command_executor::{
     Command,
     attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus as AttacherStatus},
@@ -18,6 +21,7 @@ use command_executor::{
 };
 use futures::lock::Mutex;
 use std::collections::HashMap;
+use std::result::Result;
 use std::sync::Arc;
 use tracing::info;
 
@@ -48,7 +52,8 @@ impl EventStreamable for SystemdAttachedExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<ProcessEvent>, Error> {
         let attached = self.attached_services.lock().await;
         if let Some(_handle) = attached.get(&service.name) {
             // Get service name from metadata
@@ -71,7 +76,23 @@ impl EventStreamable for SystemdAttachedExecutor {
                 // Store handle somewhere if we need to stop it later
                 // For now, let it run until dropped
 
-                Ok(Box::pin(events))
+                // Convert stream to receiver
+                let (tx, rx) = async_channel::unbounded();
+
+                // Spawn task to forward events
+                let forward_task = async move {
+                    use futures::StreamExt;
+                    let mut stream = events;
+                    while let Some(event) = stream.next().await {
+                        if tx.send(event).await.is_err() {
+                            break; // Receiver dropped
+                        }
+                    }
+                };
+
+                spawner.spawn(Box::pin(forward_task));
+
+                Ok(rx)
             } else {
                 Err(Error::NotImplemented(
                     "Event streaming not implemented for this service".to_string(),
@@ -87,7 +108,11 @@ impl EventStreamable for SystemdAttachedExecutor {
 
 #[async_trait]
 impl AttachedService for SystemdAttachedExecutor {
-    async fn attach(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn attach(
+        &self,
+        config: ServiceConfig,
+        _spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error> {
         // Extract service name from config
         let env = config.target.env();
         let service_name = env
@@ -132,7 +157,7 @@ impl AttachedService for SystemdAttachedExecutor {
         Ok(service)
     }
 
-    async fn detach(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn detach(&self, service: &RunningService, _spawner: &dyn Spawner) -> Result<(), Error> {
         info!("Detaching from systemd service: {}", service.name);
 
         let mut attached = self.attached_services.lock().await;
@@ -143,7 +168,11 @@ impl AttachedService for SystemdAttachedExecutor {
         Ok(())
     }
 
-    async fn is_accessible(&self, service: &RunningService) -> std::result::Result<bool, Error> {
+    async fn is_accessible(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> Result<bool, Error> {
         let attached = self.attached_services.lock().await;
         if let Some(handle) = attached.get(&service.name) {
             let status = handle.status().await?;
@@ -187,7 +216,8 @@ impl EventStreamable for DockerAttachedExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<ProcessEvent>, Error> {
         if let Some(container_id) = &service.container_id {
             // Create command to stream docker logs
             let cmd = Command::new("docker")
@@ -204,12 +234,25 @@ impl EventStreamable for DockerAttachedExecutor {
                 LocalLauncher,
             );
 
-            let (events, _handle) = executor.launch(&Target::Command, cmd).await?;
+            let (event_stream, _handle) = executor.launch(&Target::Command, cmd).await?;
 
-            // Store handle somewhere if we need to stop it later
-            // For now, let it run until dropped
+            // Convert stream to receiver
+            let (tx, rx) = async_channel::unbounded();
 
-            Ok(Box::pin(events))
+            // Spawn task to forward events
+            let forward_task = async move {
+                use futures::StreamExt;
+                let mut stream = event_stream;
+                while let Some(event) = stream.next().await {
+                    if tx.send(event).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
+            };
+
+            spawner.spawn(Box::pin(forward_task));
+
+            Ok(rx)
         } else {
             Err(Error::NotImplemented(
                 "Event streaming not implemented for this service".to_string(),
@@ -220,7 +263,11 @@ impl EventStreamable for DockerAttachedExecutor {
 
 #[async_trait]
 impl AttachedService for DockerAttachedExecutor {
-    async fn attach(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn attach(
+        &self,
+        config: ServiceConfig,
+        _spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error> {
         match &config.target {
             ServiceTarget::Docker { .. } => {
                 let env = config.target.env();
@@ -248,13 +295,17 @@ impl AttachedService for DockerAttachedExecutor {
         }
     }
 
-    async fn detach(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn detach(&self, service: &RunningService, _spawner: &dyn Spawner) -> Result<(), Error> {
         info!("Detaching from Docker container: {}", service.name);
         self.attached_containers.lock().await.remove(&service.name);
         Ok(())
     }
 
-    async fn is_accessible(&self, service: &RunningService) -> std::result::Result<bool, Error> {
+    async fn is_accessible(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> Result<bool, Error> {
         // Would check if container is still running via Docker API
         let attached = self.attached_containers.lock().await;
         Ok(attached.contains_key(&service.name))
@@ -285,7 +336,7 @@ impl LocalProcessAttachedExecutor {
     }
 
     /// Find PID by process name using pgrep
-    async fn find_pid_by_name(&self, process_name: &str) -> std::result::Result<u32, Error> {
+    async fn find_pid_by_name(&self, process_name: &str) -> Result<u32, Error> {
         let cmd = Command::new("pgrep").arg("-f").arg(process_name).clone();
 
         let result = self
@@ -310,7 +361,7 @@ impl LocalProcessAttachedExecutor {
     }
 
     /// Check if a process is running by PID
-    async fn is_process_running(&self, pid: u32) -> std::result::Result<bool, Error> {
+    async fn is_process_running(&self, pid: u32) -> Result<bool, Error> {
         let cmd = Command::new("kill").arg("-0").arg(pid.to_string()).clone();
 
         let result = self
@@ -326,7 +377,8 @@ impl EventStreamable for LocalProcessAttachedExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<ProcessEvent>, Error> {
         if let Some(pid) = service.pid {
             // Use journalctl to follow logs for the process by PID
             let cmd = Command::new("journalctl")
@@ -336,15 +388,28 @@ impl EventStreamable for LocalProcessAttachedExecutor {
                 .arg("0") // Start from end
                 .clone();
 
-            let (events, _handle) = self
+            let (event_stream, _handle) = self
                 .executor
                 .launch(&command_executor::target::Target::Command, cmd)
                 .await?;
 
-            // Note: We're dropping the handle here, which means we can't stop the journalctl process
-            // This is a limitation of the current design
+            // Convert stream to receiver
+            let (tx, rx) = async_channel::unbounded();
 
-            Ok(Box::pin(events))
+            // Spawn task to forward events
+            let forward_task = async move {
+                use futures::StreamExt;
+                let mut stream = event_stream;
+                while let Some(event) = stream.next().await {
+                    if tx.send(event).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
+            };
+
+            spawner.spawn(Box::pin(forward_task));
+
+            Ok(rx)
         } else {
             Err(Error::NotImplemented(
                 "Event streaming requires PID".to_string(),
@@ -355,7 +420,11 @@ impl EventStreamable for LocalProcessAttachedExecutor {
 
 #[async_trait]
 impl AttachedService for LocalProcessAttachedExecutor {
-    async fn attach(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn attach(
+        &self,
+        config: ServiceConfig,
+        _spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error> {
         let env = config.target.env();
 
         // Try to get PID or process name from config
@@ -393,13 +462,17 @@ impl AttachedService for LocalProcessAttachedExecutor {
         Ok(service)
     }
 
-    async fn detach(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn detach(&self, service: &RunningService, _spawner: &dyn Spawner) -> Result<(), Error> {
         info!("Detaching from local process: {}", service.name);
         self.attached_processes.lock().await.remove(&service.name);
         Ok(())
     }
 
-    async fn is_accessible(&self, service: &RunningService) -> std::result::Result<bool, Error> {
+    async fn is_accessible(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> Result<bool, Error> {
         if let Some(pid) = service.pid {
             self.is_process_running(pid).await
         } else {

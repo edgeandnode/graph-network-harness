@@ -306,7 +306,9 @@ error_set! {
 
 ### Error Handling Guidelines
 - NEVER use type aliases for Result types (e.g., `type Result<T> = std::result::Result<T, Error>`)
-- Always use the full `std::result::Result<T, Error>` type in function signatures
+- Always import Result from std::result instead of using absolute paths (use `use std::result::Result;`)
+- Don't use absolute paths for standard library items - import them properly
+- Error types should have descriptive names (e.g., `ServiceError`, `RegistryError`) rather than generic `Error`
 - This makes the error type explicit and improves code clarity
 
 ## Development Practices

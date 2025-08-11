@@ -8,7 +8,6 @@ pub mod docker;
 pub mod layered;
 pub mod process;
 pub mod registry;
-pub mod stream_utils;
 pub mod traits;
 
 pub use attached::{DockerAttachedExecutor, SystemdAttachedExecutor};
@@ -19,10 +18,13 @@ pub use registry::ExecutorRegistry;
 pub use traits::{AttachedService, EventStreamable, ManagedService};
 
 use crate::{Error, config::ServiceConfig, health::HealthStatus};
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::result::Result;
 use uuid::Uuid;
 
 /// Information about a running service instance
@@ -105,29 +107,28 @@ impl RunningService {
     }
 }
 
-/// Event stream from a running service
-pub type EventStream = futures::stream::BoxStream<'static, ProcessEvent>;
-
 /// Service executor trait for managing service lifecycle
 #[async_trait]
 pub trait ServiceExecutor: Send + Sync {
     /// Start a service with the given configuration
-    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error>;
+    async fn start(
+        &self,
+        config: ServiceConfig,
+        spawner: &dyn Spawner,
+    ) -> Result<RunningService, Error>;
 
     /// Stop a running service
-    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error>;
+    async fn stop(&self, service: &RunningService, spawner: &dyn Spawner) -> Result<(), Error>;
 
     /// Check the health of a running service
-    async fn health_check(
-        &self,
-        service: &RunningService,
-    ) -> std::result::Result<HealthStatus, Error>;
+    async fn health_check(&self, service: &RunningService) -> Result<HealthStatus, Error>;
 
     /// Stream events from a running service
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error>;
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<ProcessEvent>, Error>;
 
     /// Check if the executor can handle the given service configuration
     fn can_handle(&self, config: &ServiceConfig) -> bool;

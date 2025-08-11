@@ -11,11 +11,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use smol::Timer;
+use std::result::Result;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 use tempfile;
-use std::result::Result;
 
 // Shared state to track execution order
 static EXECUTION_ORDER: AtomicU32 = AtomicU32::new(0);
@@ -78,15 +78,20 @@ struct TestService {
     name: String,
     tracker: Arc<std::sync::Mutex<ExecutionTracker>>,
     setup_required: bool,
+    event_tx: async_channel::Sender<ServiceEvent>,
+    event_rx: async_channel::Receiver<ServiceEvent>,
 }
 
 impl TestService {
     fn new(name: impl Into<String>, setup_required: bool) -> Self {
         let name = name.into();
+        let (event_tx, event_rx) = async_channel::unbounded();
         Self {
             name: name.clone(),
             tracker: Arc::new(std::sync::Mutex::new(ExecutionTracker::new(name))),
             setup_required,
+            event_tx,
+            event_rx,
         }
     }
 
@@ -112,19 +117,22 @@ impl Service for TestService {
         "Test service for integration testing"
     }
 
-    async fn dispatch_action(&self, _action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
-        let (tx, rx) = async_channel::bounded(1);
+    fn event_stream(&self) -> Receiver<Self::Event> {
+        self.event_rx.clone()
+    }
 
+    async fn dispatch_action(&self, _action: Self::Action) -> Result<(), Error> {
         // Mark as started
         let order = self.tracker.lock().unwrap().mark_started();
 
-        tx.send(ServiceEvent {
-            status: format!("Service {} started as #{}", self.name, order + 1),
-        })
-        .await
-        .unwrap();
+        self.event_tx
+            .send(ServiceEvent {
+                status: format!("Service {} started as #{}", self.name, order + 1),
+            })
+            .await
+            .unwrap();
 
-        Ok(rx)
+        Ok(())
     }
 }
 
@@ -134,7 +142,7 @@ impl ServiceSetup for TestService {
         Ok(!self.setup_required || self.tracker.lock().unwrap().is_completed())
     }
 
-    async fn perform_setup(&self) -> Result<(), Error>> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         if self.setup_required {
             // Simulate setup work
             Timer::after(Duration::from_millis(10)).await;
@@ -154,7 +162,7 @@ impl StatefulService for TestService {
         }
     }
 
-    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<(), Error>> {
+    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<(), Error> {
         let current = self.get_state().await?;
         if current == target {
             Ok(())

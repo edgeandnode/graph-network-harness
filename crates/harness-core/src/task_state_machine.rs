@@ -538,7 +538,10 @@ mod tests {
 
         #[async_trait]
         impl TaskStateMachine for AlwaysFailTask {
-            async fn check_prerequisites(&mut self, _context: &mut TaskContext) -> Result<bool, Error> {
+            async fn check_prerequisites(
+                &mut self,
+                _context: &mut TaskContext,
+            ) -> Result<bool, Error> {
                 Ok(false)
             }
 

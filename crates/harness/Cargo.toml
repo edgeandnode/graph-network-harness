@@ -29,6 +29,7 @@ async-tungstenite = { workspace = true }
 futures = { workspace = true }
 futures-rustls = { workspace = true }
 async-io = "2.0"
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 # Internal dependencies
 harness-config = { path = "../harness-config" }

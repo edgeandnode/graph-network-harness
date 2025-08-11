@@ -12,15 +12,28 @@ use std::time::Duration;
 use tracing::info;
 
 /// Graph Node service that can deploy and manage subgraphs
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct GraphNodeService {
     endpoint: String,
+    event_tx: async_channel::Sender<GraphNodeEvent>,
+    event_rx: async_channel::Receiver<GraphNodeEvent>,
 }
 
 impl GraphNodeService {
     /// Create a new GraphNodeService with specified endpoint
     pub fn new(endpoint: String) -> Self {
-        Self { endpoint }
+        let (event_tx, event_rx) = async_channel::unbounded();
+        Self {
+            endpoint,
+            event_tx,
+            event_rx,
+        }
+    }
+}
+
+impl Default for GraphNodeService {
+    fn default() -> Self {
+        Self::new(String::new())
     }
 }
 
@@ -107,8 +120,12 @@ impl Service for GraphNodeService {
         "Graph Node service for subgraph deployment and querying"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
-        let (tx, rx) = async_channel::unbounded();
+    fn event_stream(&self) -> Receiver<Self::Event> {
+        self.event_rx.clone()
+    }
+
+    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
+        let tx = self.event_tx.clone();
 
         match action {
             GraphNodeAction::DeploySubgraph {
@@ -188,7 +205,7 @@ impl Service for GraphNodeService {
             }
         }
 
-        Ok(rx)
+        Ok(())
     }
 }
 
@@ -239,21 +256,26 @@ impl ServiceSetup for GraphNodeService {
 pub struct AnvilService {
     chain_id: u64,
     port: u16,
+    event_tx: async_channel::Sender<AnvilEvent>,
+    event_rx: async_channel::Receiver<AnvilEvent>,
 }
 
 impl AnvilService {
     /// Create a new AnvilService with specified chain ID and port
     pub fn new(chain_id: u64, port: u16) -> Self {
-        Self { chain_id, port }
+        let (event_tx, event_rx) = async_channel::unbounded();
+        Self {
+            chain_id,
+            port,
+            event_tx,
+            event_rx,
+        }
     }
 }
 
 impl Default for AnvilService {
     fn default() -> Self {
-        Self {
-            chain_id: 31337,
-            port: 8545,
-        }
+        Self::new(31337, 8545)
     }
 }
 
@@ -333,8 +355,12 @@ impl Service for AnvilService {
         "Anvil local Ethereum blockchain for testing"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
-        let (tx, rx) = async_channel::unbounded();
+    fn event_stream(&self) -> Receiver<Self::Event> {
+        self.event_rx.clone()
+    }
+
+    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
+        let tx = self.event_tx.clone();
 
         match action {
             AnvilAction::MineBlocks {
@@ -381,7 +407,7 @@ impl Service for AnvilService {
             }
         }
 
-        Ok(rx)
+        Ok(())
     }
 }
 
@@ -449,21 +475,26 @@ impl ServiceSetup for AnvilService {
 pub struct PostgresService {
     db_name: String,
     port: u16,
+    event_tx: async_channel::Sender<PostgresEvent>,
+    event_rx: async_channel::Receiver<PostgresEvent>,
 }
 
 impl PostgresService {
     /// Create a new PostgresService with specified database name and port
     pub fn new(db_name: String, port: u16) -> Self {
-        Self { db_name, port }
+        let (event_tx, event_rx) = async_channel::unbounded();
+        Self {
+            db_name,
+            port,
+            event_tx,
+            event_rx,
+        }
     }
 }
 
 impl Default for PostgresService {
     fn default() -> Self {
-        Self {
-            db_name: "graph-node".to_string(),
-            port: 5432,
-        }
+        Self::new("graph-node".to_string(), 5432)
     }
 }
 
@@ -533,8 +564,12 @@ impl Service for PostgresService {
         "PostgreSQL database service"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
-        let (tx, rx) = async_channel::unbounded();
+    fn event_stream(&self) -> Receiver<Self::Event> {
+        self.event_rx.clone()
+    }
+
+    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
+        let tx = self.event_tx.clone();
 
         match action {
             PostgresAction::CreateDatabase { name } => {
@@ -567,7 +602,7 @@ impl Service for PostgresService {
             }
         }
 
-        Ok(rx)
+        Ok(())
     }
 }
 
@@ -576,14 +611,19 @@ impl Service for PostgresService {
 pub struct IpfsService {
     api_port: u16,
     gateway_port: u16,
+    event_tx: async_channel::Sender<IpfsEvent>,
+    event_rx: async_channel::Receiver<IpfsEvent>,
 }
 
 impl IpfsService {
     /// Create a new IpfsService with specified API and gateway ports
     pub fn new(api_port: u16, gateway_port: u16) -> Self {
+        let (event_tx, event_rx) = async_channel::unbounded();
         Self {
             api_port,
             gateway_port,
+            event_tx,
+            event_rx,
         }
     }
 }
@@ -658,10 +698,7 @@ impl ServiceSetup for PostgresService {
 
 impl Default for IpfsService {
     fn default() -> Self {
-        Self {
-            api_port: 5001,
-            gateway_port: 8080,
-        }
+        Self::new(5001, 8080)
     }
 }
 
@@ -743,8 +780,12 @@ impl Service for IpfsService {
         "IPFS distributed storage service"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
-        let (tx, rx) = async_channel::unbounded();
+    fn event_stream(&self) -> Receiver<Self::Event> {
+        self.event_rx.clone()
+    }
+
+    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
+        let tx = self.event_tx.clone();
 
         match action {
             IpfsAction::AddContent { content } => {
@@ -785,7 +826,7 @@ impl Service for IpfsService {
             }
         }
 
-        Ok(rx)
+        Ok(())
     }
 }
 

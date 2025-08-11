@@ -4,6 +4,7 @@
 //! that serves as the foundation for domain-specific daemons.
 
 use async_runtime_compat::prelude::*;
+use async_runtime_compat::smol::SmolSpawner;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use service_orchestration::{
@@ -136,8 +137,9 @@ impl BaseDaemon {
                     };
 
                     // Start the service via ServiceManager
-                    self.service_manager
-                        .start_service(&name, service_config)
+                    let (_event_receiver, _running_service) = self
+                        .service_manager
+                        .launch_service(&name, service_config, &SmolSpawner)
                         .await
                         .map_err(|e| {
                             Error::daemon(format!("Failed to start service {name}: {e}"))
@@ -236,7 +238,11 @@ impl BaseDaemon {
     }
 
     /// Wait for a service to become healthy
-    async fn wait_for_service_health(&self, service_name: &str, timeout: Duration) -> Result<(), Error> {
+    async fn wait_for_service_health(
+        &self,
+        service_name: &str,
+        timeout: Duration,
+    ) -> Result<(), Error> {
         info!(
             "Waiting for service {} to become healthy (timeout: {:?})",
             service_name, timeout

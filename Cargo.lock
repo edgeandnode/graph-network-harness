@@ -1107,6 +1107,7 @@ dependencies = [
  "async-channel 2.5.0",
  "async-io 2.5.0",
  "async-net",
+ "async-runtime-compat",
  "async-trait",
  "async-tungstenite",
  "base64",
@@ -2455,6 +2456,7 @@ name = "service-orchestration"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel 2.5.0",
  "async-runtime-compat",
  "async-std",
  "async-trait",

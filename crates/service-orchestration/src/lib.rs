@@ -51,7 +51,7 @@ pub use config::{
 pub use context::OrchestrationContext;
 pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
 pub use executors::{
-    AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
+    AttachedService, DockerAttachedExecutor, DockerExecutor, EventStreamable,
     LayeredServiceExecutor, ManagedService, ProcessExecutor, RunningService, ServiceExecutor,
     SystemdAttachedExecutor, layered::LayerConfig,
 };
@@ -65,9 +65,13 @@ pub use state::{
 };
 pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
 
+// Re-export with the old name for backwards compatibility during transition
+#[deprecated(note = "Use OrchestrationError instead")]
+pub use OrchestrationError as Error;
+
 /// Error types for orchestration operations
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub enum OrchestrationError {
     /// Service registry errors
     #[error("Service registry error: {0}")]
     Registry(#[from] service_registry::Error),

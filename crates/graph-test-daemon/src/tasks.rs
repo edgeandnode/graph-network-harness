@@ -12,7 +12,7 @@ use command_executor::{
     Command, Executor, ProcessEvent, ProcessEventType, backends::LocalLauncher, target::Target,
 };
 use futures::StreamExt;
-use harness_core::prelude::*;
+use harness_core::{prelude::*, task::DeploymentTask, Error};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -143,7 +143,7 @@ impl DeploymentTask for GraphContractsTask {
         "Deploy Graph Protocol smart contracts"
     }
 
-    async fn is_completed(&self) -> Result<bool> {
+    async fn is_completed(&self) -> Result<bool, Error> {
         // Check if contracts.json exists and has addresses
         let contracts_file = std::path::Path::new(&self.working_dir).join("contracts.json");
 
@@ -156,7 +156,7 @@ impl DeploymentTask for GraphContractsTask {
         }
     }
 
-    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -756,12 +756,12 @@ impl DeploymentTask for TapContractsTask {
         "Deploy TAP (Timeline Aggregation Protocol) contracts"
     }
 
-    async fn is_completed(&self) -> Result<bool> {
+    async fn is_completed(&self) -> Result<bool, Error> {
         // Similar check for TAP contracts
         Ok(false)
     }
 
-    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -925,7 +925,7 @@ impl DeploymentTask for SubgraphDeployTask {
         "Deploy subgraphs to Graph Node"
     }
 
-    async fn is_completed(&self) -> Result<bool> {
+    async fn is_completed(&self) -> Result<bool, Error> {
         // Check if subgraph.yaml exists and deployment was successful
         let subgraph_file = std::path::Path::new(&self.working_dir).join("subgraph.yaml");
         let deployed_file = std::path::Path::new(&self.working_dir).join(".deployment");
@@ -933,7 +933,7 @@ impl DeploymentTask for SubgraphDeployTask {
         Ok(subgraph_file.exists() && deployed_file.exists())
     }
 
-    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {

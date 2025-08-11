@@ -6,7 +6,8 @@
 use std::sync::Arc;
 
 use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
-use harness_core::task::DeploymentTask;
+use harness_core::{task::DeploymentTask, Error};
+use std::result::Result;
 
 /// Task handle that can execute tasks
 pub enum TaskHandle {
@@ -29,7 +30,7 @@ impl TaskHandle {
     }
 
     /// Check if the task is completed
-    pub async fn is_completed(&self) -> harness_core::Result<bool> {
+    pub async fn is_completed(&self) -> Result<bool, Error> {
         match self {
             TaskHandle::GraphContracts(task) => task.is_completed().await,
             TaskHandle::SubgraphDeploy(task) => task.is_completed().await,

@@ -5,10 +5,11 @@
 
 use async_trait::async_trait;
 use harness_core::prelude::*;
-use harness_core::{Registry, ServiceManager};
+use harness_core::{Error, Registry, ServiceManager};
 use service_orchestration::{ServiceTarget, StackConfig};
 use std::net::SocketAddr;
 use std::path::Path;
+use std::result::Result;
 use tracing::info;
 
 use crate::service_registry::ServiceRegistry;
@@ -25,7 +26,7 @@ pub struct GraphTestDaemon {
 
 impl GraphTestDaemon {
     /// Create a new Graph Test Daemon from configuration
-    pub async fn from_config<P: AsRef<Path>>(endpoint: SocketAddr, config_path: P) -> Result<Self> {
+    pub async fn from_config<P: AsRef<Path>>(endpoint: SocketAddr, config_path: P) -> Result<Self, Error> {
         // Load configuration from YAML file
         let config_content = std::fs::read_to_string(config_path.as_ref())
             .map_err(|e| Error::daemon(format!("Failed to read config file: {e}")))?;
@@ -37,7 +38,7 @@ impl GraphTestDaemon {
     }
 
     /// Create a new Graph Test Daemon from a stack configuration
-    pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self> {
+    pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self, Error> {
         // Convert config to Value for validation
         let config_value = serde_json::to_value(&config)
             .map_err(|e| Error::daemon(format!("Failed to convert config: {e}")))?;
@@ -215,7 +216,7 @@ impl GraphTestDaemon {
     }
 
     /// Launch all services in the stack in dependency order
-    pub async fn launch_stack(&self) -> Result<()> {
+    pub async fn launch_stack(&self) -> Result<(), Error> {
         // Delegate to the base daemon's launch_stack implementation
         self.base.launch_stack().await
     }
@@ -223,7 +224,7 @@ impl GraphTestDaemon {
 
 #[async_trait]
 impl Daemon for GraphTestDaemon {
-    async fn start(&self) -> Result<()> {
+    async fn start(&self) -> Result<(), Error> {
         info!("Starting Graph Test Daemon");
 
         // Start the base daemon
@@ -249,7 +250,7 @@ impl Daemon for GraphTestDaemon {
         Ok(())
     }
 
-    async fn stop(&self) -> Result<()> {
+    async fn stop(&self) -> Result<(), Error> {
         info!("Stopping Graph Test Daemon");
         self.base.stop().await
     }

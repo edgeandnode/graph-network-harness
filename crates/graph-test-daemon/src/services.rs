@@ -5,7 +5,7 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::prelude::*;
+use harness_core::{prelude::*, Error, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -107,7 +107,7 @@ impl Service for GraphNodeService {
         "Graph Node service for subgraph deployment and querying"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -198,7 +198,7 @@ impl Service for GraphNodeService {
 /// Setup completion is determined by health check success.
 #[async_trait]
 impl ServiceSetup for GraphNodeService {
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         // For Graph Node, setup is complete when the service is healthy
         // In a real implementation, this would check the GraphQL endpoint
         info!(
@@ -211,7 +211,7 @@ impl ServiceSetup for GraphNodeService {
         Ok(true)
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         info!("Performing Graph Node setup");
 
         // Graph Node setup is primarily handled by service orchestration
@@ -221,7 +221,7 @@ impl ServiceSetup for GraphNodeService {
         Ok(())
     }
 
-    async fn validate_setup(&self) -> Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!("Validating Graph Node setup");
 
         // In a real implementation, this would:
@@ -333,7 +333,7 @@ impl Service for AnvilService {
         "Anvil local Ethereum blockchain for testing"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -390,7 +390,7 @@ impl Service for AnvilService {
 /// Anvil is a foundation service that doesn't require complex setup - it starts immediately
 #[async_trait]
 impl ServiceSetup for AnvilService {
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         info!(
             "Checking if Anvil blockchain is ready on port {}",
             self.port
@@ -420,7 +420,7 @@ impl ServiceSetup for AnvilService {
         }
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         info!("Performing Anvil setup (blockchain initialization)");
 
         // Anvil setup would involve:
@@ -432,7 +432,7 @@ impl ServiceSetup for AnvilService {
         Ok(())
     }
 
-    async fn validate_setup(&self) -> Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!("Validating Anvil setup");
 
         // In a real implementation, this would:
@@ -533,7 +533,7 @@ impl Service for PostgresService {
         "PostgreSQL database service"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -593,7 +593,7 @@ impl IpfsService {
 /// PostgreSQL setup involves ensuring the database exists and has proper permissions
 #[async_trait]
 impl ServiceSetup for PostgresService {
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         info!(
             "Checking if PostgreSQL setup is complete for database '{}' on port {}",
             self.db_name, self.port
@@ -625,7 +625,7 @@ impl ServiceSetup for PostgresService {
         }
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         info!(
             "Performing PostgreSQL setup for database '{}'",
             self.db_name
@@ -644,7 +644,7 @@ impl ServiceSetup for PostgresService {
         Ok(())
     }
 
-    async fn validate_setup(&self) -> Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!("Validating PostgreSQL setup");
 
         // Validate that:
@@ -743,7 +743,7 @@ impl Service for IpfsService {
         "IPFS distributed storage service"
     }
 
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         match action {
@@ -794,7 +794,7 @@ impl Service for IpfsService {
 /// IPFS setup involves initializing the repository and configuring CORS for graph-node
 #[async_trait]
 impl ServiceSetup for IpfsService {
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         info!(
             "Checking if IPFS setup is complete on API port {} and gateway port {}",
             self.api_port, self.gateway_port
@@ -846,7 +846,7 @@ impl ServiceSetup for IpfsService {
         }
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         info!("Performing IPFS setup");
 
         // In local-network, the IPFS run.sh script:
@@ -861,7 +861,7 @@ impl ServiceSetup for IpfsService {
         Ok(())
     }
 
-    async fn validate_setup(&self) -> Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!("Validating IPFS setup");
 
         // Validate that:

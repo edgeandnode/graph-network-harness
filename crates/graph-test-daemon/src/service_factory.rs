@@ -3,9 +3,9 @@
 //! This module provides a factory that creates service instances that implement
 //! both the Service trait and ServiceSetup trait.
 
-use harness_core::service::ServiceSetup;
-
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
+use harness_core::Error;
+use std::result::Result;
 
 /// Enum containing all supported graph protocol services
 #[derive(Debug)]
@@ -51,7 +51,7 @@ impl harness_core::service::Service for GraphService {
     async fn dispatch_action(
         &self,
         _action: Self::Action,
-    ) -> harness_core::Result<async_channel::Receiver<Self::Event>> {
+    ) -> Result<async_channel::Receiver<Self::Event>, Error> {
         // For the enum, we'd need to route actions to the appropriate service
         // For now, return an empty receiver
         let (_tx, rx) = async_channel::unbounded();
@@ -61,7 +61,7 @@ impl harness_core::service::Service for GraphService {
 
 #[async_trait::async_trait]
 impl harness_core::service::ServiceSetup for GraphService {
-    async fn is_setup_complete(&self) -> harness_core::Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         match self {
             GraphService::GraphNode(service) => service.is_setup_complete().await,
             GraphService::Anvil(service) => service.is_setup_complete().await,
@@ -70,7 +70,7 @@ impl harness_core::service::ServiceSetup for GraphService {
         }
     }
 
-    async fn perform_setup(&self) -> harness_core::Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         match self {
             GraphService::GraphNode(service) => service.perform_setup().await,
             GraphService::Anvil(service) => service.perform_setup().await,
@@ -79,7 +79,7 @@ impl harness_core::service::ServiceSetup for GraphService {
         }
     }
 
-    async fn validate_setup(&self) -> harness_core::Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         match self {
             GraphService::GraphNode(service) => service.validate_setup().await,
             GraphService::Anvil(service) => service.validate_setup().await,

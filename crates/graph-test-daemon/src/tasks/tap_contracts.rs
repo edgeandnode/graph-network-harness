@@ -3,12 +3,16 @@
 //! This module implements a robust state machine for deploying TAP (Timeline Aggregation Protocol)
 //! contracts with proper verification and error recovery using the statig crate.
 
+// Allow missing docs for statig macro-generated code
+#![allow(missing_docs)]
+
 use command_executor::{
     Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
-use harness_core::{Error, Result};
+use harness_core::Error;
 use statig::prelude::*;
+use std::result::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
@@ -137,7 +141,7 @@ impl TapContractsDeployTaskStateMachine {
     }
 
     /// Check if Graph contracts are deployed
-    async fn check_graph_contracts(context: &mut TapContractsContext) -> Result<bool> {
+    async fn check_graph_contracts(context: &mut TapContractsContext) -> Result<bool, Error> {
         let graph_addresses_file = context
             .working_dir
             .parent()
@@ -181,7 +185,7 @@ impl TapContractsDeployTaskStateMachine {
     }
 
     /// Verify working directory and required files exist
-    fn verify_environment(context: &TapContractsContext) -> Result<()> {
+    fn verify_environment(context: &TapContractsContext) -> Result<(), Error> {
         if !context.working_dir.exists() {
             return Err(Error::daemon(format!(
                 "Working directory does not exist: {}",
@@ -199,7 +203,7 @@ impl TapContractsDeployTaskStateMachine {
     }
 
     /// Deploy TAP contracts using forge
-    async fn deploy_contracts(context: &mut TapContractsContext) -> Result<()> {
+    async fn deploy_contracts(context: &mut TapContractsContext) -> Result<(), Error> {
         info!("Deploying TAP contracts");
 
         // TAP contracts typically include:
@@ -294,7 +298,7 @@ impl TapContractsDeployTaskStateMachine {
     }
 
     /// Deploy the TAP subgraph
-    async fn deploy_subgraph(context: &mut TapContractsContext) -> Result<()> {
+    async fn deploy_subgraph(context: &mut TapContractsContext) -> Result<(), Error> {
         info!("Deploying TAP subgraph");
 
         // Create subgraph
@@ -370,7 +374,7 @@ impl TapContractsDeployTaskStateMachine {
     }
 
     /// Verify deployment succeeded
-    fn verify_deployment(context: &TapContractsContext) -> Result<()> {
+    fn verify_deployment(context: &TapContractsContext) -> Result<(), Error> {
         // Verify we have deployed addresses
         if context.deployed_addresses.is_empty() {
             return Err(Error::daemon("No TAP contracts were deployed"));
@@ -615,7 +619,7 @@ fn extract_deployment_id(line: &str) -> Option<String> {
 }
 
 /// Run the TAP contracts deployment
-pub async fn deploy_tap_contracts(ethereum_url: String, working_dir: PathBuf) -> Result<()> {
+pub async fn deploy_tap_contracts(ethereum_url: String, working_dir: PathBuf) -> Result<(), Error> {
     let context = TapContractsContext::new(ethereum_url, working_dir);
     let state_machine = TapContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();

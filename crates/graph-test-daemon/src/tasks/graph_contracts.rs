@@ -3,12 +3,16 @@
 //! This module implements a robust state machine for deploying Graph Protocol
 //! contracts with proper verification and error recovery using the statig crate.
 
+// Allow missing docs for statig macro-generated code
+#![allow(missing_docs)]
+
 use command_executor::{
     Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
-use harness_core::{Error, Result};
+use harness_core::Error;
 use statig::prelude::*;
+use std::result::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
@@ -133,7 +137,7 @@ impl GraphContractsDeployTaskStateMachine {
     }
 
     /// Load expected addresses from contracts.json
-    async fn load_expected_addresses(context: &mut GraphContractsContext) -> Result<()> {
+    async fn load_expected_addresses(context: &mut GraphContractsContext) -> Result<(), Error> {
         let contracts_file = context.working_dir.join("contracts.json");
 
         if contracts_file.exists() {
@@ -166,7 +170,7 @@ impl GraphContractsDeployTaskStateMachine {
     }
 
     /// Verify working directory and required files exist
-    fn verify_environment(context: &GraphContractsContext) -> Result<()> {
+    fn verify_environment(context: &GraphContractsContext) -> Result<(), Error> {
         if !context.working_dir.exists() {
             return Err(Error::daemon(format!(
                 "Working directory does not exist: {}",
@@ -190,7 +194,7 @@ impl GraphContractsDeployTaskStateMachine {
     }
 
     /// Deploy contracts using hardhat
-    async fn deploy_contracts(context: &mut GraphContractsContext) -> Result<()> {
+    async fn deploy_contracts(context: &mut GraphContractsContext) -> Result<(), Error> {
         info!("Deploying Graph Protocol contracts");
 
         let mut cmd = Command::new("npx");
@@ -257,7 +261,7 @@ impl GraphContractsDeployTaskStateMachine {
     }
 
     /// Deploy the graph-network subgraph
-    async fn deploy_subgraph(context: &mut GraphContractsContext) -> Result<()> {
+    async fn deploy_subgraph(context: &mut GraphContractsContext) -> Result<(), Error> {
         info!("Deploying graph-network subgraph");
 
         // Create subgraph
@@ -334,7 +338,7 @@ impl GraphContractsDeployTaskStateMachine {
     }
 
     /// Verify deployment succeeded
-    fn verify_deployment(context: &GraphContractsContext) -> Result<()> {
+    fn verify_deployment(context: &GraphContractsContext) -> Result<(), Error> {
         // Verify we have deployed addresses
         if context.deployed_addresses.is_empty() {
             return Err(Error::daemon("No contracts were deployed"));
@@ -557,7 +561,7 @@ fn extract_deployment_id(line: &str) -> Option<String> {
 }
 
 /// Run the Graph contracts deployment
-pub async fn deploy_graph_contracts(ethereum_url: String, working_dir: PathBuf) -> Result<()> {
+pub async fn deploy_graph_contracts(ethereum_url: String, working_dir: PathBuf) -> Result<(), Error> {
     let context = GraphContractsContext::new(ethereum_url, working_dir);
     let state_machine = GraphContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();

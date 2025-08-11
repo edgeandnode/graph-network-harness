@@ -22,8 +22,9 @@ pub use services::{
     PostgresService,
 };
 pub use tasks::{
-    GraphContractsAction, GraphContractsEvent, GraphContractsTask, TapContractsAction,
-    TapContractsEvent, TapContractsTask,
+    GraphContractsAction, GraphContractsEvent, GraphContractsTask, SubgraphDeployAction,
+    SubgraphDeployEvent, SubgraphDeployTask, TapContractsAction, TapContractsEvent,
+    TapContractsTask,
 };
 
 /// Re-export core types for convenience

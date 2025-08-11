@@ -1,9 +1,10 @@
 //! Layered executor implementation for runtime command composition.
 
 use super::{ExecutionContext, ExecutionLayer};
-use crate::{Command, error::Result, event::ProcessEvent, launcher::Launcher, target::Target};
+use crate::{Command, error::Error, event::ProcessEvent, launcher::Launcher, target::Target};
 use futures::stream::Stream;
 use std::pin::Pin;
+use std::result::Result;
 
 /// Type alias for event streams
 pub type EventStream = Pin<Box<dyn Stream<Item = ProcessEvent> + Send>>;
@@ -67,7 +68,7 @@ impl<L: Launcher> LayeredExecutor<L> {
 
     /// Test helper: Apply layers to a command without executing (for testing only)
     #[cfg(test)]
-    pub fn transform_command_for_test(&self, command: Command) -> Result<Command> {
+    pub fn transform_command_for_test(&self, command: Command) -> Result<Command, Error> {
         self.layers
             .iter()
             .try_fold(command, |cmd, layer| layer.wrap_command(cmd, &self.context))
@@ -85,7 +86,7 @@ impl<L: Launcher> LayeredExecutor<L> {
         &self,
         command: Command,
         target: &L::Target,
-    ) -> Result<(EventStream, L::Handle)> {
+    ) -> Result<(EventStream, L::Handle), Error> {
         // Apply all layers to transform the command
         let final_command = self
             .layers
@@ -105,7 +106,7 @@ impl LayeredExecutor<crate::backends::LocalLauncher> {
     pub async fn execute_command(
         &self,
         command: Command,
-    ) -> Result<(EventStream, crate::backends::LocalProcessHandle)> {
+    ) -> Result<(EventStream, crate::backends::LocalProcessHandle), Error> {
         self.execute(command, &Target::Command).await
     }
 }

@@ -3,10 +3,11 @@
 //! This module provides traits for attaching to services that we can control,
 //! such as systemd services, docker containers we didn't create, etc.
 
-use crate::error::Result;
+use crate::error::Error;
 use crate::event::ProcessEvent;
 use async_trait::async_trait;
 use futures::stream::Stream;
+use std::result::Result;
 
 /// Configuration for attaching to an existing service
 #[derive(Debug, Clone)]
@@ -36,10 +37,10 @@ pub trait AttachedHandle: Send + Sync {
     fn id(&self) -> String;
 
     /// Check the current status of the service
-    async fn status(&self) -> Result<ServiceStatus>;
+    async fn status(&self) -> Result<ServiceStatus, Error>;
 
     /// Disconnect from the service (stop monitoring)
-    async fn disconnect(&mut self) -> Result<()>;
+    async fn disconnect(&mut self) -> Result<(), Error>;
 }
 
 /// Status of an attached service
@@ -72,5 +73,5 @@ pub trait Attacher: Send + Sync + 'static {
         &self,
         target: &Self::Target,
         config: AttachConfig,
-    ) -> Result<(Self::EventStream, Self::Handle)>;
+    ) -> Result<(Self::EventStream, Self::Handle), Error>;
 }

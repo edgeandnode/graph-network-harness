@@ -1,8 +1,9 @@
 //! Configuration structures for service registry
 
-use crate::error::Result;
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::result::Result;
 
 /// Service registry configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +93,7 @@ impl Default for RegistryConfig {
 
 impl RegistryConfig {
     /// Load configuration from file
-    pub async fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
+    pub async fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
 

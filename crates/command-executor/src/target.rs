@@ -5,9 +5,10 @@
 //! determine WHERE to execute them.
 
 use crate::command::Command;
-use crate::error::Result;
+use crate::error::Error;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::result::Result;
 
 /// Target types that can be executed by launchers
 #[derive(Debug, Clone)]
@@ -249,8 +250,7 @@ impl ManagedServiceBuilder {
     }
 
     /// Build the ManagedService
-    pub fn build(self) -> Result<ManagedService> {
-        use crate::error::Error;
+    pub fn build(self) -> Result<ManagedService, Error> {
         Ok(ManagedService {
             name: self.name,
             status_command: self
@@ -458,8 +458,7 @@ impl AttachedServiceBuilder {
     }
 
     /// Build the AttachedService
-    pub fn build(self) -> Result<AttachedService> {
-        use crate::error::Error;
+    pub fn build(self) -> Result<AttachedService, Error> {
         Ok(AttachedService {
             name: self.name,
             status_command: self

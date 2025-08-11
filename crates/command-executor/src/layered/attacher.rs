@@ -3,12 +3,13 @@
 use super::ExecutionContext;
 use crate::{
     attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus},
-    error::Result,
+    error::Error,
     event::ProcessEvent,
     target::ManagedService,
 };
 use async_trait::async_trait;
 use futures::stream::BoxStream;
+use std::result::Result;
 
 /// Trait for attachment layers that transform service attachment behavior
 #[async_trait]
@@ -21,21 +22,21 @@ pub trait AttachmentLayer: Send + Sync {
         &self,
         target: ManagedService,
         context: &ExecutionContext,
-    ) -> Result<ManagedService>;
+    ) -> Result<ManagedService, Error>;
 
     /// Wrap the attached handle from the inner layer
     fn wrap_handle(
         &self,
         handle: Box<dyn AttachedHandle>,
         context: &ExecutionContext,
-    ) -> Result<Box<dyn AttachedHandle>>;
+    ) -> Result<Box<dyn AttachedHandle>, Error>;
 
     /// Optionally transform the event stream
     fn wrap_event_stream(
         &self,
         stream: BoxStream<'static, ProcessEvent>,
         _context: &ExecutionContext,
-    ) -> Result<BoxStream<'static, ProcessEvent>> {
+    ) -> Result<BoxStream<'static, ProcessEvent>, Error> {
         Ok(stream)
     }
 }
@@ -99,7 +100,7 @@ where
         &self,
         target: &A::Target,
         config: AttachConfig,
-    ) -> Result<(BoxStream<'static, ProcessEvent>, Box<dyn AttachedHandle>)> {
+    ) -> Result<(BoxStream<'static, ProcessEvent>, Box<dyn AttachedHandle>), Error> {
         // For now, we'll do a runtime check that target is ManagedService
         // In the future, we might want to make AttachmentLayer generic over target type
         let final_target = target.clone();
@@ -159,7 +160,7 @@ impl AttachmentLayer for SshAttachmentLayer {
         &self,
         mut target: ManagedService,
         _context: &ExecutionContext,
-    ) -> Result<ManagedService> {
+    ) -> Result<ManagedService, Error> {
         use crate::Command;
 
         // Transform all commands to run over SSH
@@ -198,7 +199,7 @@ impl AttachmentLayer for SshAttachmentLayer {
         &self,
         handle: Box<dyn AttachedHandle>,
         _context: &ExecutionContext,
-    ) -> Result<Box<dyn AttachedHandle>> {
+    ) -> Result<Box<dyn AttachedHandle>, Error> {
         Ok(Box::new(SshWrappedHandle {
             inner: handle,
             ssh_target: self.ssh_target.clone(),
@@ -218,12 +219,12 @@ impl AttachedHandle for SshWrappedHandle {
         format!("ssh:{}/{}", self.ssh_target, self.inner.id())
     }
 
-    async fn status(&self) -> Result<ServiceStatus> {
+    async fn status(&self) -> Result<ServiceStatus, Error> {
         // Status is already being checked via SSH-wrapped commands
         self.inner.status().await
     }
 
-    async fn disconnect(&mut self) -> Result<()> {
+    async fn disconnect(&mut self) -> Result<(), Error> {
         self.inner.disconnect().await
     }
 }
@@ -247,7 +248,7 @@ impl AttachmentLayer for DockerAttachmentLayer {
         &self,
         mut target: ManagedService,
         _context: &ExecutionContext,
-    ) -> Result<ManagedService> {
+    ) -> Result<ManagedService, Error> {
         use crate::Command;
 
         // Transform commands to use docker exec
@@ -279,7 +280,7 @@ impl AttachmentLayer for DockerAttachmentLayer {
         &self,
         handle: Box<dyn AttachedHandle>,
         _context: &ExecutionContext,
-    ) -> Result<Box<dyn AttachedHandle>> {
+    ) -> Result<Box<dyn AttachedHandle>, Error> {
         Ok(Box::new(DockerWrappedHandle {
             inner: handle,
             container_id: self.container_id.clone(),
@@ -299,11 +300,11 @@ impl AttachedHandle for DockerWrappedHandle {
         format!("docker:{}/{}", self.container_id, self.inner.id())
     }
 
-    async fn status(&self) -> Result<ServiceStatus> {
+    async fn status(&self) -> Result<ServiceStatus, Error> {
         self.inner.status().await
     }
 
-    async fn disconnect(&mut self) -> Result<()> {
+    async fn disconnect(&mut self) -> Result<(), Error> {
         self.inner.disconnect().await
     }
 }
@@ -343,7 +344,7 @@ impl AttachmentLayer for LocalAttachmentLayer {
         &self,
         target: ManagedService,
         _context: &ExecutionContext,
-    ) -> Result<ManagedService> {
+    ) -> Result<ManagedService, Error> {
         // For local attachment, we typically don't need to transform the target
         // The prefix is more for identification in wrapped handles
 
@@ -354,7 +355,7 @@ impl AttachmentLayer for LocalAttachmentLayer {
         &self,
         handle: Box<dyn AttachedHandle>,
         _context: &ExecutionContext,
-    ) -> Result<Box<dyn AttachedHandle>> {
+    ) -> Result<Box<dyn AttachedHandle>, Error> {
         // For local, we don't need to wrap much
         Ok(handle)
     }

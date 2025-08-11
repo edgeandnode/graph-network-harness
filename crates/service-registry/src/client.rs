@@ -1,10 +1,11 @@
 //! WebSocket client for service registry
 
 use crate::{
-    error::{Error, Result},
+    error::Error,
     models::*,
     tls::TlsClientConfig,
 };
+use std::result::Result;
 use async_net::TcpStream;
 use async_tungstenite::{WebSocketStream, client_async};
 use futures::StreamExt;
@@ -20,7 +21,7 @@ use crate::tls::TlsConnector;
 
 /// Type alias for the pending requests map
 type PendingRequests =
-    Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>;
+    Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>>;
 
 /// WebSocket client for service registry
 pub enum WsClient {
@@ -46,7 +47,7 @@ pub enum WsClient {
 
 impl WsClient {
     /// Connect to a WebSocket server (plain HTTP)
-    pub async fn connect(addr: SocketAddr) -> Result<Self> {
+    pub async fn connect(addr: SocketAddr) -> Result<Self, Error> {
         let url = format!("ws://{addr}");
         let stream = TcpStream::connect(addr).await?;
         let (ws, _) = client_async(&url, stream).await?;
@@ -65,7 +66,7 @@ impl WsClient {
         addr: SocketAddr,
         tls_config: TlsClientConfig,
         server_name: &str,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let url = format!("wss://{addr}");
         let tcp_stream = TcpStream::connect(addr).await?;
 
@@ -92,7 +93,7 @@ impl WsClient {
         self,
     ) -> (
         WsClientHandle,
-        futures::future::BoxFuture<'static, Result<()>>,
+        futures::future::BoxFuture<'static, Result<(), Error>>,
     ) {
         match self {
             Self::Plain {
@@ -221,7 +222,7 @@ impl WsClient {
     }
 
     /// Handle incoming message (static to be used by both variants)
-    async fn handle_message(text: &str, pending: &PendingRequests) -> Result<()> {
+    async fn handle_message(text: &str, pending: &PendingRequests) -> Result<(), Error> {
         let msg: WsMessage = serde_json::from_str(text)?;
 
         match msg {
@@ -255,7 +256,7 @@ impl WsClient {
 pub struct WsClientHandle {
     tx: futures::channel::mpsc::UnboundedSender<ClientMessage>,
     pending_requests:
-        Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value>>>>>,
+        Arc<Mutex<HashMap<String, futures::channel::oneshot::Sender<Result<serde_json::Value, Error>>>>>,
 }
 
 enum ClientMessage {
@@ -269,7 +270,7 @@ impl WsClientHandle {
         &self,
         action: Action,
         params: serde_json::Value,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<serde_json::Value, Error> {
         let id = Uuid::new_v4().to_string();
         let (tx, rx) = futures::channel::oneshot::channel();
 
@@ -303,7 +304,7 @@ impl WsClientHandle {
     }
 
     /// List all services
-    pub async fn list_services(&self) -> Result<Vec<ServiceEntry>> {
+    pub async fn list_services(&self) -> Result<Vec<ServiceEntry>, Error> {
         let data = self
             .request(Action::ListServices, serde_json::json!({}))
             .await?;
@@ -311,7 +312,7 @@ impl WsClientHandle {
     }
 
     /// Get a specific service
-    pub async fn get_service(&self, name: &str) -> Result<ServiceEntry> {
+    pub async fn get_service(&self, name: &str) -> Result<ServiceEntry, Error> {
         let params = serde_json::json!({ "name": name });
         let data = self.request(Action::GetService, params).await?;
         Ok(serde_json::from_value(data)?)
@@ -322,7 +323,7 @@ impl WsClientHandle {
         &self,
         name: &str,
         action: ServiceAction,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<serde_json::Value, Error> {
         let params = serde_json::json!({
             "name": name,
             "action": action,
@@ -331,7 +332,7 @@ impl WsClientHandle {
     }
 
     /// List all endpoints
-    pub async fn list_endpoints(&self) -> Result<HashMap<String, Vec<Endpoint>>> {
+    pub async fn list_endpoints(&self) -> Result<HashMap<String, Vec<Endpoint>>, Error> {
         let data = self
             .request(Action::ListEndpoints, serde_json::json!({}))
             .await?;
@@ -339,7 +340,7 @@ impl WsClientHandle {
     }
 
     /// Subscribe to events
-    pub async fn subscribe(&self, events: Vec<EventType>) -> Result<Vec<EventType>> {
+    pub async fn subscribe(&self, events: Vec<EventType>) -> Result<Vec<EventType>, Error> {
         let params = serde_json::json!({ "events": events });
         let data = self.request(Action::Subscribe, params).await?;
 
@@ -351,7 +352,7 @@ impl WsClientHandle {
     }
 
     /// Unsubscribe from events
-    pub async fn unsubscribe(&self, events: Vec<EventType>) -> Result<Vec<EventType>> {
+    pub async fn unsubscribe(&self, events: Vec<EventType>) -> Result<Vec<EventType>, Error> {
         let params = serde_json::json!({ "events": events });
         let data = self.request(Action::Unsubscribe, params).await?;
 
@@ -363,7 +364,7 @@ impl WsClientHandle {
     }
 
     /// Close the connection
-    pub async fn close(&self) -> Result<()> {
+    pub async fn close(&self) -> Result<(), Error> {
         self.tx
             .unbounded_send(ClientMessage::Close)
             .map_err(|_| Error::Operation("Failed to send close".to_string()))?;

@@ -11,11 +11,12 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::{Error, Result};
+use crate::Error;
+use std::result::Result;
 
 /// Action function signature
 pub type ActionFn = Box<
-    dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value>> + Send + 'static>>
+    dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, Error>> + Send + 'static>>
         + Send
         + Sync
         + 'static,
@@ -95,10 +96,10 @@ impl ActionRegistry {
     }
 
     /// Register an action with metadata
-    pub fn register<F, Fut>(&mut self, info: ActionInfo, action: F) -> Result<()>
+    pub fn register<F, Fut>(&mut self, info: ActionInfo, action: F) -> Result<(), Error>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value>> + Send + 'static,
+        Fut: Future<Output = Result<Value, Error>> + Send + 'static,
     {
         let name = info.name.clone();
 
@@ -109,7 +110,7 @@ impl ActionRegistry {
         // Wrap the function to match our signature
         let action_fn = Box::new(move |params: Value| {
             Box::pin(action(params))
-                as Pin<Box<dyn Future<Output = Result<Value>> + Send + 'static>>
+                as Pin<Box<dyn Future<Output = Result<Value, Error>> + Send + 'static>>
         });
 
         self.actions.insert(name.clone(), action_fn);
@@ -124,17 +125,17 @@ impl ActionRegistry {
         name: impl Into<String>,
         description: impl Into<String>,
         action: F,
-    ) -> Result<()>
+    ) -> Result<(), Error>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Value>> + Send + 'static,
+        Fut: Future<Output = Result<Value, Error>> + Send + 'static,
     {
         let info = ActionInfo::new(name, description);
         self.register(info, action)
     }
 
     /// Invoke an action by name
-    pub async fn invoke(&self, name: &str, params: Value) -> Result<Value> {
+    pub async fn invoke(&self, name: &str, params: Value) -> Result<Value, Error> {
         let action = self
             .actions
             .get(name)
@@ -181,7 +182,7 @@ pub trait Action {
     fn actions_mut(&mut self) -> &mut ActionRegistry;
 
     /// Invoke an action
-    async fn invoke_action(&self, name: &str, params: Value) -> Result<Value> {
+    async fn invoke_action(&self, name: &str, params: Value) -> Result<Value, Error> {
         self.actions().invoke(name, params).await
     }
 

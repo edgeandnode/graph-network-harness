@@ -1,9 +1,10 @@
 //! Service IP resolution logic
 
 use super::{NetworkLocation, NetworkTopology, ServiceNetwork};
-use crate::error::{Error, Result};
+use crate::error::Error;
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::result::Result;
 
 /// Service resolver determines the best IP address for service-to-service communication
 pub struct ServiceResolver {
@@ -31,7 +32,7 @@ impl ServiceResolver {
         from_service: &str,
         to_service: &str,
         topology: &NetworkTopology,
-    ) -> Result<IpAddr> {
+    ) -> Result<IpAddr, Error> {
         // Check cache first
         let cache_key = (from_service.to_string(), to_service.to_string());
         if let Some(&ip) = self.resolution_cache.get(&cache_key) {
@@ -56,7 +57,7 @@ impl ServiceResolver {
     }
 
     /// Determine the best IP address based on network topology
-    fn determine_best_ip(&self, from: &ServiceNetwork, to: &ServiceNetwork) -> Result<IpAddr> {
+    fn determine_best_ip(&self, from: &ServiceNetwork, to: &ServiceNetwork) -> Result<IpAddr, Error> {
         match (&from.location, &to.location) {
             // Both services are local - use host/Docker IP
             (NetworkLocation::Local, NetworkLocation::Local) => to.host_ip.ok_or_else(|| {
@@ -108,7 +109,7 @@ impl ServiceResolver {
         from_service: &str,
         to_services: &[String],
         topology: &NetworkTopology,
-    ) -> Result<HashMap<String, IpAddr>> {
+    ) -> Result<HashMap<String, IpAddr>, Error> {
         let mut results = HashMap::new();
 
         for to_service in to_services {

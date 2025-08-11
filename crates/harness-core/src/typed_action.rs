@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::Result;
+use crate::Error;
+use std::result::Result;
 
 /// Trait for strongly-typed actions
 #[async_trait]
@@ -26,5 +27,5 @@ pub trait TypedAction: Send + Sync + 'static {
     fn description(&self) -> &'static str;
 
     /// Execute the action, returning a receiver for events
-    async fn execute(&self, input: Self::Input) -> Result<Receiver<Self::Event>>;
+    async fn execute(&self, input: Self::Input) -> Result<Receiver<Self::Event>, Error>;
 }

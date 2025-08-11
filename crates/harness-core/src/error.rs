@@ -2,8 +2,6 @@
 
 use thiserror::Error;
 
-/// Result type alias for harness-core operations
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// Core harness error types
 #[derive(Error, Debug)]

@@ -1,10 +1,11 @@
 //! Network topology detection and management
 
 use super::{NetworkConfig, ServiceNetwork};
-use crate::error::Result;
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::result::Result;
 
 /// Network location type for a service
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -58,7 +59,7 @@ impl NetworkTopology {
     }
 
     /// Discover network topology from system
-    pub async fn discover(&mut self, config: &NetworkConfig) -> Result<()> {
+    pub async fn discover(&mut self, config: &NetworkConfig) -> Result<(), Error> {
         // Discover network interfaces
         self.host_interfaces = self.discover_interfaces().await?;
 
@@ -74,7 +75,7 @@ impl NetworkTopology {
     }
 
     /// Discover network interfaces on the host
-    async fn discover_interfaces(&self) -> Result<Vec<NetworkInterface>> {
+    async fn discover_interfaces(&self) -> Result<Vec<NetworkInterface>, Error> {
         // In a real implementation, this would use async-net or similar
         // For now, return a mock implementation
         Ok(vec![
@@ -97,14 +98,14 @@ impl NetworkTopology {
     }
 
     /// Detect Docker networks and containers
-    async fn detect_docker_networks(&self) -> Result<()> {
+    async fn detect_docker_networks(&self) -> Result<(), Error> {
         // Would integrate with Docker API to detect containers
         // For now, this is a placeholder
         Ok(())
     }
 
     /// Scan LAN for services
-    async fn scan_lan_services(&self, _config: &NetworkConfig) -> Result<()> {
+    async fn scan_lan_services(&self, _config: &NetworkConfig) -> Result<(), Error> {
         // Would perform network discovery (ARP scan, mDNS, etc.)
         // For now, this is a placeholder
         Ok(())

@@ -3,9 +3,10 @@
 //! This module provides the `StdinHandle` type for writing to a process's stdin.
 //! It supports both direct writing and channel-based forwarding of input.
 
-use crate::error::Result;
+use crate::error::Error;
 use async_channel::Receiver;
 use futures::io::AsyncWriteExt;
+use std::result::Result;
 
 /// Handle for writing to a process's stdin
 pub struct StdinHandle {
@@ -38,7 +39,7 @@ impl StdinHandle {
     }
 
     /// Write a line to stdin (adds newline)
-    pub async fn write_line(&mut self, line: &str) -> Result<()> {
+    pub async fn write_line(&mut self, line: &str) -> Result<(), Error> {
         if let Some(stdin) = &mut self.stdin {
             stdin.write_all(line.as_bytes()).await?;
             stdin.write_all(b"\n").await?;
@@ -48,7 +49,7 @@ impl StdinHandle {
     }
 
     /// Write raw bytes to stdin
-    pub async fn write(&mut self, data: &[u8]) -> Result<()> {
+    pub async fn write(&mut self, data: &[u8]) -> Result<(), Error> {
         if let Some(stdin) = &mut self.stdin {
             stdin.write_all(data).await?;
             stdin.flush().await?;
@@ -58,7 +59,7 @@ impl StdinHandle {
 
     /// Start forwarding from the channel to stdin
     /// This consumes self and runs until the channel is closed
-    pub async fn forward_channel(mut self) -> Result<()> {
+    pub async fn forward_channel(mut self) -> Result<(), Error> {
         if let Some(channel) = self.channel.take() {
             while let Ok(line) = channel.recv().await {
                 self.write_line(&line).await?;

@@ -264,7 +264,7 @@ impl ServiceEntry {
         version: String,
         execution: ExecutionInfo,
         location: Location,
-    ) -> crate::Result<Self> {
+    ) -> std::result::Result<Self, crate::Error> {
         // Validate service name
         if name.trim().is_empty() {
             return Err(crate::Error::Operation(

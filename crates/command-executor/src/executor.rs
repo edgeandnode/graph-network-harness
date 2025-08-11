@@ -1,10 +1,11 @@
 //! Main executor type that wraps different launchers
 
 use crate::command::Command;
-use crate::error::Result;
+use crate::error::Error;
 use crate::event::LogFilter;
 use crate::launcher::Launcher;
 use crate::process::ExitResult;
+use std::result::Result;
 
 /// An executor that can run commands via a specific launcher
 pub struct Executor<L: Launcher> {
@@ -42,12 +43,12 @@ impl<L: Launcher> Executor<L> {
         &self,
         target: &L::Target,
         command: Command,
-    ) -> Result<(L::EventStream, L::Handle)> {
+    ) -> Result<(L::EventStream, L::Handle), Error> {
         self.launcher.launch(target, command).await
     }
 
     /// Execute a command and wait for it to complete
-    pub async fn execute(&self, target: &L::Target, command: Command) -> Result<ExitResult> {
+    pub async fn execute(&self, target: &L::Target, command: Command) -> Result<ExitResult, Error> {
         self.launcher.execute(target, command).await
     }
 

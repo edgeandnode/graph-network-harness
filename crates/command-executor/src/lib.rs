@@ -22,7 +22,7 @@ mod stdin_test;
 
 pub use attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 pub use command::Command;
-pub use error::{Error, Result};
+pub use error::Error;
 pub use event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 pub use executor::Executor;
 pub use launcher::Launcher;

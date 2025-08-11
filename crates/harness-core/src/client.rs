@@ -8,24 +8,25 @@ use serde_json::Value;
 use std::net::SocketAddr;
 use tracing::{debug, info};
 
-use crate::{Error, Result};
+use crate::Error;
+use std::result::Result;
 
 /// Trait for clients that can communicate with harness daemons
 #[async_trait]
 pub trait Client: Send + Sync {
     /// Connect to a daemon
-    async fn connect(endpoint: SocketAddr) -> Result<Self>
+    async fn connect(endpoint: SocketAddr) -> Result<Self, Error>
     where
         Self: Sized;
 
     /// Invoke an action on the daemon
-    async fn action(&self, name: &str, params: Value) -> Result<Value>;
+    async fn action(&self, name: &str, params: Value) -> Result<Value, Error>;
 
     /// List available actions
-    async fn list_actions(&self) -> Result<Vec<Value>>;
+    async fn list_actions(&self) -> Result<Vec<Value>, Error>;
 
     /// Disconnect from the daemon
-    async fn disconnect(&self) -> Result<()>;
+    async fn disconnect(&self) -> Result<(), Error>;
 }
 
 /// Test client implementation for integration testing
@@ -56,7 +57,7 @@ impl TestClient {
 
 #[async_trait]
 impl Client for TestClient {
-    async fn connect(endpoint: SocketAddr) -> Result<Self> {
+    async fn connect(endpoint: SocketAddr) -> Result<Self, Error> {
         info!("Connecting test client to {}", endpoint);
 
         // TODO: Implement actual WebSocket connection
@@ -68,7 +69,7 @@ impl Client for TestClient {
         })
     }
 
-    async fn action(&self, name: &str, params: Value) -> Result<Value> {
+    async fn action(&self, name: &str, params: Value) -> Result<Value, Error> {
         if !self.connected {
             return Err(Error::client("Client not connected"));
         }
@@ -85,7 +86,7 @@ impl Client for TestClient {
         }))
     }
 
-    async fn list_actions(&self) -> Result<Vec<Value>> {
+    async fn list_actions(&self) -> Result<Vec<Value>, Error> {
         if !self.connected {
             return Err(Error::client("Client not connected"));
         }
@@ -100,7 +101,7 @@ impl Client for TestClient {
         })])
     }
 
-    async fn disconnect(&self) -> Result<()> {
+    async fn disconnect(&self) -> Result<(), Error> {
         info!("Disconnecting test client from {}", self.endpoint);
 
         // TODO: Implement actual WebSocket disconnection
@@ -112,7 +113,7 @@ impl Client for TestClient {
 /// Helper functions for testing
 impl TestClient {
     /// Wait for a condition to be true (polling-based)
-    pub async fn wait_for<F, Fut>(&self, condition: F, timeout_ms: u64) -> Result<()>
+    pub async fn wait_for<F, Fut>(&self, condition: F, timeout_ms: u64) -> Result<(), Error>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = bool>,
@@ -140,7 +141,7 @@ impl TestClient {
         service_name: &str,
         expected_state: &str,
         timeout_ms: u64,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         self.wait_for(
             || async {
                 // TODO: Query service status
@@ -153,7 +154,7 @@ impl TestClient {
     }
 
     /// Wait for all services to be healthy
-    pub async fn wait_for_healthy(&self, timeout_ms: u64) -> Result<()> {
+    pub async fn wait_for_healthy(&self, timeout_ms: u64) -> Result<(), Error> {
         self.wait_for(
             || async {
                 // TODO: Check all service health

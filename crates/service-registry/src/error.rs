@@ -53,5 +53,3 @@ impl From<tungstenite::Error> for Error {
     }
 }
 
-/// Result type alias
-pub type Result<T> = std::result::Result<T, Error>;

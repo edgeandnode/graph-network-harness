@@ -11,7 +11,8 @@ use std::fmt::Debug;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
 
-use crate::{Error, Result};
+use crate::Error;
+use std::result::Result;
 
 /// Common states for deployment tasks
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -131,19 +132,19 @@ impl TaskContext {
 #[async_trait]
 pub trait TaskStateMachine: Send + Sync {
     /// Check if prerequisites are met
-    async fn check_prerequisites(&mut self, context: &mut TaskContext) -> Result<bool>;
+    async fn check_prerequisites(&mut self, context: &mut TaskContext) -> Result<bool, Error>;
 
     /// Prepare for execution
-    async fn prepare(&mut self, context: &mut TaskContext) -> Result<()>;
+    async fn prepare(&mut self, context: &mut TaskContext) -> Result<(), Error>;
 
     /// Execute the main task
-    async fn execute(&mut self, context: &mut TaskContext) -> Result<()>;
+    async fn execute(&mut self, context: &mut TaskContext) -> Result<(), Error>;
 
     /// Verify the task completed successfully
-    async fn verify(&mut self, context: &mut TaskContext) -> Result<()>;
+    async fn verify(&mut self, context: &mut TaskContext) -> Result<(), Error>;
 
     /// Rollback changes on failure
-    async fn rollback(&mut self, context: &mut TaskContext) -> Result<()>;
+    async fn rollback(&mut self, context: &mut TaskContext) -> Result<(), Error>;
 
     /// Get current state for persistence
     fn get_state(&self) -> TaskExecutionState;
@@ -180,7 +181,7 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
     }
 
     /// Process an event and transition states
-    pub async fn process_event(&mut self, event: TaskEvent) -> Result<TaskExecutionState> {
+    pub async fn process_event(&mut self, event: TaskEvent) -> Result<TaskExecutionState, Error> {
         let current_state = self.inner.get_state();
         info!(
             task = %self.context.name,
@@ -291,7 +292,7 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
     }
 
     /// Run the state machine to completion
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<(), Error> {
         // Start the task
         self.process_event(TaskEvent::Start).await?;
 
@@ -449,12 +450,12 @@ mod tests {
 
     #[async_trait]
     impl TaskStateMachine for TestTask {
-        async fn check_prerequisites(&mut self, context: &mut TaskContext) -> Result<bool> {
+        async fn check_prerequisites(&mut self, context: &mut TaskContext) -> Result<bool, Error> {
             context.set_progress(5, "Checking test prerequisites");
             Ok(self.already_complete)
         }
 
-        async fn prepare(&mut self, context: &mut TaskContext) -> Result<()> {
+        async fn prepare(&mut self, context: &mut TaskContext) -> Result<(), Error> {
             context.set_progress(15, "Preparing test task");
             if self.should_fail && context.retry_count == 0 {
                 return Err(Error::daemon("Preparation failed"));
@@ -462,7 +463,7 @@ mod tests {
             Ok(())
         }
 
-        async fn execute(&mut self, context: &mut TaskContext) -> Result<()> {
+        async fn execute(&mut self, context: &mut TaskContext) -> Result<(), Error> {
             context.set_progress(50, "Executing test task");
             context
                 .data
@@ -470,7 +471,7 @@ mod tests {
             Ok(())
         }
 
-        async fn verify(&mut self, context: &mut TaskContext) -> Result<()> {
+        async fn verify(&mut self, context: &mut TaskContext) -> Result<(), Error> {
             context.set_progress(90, "Verifying test task");
             if context.data.get("test_key").is_some() {
                 Ok(())
@@ -479,7 +480,7 @@ mod tests {
             }
         }
 
-        async fn rollback(&mut self, _context: &mut TaskContext) -> Result<()> {
+        async fn rollback(&mut self, _context: &mut TaskContext) -> Result<(), Error> {
             // Clean up test data
             Ok(())
         }
@@ -537,23 +538,23 @@ mod tests {
 
         #[async_trait]
         impl TaskStateMachine for AlwaysFailTask {
-            async fn check_prerequisites(&mut self, _context: &mut TaskContext) -> Result<bool> {
+            async fn check_prerequisites(&mut self, _context: &mut TaskContext) -> Result<bool, Error> {
                 Ok(false)
             }
 
-            async fn prepare(&mut self, _context: &mut TaskContext) -> Result<()> {
+            async fn prepare(&mut self, _context: &mut TaskContext) -> Result<(), Error> {
                 Err(Error::daemon("Always fails"))
             }
 
-            async fn execute(&mut self, _context: &mut TaskContext) -> Result<()> {
+            async fn execute(&mut self, _context: &mut TaskContext) -> Result<(), Error> {
                 unreachable!()
             }
 
-            async fn verify(&mut self, _context: &mut TaskContext) -> Result<()> {
+            async fn verify(&mut self, _context: &mut TaskContext) -> Result<(), Error> {
                 unreachable!()
             }
 
-            async fn rollback(&mut self, _context: &mut TaskContext) -> Result<()> {
+            async fn rollback(&mut self, _context: &mut TaskContext) -> Result<(), Error> {
                 Ok(())
             }
 

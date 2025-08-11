@@ -8,9 +8,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 use crate::target::AttachedService;
+use std::result::Result;
 
 /// Attacher for connecting to existing local services
 #[derive(Debug, Clone, Copy)]
@@ -40,7 +41,7 @@ impl Attacher for LocalAttacher {
         &self,
         target: &Self::Target,
         config: AttachConfig,
-    ) -> Result<(Self::EventStream, Self::Handle)> {
+    ) -> Result<(Self::EventStream, Self::Handle), Error> {
         // Check if service is running first
         let status = check_service_status(target).await?;
         if status != ServiceStatus::Running {
@@ -106,11 +107,11 @@ impl AttachedHandle for LocalAttachedHandle {
         self.service_name.clone()
     }
 
-    async fn status(&self) -> Result<ServiceStatus> {
+    async fn status(&self) -> Result<ServiceStatus, Error> {
         check_service_status(&self.service).await
     }
 
-    async fn disconnect(&mut self) -> Result<()> {
+    async fn disconnect(&mut self) -> Result<(), Error> {
         // Kill log streaming process if still running
         if let Some(mut child) = self.log_child.take() {
             let _ = child.kill();
@@ -169,7 +170,7 @@ impl Stream for AttachedEventStream {
 }
 
 /// Helper function to check service status
-async fn check_service_status(service: &AttachedService) -> Result<ServiceStatus> {
+async fn check_service_status(service: &AttachedService) -> Result<ServiceStatus, Error> {
     let mut cmd = service.status_command.prepare();
 
     let output = cmd

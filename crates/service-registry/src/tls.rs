@@ -1,8 +1,9 @@
 //! TLS configuration and utilities
 
-use crate::error::{Error, Result};
+use crate::error::Error;
 use std::path::Path;
 use std::sync::Arc;
+use std::result::Result;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, ServerConfig};
@@ -26,7 +27,7 @@ impl TlsServerConfig {
     pub async fn from_files(
         cert_path: impl AsRef<Path>,
         key_path: impl AsRef<Path>,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
 
@@ -81,7 +82,7 @@ impl TlsServerConfig {
 
     /// Create TLS server configuration for testing with self-signed certificate
     #[cfg(test)]
-    pub fn self_signed_for_testing() -> Result<Self> {
+    pub fn self_signed_for_testing() -> Result<Self, Error> {
         use rcgen::generate_simple_self_signed;
 
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
@@ -110,7 +111,7 @@ impl TlsServerConfig {
 
 impl TlsClientConfig {
     /// Create TLS client configuration with default settings (uses system root certificates)
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self, Error> {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
@@ -125,7 +126,7 @@ impl TlsClientConfig {
 
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
     #[cfg(test)]
-    pub fn dangerous_accept_any_cert() -> Result<Self> {
+    pub fn dangerous_accept_any_cert() -> Result<Self, Error> {
         use rustls::DigitallySignedStruct;
         use rustls::client::danger::{
             HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
@@ -191,7 +192,7 @@ impl TlsClientConfig {
     }
 
     /// Create TLS client configuration with custom CA certificate
-    pub async fn with_ca_cert(ca_cert_path: impl AsRef<Path>) -> Result<Self> {
+    pub async fn with_ca_cert(ca_cert_path: impl AsRef<Path>) -> Result<Self, Error> {
         use async_fs::File;
         use futures::io::AsyncReadExt;
 

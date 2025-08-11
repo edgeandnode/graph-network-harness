@@ -1,11 +1,12 @@
 //! WebSocket server implementation
 
 use crate::{
-    error::{Error, Result},
+    error::Error,
     models::*,
     registry::Registry,
     tls::TlsServerConfig,
 };
+use std::result::Result;
 use async_net::{TcpListener, TcpStream};
 use async_tungstenite::{WebSocketStream, accept_async};
 use futures::StreamExt;
@@ -28,7 +29,7 @@ pub struct WsServer {
 
 impl WsServer {
     /// Create a new WebSocket server (plain HTTP)
-    pub async fn new(addr: impl AsRef<str>, registry: Registry) -> Result<Self> {
+    pub async fn new(addr: impl AsRef<str>, registry: Registry) -> Result<Self, Error> {
         let listener = TcpListener::bind(addr.as_ref()).await?;
         info!("WebSocket server listening on {} (no TLS)", addr.as_ref());
 
@@ -44,7 +45,7 @@ impl WsServer {
         addr: impl AsRef<str>,
         registry: Registry,
         tls_config: TlsServerConfig,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let listener = TcpListener::bind(addr.as_ref()).await?;
         info!("WebSocket server listening on {} (with TLS)", addr.as_ref());
 
@@ -56,7 +57,7 @@ impl WsServer {
     }
 
     /// Accept a new connection
-    pub async fn accept(&self) -> Result<ConnectionHandler> {
+    pub async fn accept(&self) -> Result<ConnectionHandler, Error> {
         let (tcp_stream, addr) = self.listener.accept().await?;
 
         // Create appropriate connection handler based on TLS config
@@ -106,7 +107,7 @@ pub enum ConnectionHandler {
 
 impl ConnectionHandler {
     /// Handle the connection
-    pub async fn handle(self) -> Result<()> {
+    pub async fn handle(self) -> Result<(), Error> {
         match self {
             ConnectionHandler::Plain(handler) => handler.handle().await,
             ConnectionHandler::Tls(handler) => handler.handle().await,
@@ -135,7 +136,7 @@ macro_rules! impl_connection_handler {
     ($handler_type:ty) => {
         impl $handler_type {
             /// Handle the connection
-            pub async fn handle(mut self) -> Result<()> {
+            pub async fn handle(mut self) -> Result<(), Error> {
                 info!("Handling connection from {}", self.addr);
 
                 // Send initial state
@@ -175,7 +176,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Send initial registry state
-            async fn send_initial_state(&mut self) -> Result<()> {
+            async fn send_initial_state(&mut self) -> Result<(), Error> {
                 let services = self.registry.list().await;
 
                 let event = WsMessage::Event {
@@ -187,7 +188,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Process a text message
-            async fn process_text_message(&mut self, text: &str) -> Result<()> {
+            async fn process_text_message(&mut self, text: &str) -> Result<(), Error> {
                 let msg: WsMessage = serde_json::from_str(text)?;
 
                 match msg {
@@ -203,7 +204,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Handle a request
-            async fn handle_request(&mut self, id: &str, action: Action, params: serde_json::Value) -> Result<()> {
+            async fn handle_request(&mut self, id: &str, action: Action, params: serde_json::Value) -> Result<(), Error> {
                 debug!("Request {}: {:?}", id, action);
 
                 let response = match action {
@@ -224,13 +225,13 @@ macro_rules! impl_connection_handler {
             }
 
             /// Handle list services request
-            async fn handle_list_services(&self) -> Result<serde_json::Value> {
+            async fn handle_list_services(&self) -> Result<serde_json::Value, Error> {
                 let services = self.registry.list().await;
                 Ok(serde_json::to_value(&services)?)
             }
 
             /// Handle get service request
-            async fn handle_get_service(&self, params: serde_json::Value) -> Result<serde_json::Value> {
+            async fn handle_get_service(&self, params: serde_json::Value) -> Result<serde_json::Value, Error> {
                 #[derive(Deserialize)]
                 struct GetServiceParams {
                     name: String,
@@ -242,7 +243,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Handle service action request
-            async fn handle_service_action(&self, params: serde_json::Value) -> Result<serde_json::Value> {
+            async fn handle_service_action(&self, params: serde_json::Value) -> Result<serde_json::Value, Error> {
                 #[derive(Deserialize)]
                 struct ServiceActionParams {
                     name: String,
@@ -272,13 +273,13 @@ macro_rules! impl_connection_handler {
             }
 
             /// Handle list endpoints request
-            async fn handle_list_endpoints(&self) -> Result<serde_json::Value> {
+            async fn handle_list_endpoints(&self) -> Result<serde_json::Value, Error> {
                 let endpoints = self.registry.list_endpoints().await;
                 Ok(serde_json::to_value(&endpoints)?)
             }
 
             /// Handle subscribe request
-            async fn handle_subscribe(&mut self, params: serde_json::Value) -> Result<serde_json::Value> {
+            async fn handle_subscribe(&mut self, params: serde_json::Value) -> Result<serde_json::Value, Error> {
                 #[derive(Deserialize)]
                 struct SubscribeParams {
                     events: Vec<EventType>,
@@ -300,7 +301,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Handle unsubscribe request
-            async fn handle_unsubscribe(&mut self, params: serde_json::Value) -> Result<serde_json::Value> {
+            async fn handle_unsubscribe(&mut self, params: serde_json::Value) -> Result<serde_json::Value, Error> {
                 #[derive(Deserialize)]
                 struct UnsubscribeParams {
                     events: Vec<EventType>,
@@ -323,7 +324,7 @@ macro_rules! impl_connection_handler {
 
 
             /// Send a response
-            async fn send_response(&mut self, id: &str, data: serde_json::Value) -> Result<()> {
+            async fn send_response(&mut self, id: &str, data: serde_json::Value) -> Result<(), Error> {
                 let msg = WsMessage::Response {
                     id: id.to_string(),
                     data: Some(data),
@@ -334,7 +335,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Send an error response
-            async fn send_error_response(&mut self, id: &str, error: &Error) -> Result<()> {
+            async fn send_error_response(&mut self, id: &str, error: &Error) -> Result<(), Error> {
                 let msg = WsMessage::Response {
                     id: id.to_string(),
                     data: None,
@@ -349,7 +350,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Send a message
-            async fn send_message(&mut self, msg: &WsMessage) -> Result<()> {
+            async fn send_message(&mut self, msg: &WsMessage) -> Result<(), Error> {
                 let json = serde_json::to_string(msg)?;
                 self.ws.send(Message::Text(json.into())).await?;
                 Ok(())
@@ -361,7 +362,7 @@ macro_rules! impl_connection_handler {
             }
 
             /// Send an event if subscribed
-            pub async fn send_event(&mut self, event: EventType, data: serde_json::Value) -> Result<()> {
+            pub async fn send_event(&mut self, event: EventType, data: serde_json::Value) -> Result<(), Error> {
                 if self.is_subscribed(&event) {
                     let msg = WsMessage::Event { event, data };
                     self.send_message(&msg).await?;

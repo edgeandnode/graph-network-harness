@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 use tempfile;
+use std::result::Result;
 
 // Shared state to track execution order
 static EXECUTION_ORDER: AtomicU32 = AtomicU32::new(0);
@@ -111,7 +112,7 @@ impl Service for TestService {
         "Test service for integration testing"
     }
 
-    async fn dispatch_action(&self, _action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn dispatch_action(&self, _action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::bounded(1);
 
         // Mark as started
@@ -129,11 +130,11 @@ impl Service for TestService {
 
 #[async_trait]
 impl ServiceSetup for TestService {
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         Ok(!self.setup_required || self.tracker.lock().unwrap().is_completed())
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error>> {
         if self.setup_required {
             // Simulate setup work
             Timer::after(Duration::from_millis(10)).await;
@@ -145,7 +146,7 @@ impl ServiceSetup for TestService {
 
 #[async_trait]
 impl StatefulService for TestService {
-    async fn get_state(&self) -> Result<ServiceState> {
+    async fn get_state(&self) -> Result<ServiceState, Error> {
         if self.setup_required && !self.is_setup_complete().await? {
             Ok(ServiceState::SetupRequired)
         } else {
@@ -153,7 +154,7 @@ impl StatefulService for TestService {
         }
     }
 
-    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<()> {
+    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<(), Error>> {
         let current = self.get_state().await?;
         if current == target {
             Ok(())
@@ -214,11 +215,11 @@ impl DeploymentTask for TestTask {
         "Test deployment task"
     }
 
-    async fn is_completed(&self) -> Result<bool> {
+    async fn is_completed(&self) -> Result<bool, Error> {
         Ok(self.tracker.lock().unwrap().is_completed())
     }
 
-    async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>> {
+    async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
         let (tx, rx) = async_channel::bounded(10);
         let tracker = self.tracker.clone();
         let name = self.name.clone();
@@ -729,11 +730,11 @@ async fn test_failed_dependency_handling() {
             "Task that always fails"
         }
 
-        async fn is_completed(&self) -> Result<bool> {
+        async fn is_completed(&self) -> Result<bool, Error> {
             Ok(false)
         }
 
-        async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>> {
+        async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
             Err(Error::daemon("Task failed intentionally"))
         }
     }

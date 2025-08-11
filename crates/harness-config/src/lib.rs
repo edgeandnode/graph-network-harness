@@ -38,9 +38,6 @@ pub enum ConfigError {
     ServiceNotFound(String),
 }
 
-/// Result type for configuration operations
-pub type Result<T> = std::result::Result<T, ConfigError>;
-
 /// Root configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {

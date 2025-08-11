@@ -1,12 +1,13 @@
 //! Execution layer implementations for common execution contexts.
 
 use super::ExecutionContext;
-use crate::{Command, error::Result};
+use crate::{Command, error::Error};
+use std::result::Result;
 
 /// Trait for execution layers that can wrap commands
 pub trait ExecutionLayer: Send + Sync + std::fmt::Debug {
     /// Wrap a command with this layer's execution context
-    fn wrap_command(&self, command: Command, context: &ExecutionContext) -> Result<Command>;
+    fn wrap_command(&self, command: Command, context: &ExecutionContext) -> Result<Command, Error>;
 
     /// Get a description of this layer for debugging
     fn description(&self) -> String;
@@ -101,7 +102,11 @@ impl SshLayer {
 }
 
 impl ExecutionLayer for SshLayer {
-    fn wrap_command(&self, mut command: Command, _context: &ExecutionContext) -> Result<Command> {
+    fn wrap_command(
+        &self,
+        mut command: Command,
+        _context: &ExecutionContext,
+    ) -> Result<Command, Error> {
         // Apply SSH layer's own environment variables to the inner command
         for (key, value) in &self.env {
             command.env(key, value);
@@ -246,7 +251,11 @@ impl DockerLayer {
 }
 
 impl ExecutionLayer for DockerLayer {
-    fn wrap_command(&self, command: Command, _context: &ExecutionContext) -> Result<Command> {
+    fn wrap_command(
+        &self,
+        command: Command,
+        _context: &ExecutionContext,
+    ) -> Result<Command, Error> {
         let mut docker_cmd = Command::new("docker");
         docker_cmd.arg("exec");
 
@@ -327,7 +336,11 @@ impl Default for LocalLayer {
 }
 
 impl ExecutionLayer for LocalLayer {
-    fn wrap_command(&self, mut command: Command, _context: &ExecutionContext) -> Result<Command> {
+    fn wrap_command(
+        &self,
+        mut command: Command,
+        _context: &ExecutionContext,
+    ) -> Result<Command, Error> {
         // Apply environment variables from this layer
         for (key, value) in &self.env {
             command.env(key, value);
@@ -347,7 +360,7 @@ impl ExecutionLayer for LocalLayer {
 }
 
 /// Convert a Command to a shell-escaped string
-fn command_to_shell_string(command: &Command) -> Result<String> {
+fn command_to_shell_string(command: &Command) -> Result<String, Error> {
     let program = command.get_program().to_string_lossy();
     let args: Vec<String> = command
         .get_args()

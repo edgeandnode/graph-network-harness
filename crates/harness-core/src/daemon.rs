@@ -17,16 +17,17 @@ use tracing::{info, warn};
 use crate::action::{Action, ActionRegistry};
 use crate::service::ServiceStack;
 use crate::task::TaskStack;
-use crate::{Error, Registry, Result, ServiceManager};
+use crate::{Error, Registry, ServiceManager};
+use std::result::Result;
 
 /// Core daemon trait that all harness daemons must implement
 #[async_trait]
 pub trait Daemon: Action + Send + Sync {
     /// Start the daemon
-    async fn start(&self) -> Result<()>;
+    async fn start(&self) -> Result<(), Error>;
 
     /// Stop the daemon gracefully
-    async fn stop(&self) -> Result<()>;
+    async fn stop(&self) -> Result<(), Error>;
 
     /// Get the WebSocket endpoint this daemon listens on
     fn endpoint(&self) -> SocketAddr;
@@ -97,7 +98,7 @@ impl BaseDaemon {
     }
 
     /// Launch all services in the stack in dependency order
-    pub async fn launch_stack(&self) -> Result<()> {
+    pub async fn launch_stack(&self) -> Result<(), Error> {
         let config = self
             .stack_config
             .as_ref()
@@ -168,7 +169,7 @@ impl BaseDaemon {
     }
 
     /// Execute a task
-    async fn execute_task(&self, task_name: &str) -> Result<()> {
+    async fn execute_task(&self, task_name: &str) -> Result<(), Error> {
         use async_runtime_compat::smol::SmolSpawner;
 
         info!("Executing task: {}", task_name);
@@ -235,7 +236,7 @@ impl BaseDaemon {
     }
 
     /// Wait for a service to become healthy
-    async fn wait_for_service_health(&self, service_name: &str, timeout: Duration) -> Result<()> {
+    async fn wait_for_service_health(&self, service_name: &str, timeout: Duration) -> Result<(), Error> {
         info!(
             "Waiting for service {} to become healthy (timeout: {:?})",
             service_name, timeout
@@ -286,7 +287,7 @@ impl Action for BaseDaemon {
 
 #[async_trait]
 impl Daemon for BaseDaemon {
-    async fn start(&self) -> Result<()> {
+    async fn start(&self) -> Result<(), Error> {
         info!("Starting base daemon on {}", self.endpoint);
 
         // Mark as running
@@ -303,7 +304,7 @@ impl Daemon for BaseDaemon {
         Ok(())
     }
 
-    async fn stop(&self) -> Result<()> {
+    async fn stop(&self) -> Result<(), Error> {
         info!("Stopping base daemon");
 
         // Mark as stopped
@@ -405,10 +406,10 @@ impl DaemonBuilder {
         name: impl Into<String>,
         description: impl Into<String>,
         action: F,
-    ) -> Result<Self>
+    ) -> Result<Self, Error>
     where
         F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<Value>> + Send + 'static,
+        Fut: std::future::Future<Output = Result<Value, Error>> + Send + 'static,
     {
         self.action_registry
             .register_simple(name, description, action)?;
@@ -416,7 +417,7 @@ impl DaemonBuilder {
     }
 
     /// Build the daemon
-    pub async fn build(self) -> Result<BaseDaemon> {
+    pub async fn build(self) -> Result<BaseDaemon, Error> {
         info!("Building daemon with endpoint {}", self.endpoint);
 
         // Validate configuration if provided
@@ -467,7 +468,7 @@ impl DaemonBuilder {
     }
 
     /// Validate configuration against registered services and tasks
-    fn validate_config(&self, config: &Value) -> Result<()> {
+    fn validate_config(&self, config: &Value) -> Result<(), Error> {
         let services = config.get("services").and_then(|s| s.as_object());
 
         // Validate services
@@ -537,7 +538,7 @@ impl DaemonBuilder {
         dep: &Value,
         services: &serde_json::Map<String, Value>,
         config: &Value,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         // Check if it's a service dependency
         if let Some(service_name) = dep.get("service").and_then(|s| s.as_str()) {
             if !services.contains_key(service_name) {
@@ -609,7 +610,7 @@ mod tests {
         async fn dispatch_action(
             &self,
             _action: Self::Action,
-        ) -> Result<async_channel::Receiver<Self::Event>> {
+        ) -> Result<async_channel::Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(1);
             tx.send(TestEvent).await.unwrap();
             Ok(rx)
@@ -636,14 +637,14 @@ mod tests {
             "Test task"
         }
 
-        async fn is_completed(&self) -> Result<bool> {
+        async fn is_completed(&self) -> Result<bool, Error> {
             Ok(true)
         }
 
         async fn execute(
             &self,
             _action: Self::Action,
-        ) -> Result<async_channel::Receiver<Self::Event>> {
+        ) -> Result<async_channel::Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(1);
             tx.send(TestEvent).await.unwrap();
             Ok(rx)

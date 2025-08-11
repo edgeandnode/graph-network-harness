@@ -50,7 +50,7 @@ pub mod websocket;
 
 pub use client::{WsClient, WsClientHandle};
 pub use config::{ClientConfig, ClientTlsConfig, RegistryConfig, ServerConfig, TlsConfig};
-pub use error::{Error, Result};
+pub use error::Error;
 pub use models::*;
 pub use registry::Registry;
 pub use tls::{TlsClientConfig, TlsServerConfig};
@@ -59,7 +59,7 @@ pub use websocket::{ConnectionHandler, WsServer};
 /// Re-export key types for convenience
 pub mod prelude {
     pub use crate::{
-        Endpoint, Error, ExecutionInfo, Location, Registry, Result, ServiceEntry, ServiceState,
+        Endpoint, Error, ExecutionInfo, Location, Registry, ServiceEntry, ServiceState,
         WsServer,
     };
 }

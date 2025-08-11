@@ -4,7 +4,7 @@
 //! - Environment variables: ${VAR} and ${VAR:-default}
 //! - Service references: ${service.ip}, ${service.port}, ${service.host}
 
-use crate::{Config, ConfigError, Result, Service};
+use crate::{Config, ConfigError, Service};
 use nom::{
     IResult, Parser,
     branch::alt,
@@ -15,6 +15,7 @@ use nom::{
     sequence::{pair, separated_pair},
 };
 use std::collections::{HashMap, HashSet};
+use std::result::Result;
 
 /// Context for resolving variables and references
 #[derive(Debug, Clone)]
@@ -150,7 +151,7 @@ fn parse_service_ref(input: &str) -> IResult<&str, Variable> {
 }
 
 /// Parse a variable expression (the part inside ${...})
-fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
+fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable, ConfigError>> {
     // First check if it contains a dot - if so, it must be a service reference
     if input.contains('.') {
         // If it has a dot, try to parse as service reference
@@ -204,7 +205,7 @@ fn parse_variable_expr(input: &str) -> IResult<&str, Result<Variable>> {
 }
 
 /// Parse a complete variable (${...})
-pub fn parse_variable(input: &str) -> IResult<&str, Result<Variable>> {
+pub fn parse_variable(input: &str) -> IResult<&str, Result<Variable, ConfigError>> {
     let (input, _) = tag("${")(input)?;
     let (input, content) = take_until("}")(input)?;
     let (input, _) = tag("}")(input)?;
@@ -221,7 +222,7 @@ pub fn parse_variable(input: &str) -> IResult<&str, Result<Variable>> {
 }
 
 /// Find all variables in a string
-pub fn find_variables(input: &str) -> Vec<Result<(usize, usize, Variable)>> {
+pub fn find_variables(input: &str) -> Vec<Result<(usize, usize, Variable), ConfigError>> {
     let mut results = Vec::new();
     let mut remaining = input;
     let mut pos = 0;
@@ -256,7 +257,7 @@ pub fn find_variables(input: &str) -> Vec<Result<(usize, usize, Variable)>> {
 }
 
 /// Resolve all variables in a string
-pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String> {
+pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String, ConfigError> {
     let variables = find_variables(input);
     let mut result = String::new();
     let mut last_end = 0;
@@ -326,7 +327,7 @@ pub fn resolve_string(input: &str, context: &ResolutionContext) -> Result<String
 pub fn resolve_service_env(
     service: &Service,
     context: &ResolutionContext,
-) -> Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ConfigError> {
     let mut resolved_env = HashMap::new();
 
     for (key, value) in &service.env {
@@ -338,7 +339,9 @@ pub fn resolve_service_env(
 }
 
 /// Find all variable references in a configuration
-pub fn find_all_references(config: &Config) -> Result<(HashSet<String>, HashSet<String>)> {
+pub fn find_all_references(
+    config: &Config,
+) -> Result<(HashSet<String>, HashSet<String>), ConfigError> {
     let mut env_vars = HashSet::new();
     let mut service_refs = HashSet::new();
 
@@ -365,7 +368,7 @@ pub fn find_all_references(config: &Config) -> Result<(HashSet<String>, HashSet<
 }
 
 /// Validate that all references can be resolved
-pub fn validate_references(config: &Config) -> Result<()> {
+pub fn validate_references(config: &Config) -> Result<(), ConfigError> {
     let (env_vars, service_refs) = find_all_references(config)?;
 
     // Check service references

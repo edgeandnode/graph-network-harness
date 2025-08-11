@@ -16,7 +16,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
-use crate::{Error, Result};
+use crate::Error;
+use std::result::Result;
 
 /// Trait for services that can perform actions
 ///
@@ -51,7 +52,7 @@ pub trait Service: Send + Sync + 'static {
     }
 
     /// Execute an action, returning a stream of events
-    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>>;
+    async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error>;
 }
 
 /// Service state tracking the lifecycle and setup status
@@ -100,19 +101,19 @@ pub trait ServiceSetup: Service {
     ///
     /// This enables idempotency - setup operations can be safely retried
     /// without causing duplicate work or conflicts.
-    async fn is_setup_complete(&self) -> Result<bool>;
+    async fn is_setup_complete(&self) -> Result<bool, Error>;
 
     /// Perform the one-time setup operations for this service
     ///
     /// This method should be idempotent and safe to call multiple times.
     /// It should check `is_setup_complete()` before performing work.
-    async fn perform_setup(&self) -> Result<()>;
+    async fn perform_setup(&self) -> Result<(), Error>;
 
     /// Validate that setup completed successfully
     ///
     /// This method can perform additional checks to ensure that setup
     /// operations completed correctly (e.g., contract address validation).
-    async fn validate_setup(&self) -> Result<()> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -124,7 +125,7 @@ pub trait ServiceSetup: Service {
 #[async_trait]
 pub trait StatefulService: Service {
     /// Get the current state of the service
-    async fn get_state(&self) -> Result<ServiceState>;
+    async fn get_state(&self) -> Result<ServiceState, Error>;
 
     /// Wait for the service to reach a target state with timeout
     ///
@@ -133,12 +134,12 @@ pub trait StatefulService: Service {
     ///
     /// Note: The implementation should provide appropriate delays between checks
     /// using the runtime-specific timer mechanism.
-    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<()>;
+    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error>;
 
     /// Default implementation using polling without delays
     ///
     /// Services should override this with runtime-specific delay mechanisms
-    async fn poll_for_state(&self, target: ServiceState, timeout: Duration) -> Result<()> {
+    async fn poll_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
         let start = std::time::Instant::now();
 
         while start.elapsed() < timeout {
@@ -223,7 +224,7 @@ where
         &self,
         _action_name: &str,
         input: Value,
-    ) -> Result<Receiver<S::Event>> {
+    ) -> Result<Receiver<S::Event>, Error> {
         // Deserialize JSON to typed action
         let action: S::Action = serde_json::from_value(input)
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
@@ -258,15 +259,15 @@ pub trait JsonService: Send + Sync {
         &self,
         action_name: &str,
         input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)>;
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error>;
 
     /// Get the current state of the service
-    async fn get_state(&self) -> Result<ServiceState> {
+    async fn get_state(&self) -> Result<ServiceState, Error> {
         Ok(ServiceState::Running)
     }
 
     /// Wait for the service to reach a target state with timeout
-    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<()> {
+    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
         let current = self.get_state().await?;
         if current == target {
             Ok(())
@@ -286,12 +287,12 @@ pub trait JsonService: Send + Sync {
     }
 
     /// Perform setup if this service implements ServiceSetup
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         Ok(())
     }
 
     /// Check if setup is complete
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         Ok(true)
     }
 }
@@ -320,7 +321,7 @@ where
         &self,
         action_name: &str,
         input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         // Get typed event receiver
         let event_rx = self.dispatch_json(action_name, input).await?;
 
@@ -339,13 +340,13 @@ where
         Ok((rx, Box::pin(converter)))
     }
 
-    async fn get_state(&self) -> Result<ServiceState> {
+    async fn get_state(&self) -> Result<ServiceState, Error> {
         // Default to Running state - services that need different behavior
         // should implement StatefulService
         Ok(ServiceState::Running)
     }
 
-    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<()> {
+    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<(), Error> {
         // For now, just check if we're already in the target state
         let current = self.get_state().await?;
         if current == target {
@@ -420,7 +421,7 @@ where
         &self,
         _action_name: &str,
         input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         // Deserialize JSON to typed action
         let action: S::Action = serde_json::from_value(input)
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
@@ -443,11 +444,11 @@ where
         Ok((rx, Box::pin(converter)))
     }
 
-    async fn get_state(&self) -> Result<ServiceState> {
+    async fn get_state(&self) -> Result<ServiceState, Error> {
         self.inner.get_state().await
     }
 
-    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<()> {
+    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
         self.inner.wait_for_state(target, timeout).await
     }
 
@@ -455,11 +456,11 @@ where
         true
     }
 
-    async fn perform_setup(&self) -> Result<()> {
+    async fn perform_setup(&self) -> Result<(), Error> {
         self.inner.perform_setup().await
     }
 
-    async fn is_setup_complete(&self) -> Result<bool> {
+    async fn is_setup_complete(&self) -> Result<bool, Error> {
         self.inner.is_setup_complete().await
     }
 }
@@ -485,7 +486,7 @@ impl ServiceStack {
     /// Register a service in the stack
     ///
     /// The service must implement JsonSchema for its Action and Event types.
-    pub fn register<S>(&mut self, instance_name: String, service: S) -> Result<()>
+    pub fn register<S>(&mut self, instance_name: String, service: S) -> Result<(), Error>
     where
         S: Service + 'static,
         S::Action: JsonSchema,
@@ -506,7 +507,7 @@ impl ServiceStack {
     }
 
     /// Register a stateful service with setup support
-    pub fn register_stateful<S>(&mut self, instance_name: String, service: S) -> Result<()>
+    pub fn register_stateful<S>(&mut self, instance_name: String, service: S) -> Result<(), Error>
     where
         S: Service + StatefulService + ServiceSetup + 'static,
         S::Action: JsonSchema,
@@ -564,7 +565,7 @@ impl ServiceStack {
         action_name: &str,
         input: Value,
         spawner: &Sp,
-    ) -> Result<Receiver<Value>> {
+    ) -> Result<Receiver<Value>, Error> {
         let service = self.get(instance_name).ok_or_else(|| {
             Error::service_type(format!("Service instance '{instance_name}' not found"))
         })?;
@@ -620,7 +621,7 @@ mod tests {
             "A test service"
         }
 
-        async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+        async fn dispatch_action(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(1);
             tx.send(TestEvent {
                 response: format!("Echo: {}", action.message),

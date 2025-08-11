@@ -3,9 +3,10 @@
 use crate::{
     backend::RegistryBackend,
     backend::memory::MemoryBackend,
-    error::{Error, Result},
+    error::Error,
     models::*,
 };
+use std::result::Result;
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -49,7 +50,7 @@ impl Registry {
     }
 
     /// Register a new service
-    pub async fn register(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>> {
+    pub async fn register(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
         // Check if service already exists
         if self.backend.get_service(&entry.name).await?.is_some() {
             return Err(Error::ServiceExists(entry.name.clone()));
@@ -75,7 +76,7 @@ impl Registry {
     }
 
     /// Subscribe to events
-    pub async fn subscribe(&self, addr: SocketAddr, events: Vec<EventType>) -> Result<()> {
+    pub async fn subscribe(&self, addr: SocketAddr, events: Vec<EventType>) -> Result<(), Error> {
         let mut subscribers = self.subscribers.lock().await;
         let subscription = EventSubscription {
             events: events.into_iter().collect(),
@@ -87,7 +88,7 @@ impl Registry {
     }
 
     /// Unsubscribe from events
-    pub async fn unsubscribe(&self, addr: SocketAddr, events: Vec<EventType>) -> Result<()> {
+    pub async fn unsubscribe(&self, addr: SocketAddr, events: Vec<EventType>) -> Result<(), Error> {
         let mut subscribers = self.subscribers.lock().await;
         if let Some(subscription) = subscribers.get_mut(&addr) {
             for event in events {
@@ -102,7 +103,7 @@ impl Registry {
     }
 
     /// Remove all subscriptions for an address
-    pub async fn remove_subscriber(&self, addr: SocketAddr) -> Result<()> {
+    pub async fn remove_subscriber(&self, addr: SocketAddr) -> Result<(), Error> {
         let mut subscribers = self.subscribers.lock().await;
         subscribers.remove(&addr);
         Ok(())
@@ -131,7 +132,7 @@ impl Registry {
     }
 
     /// Get a service by name
-    pub async fn get(&self, name: &str) -> Result<ServiceEntry> {
+    pub async fn get(&self, name: &str) -> Result<ServiceEntry, Error> {
         self.backend
             .get_service(name)
             .await?
@@ -148,7 +149,7 @@ impl Registry {
         &self,
         name: &str,
         new_state: ServiceState,
-    ) -> Result<(ServiceState, Vec<(SocketAddr, WsMessage)>)> {
+    ) -> Result<(ServiceState, Vec<(SocketAddr, WsMessage)>), Error> {
         // Get current service
         let mut entry = self.get(name).await?;
         let old_state = entry.state;
@@ -187,7 +188,7 @@ impl Registry {
         &self,
         name: &str,
         endpoints: Vec<Endpoint>,
-    ) -> Result<Vec<(SocketAddr, WsMessage)>> {
+    ) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
         // Get current service
         let mut entry = self.get(name).await?;
         entry.endpoints = endpoints.clone();
@@ -226,7 +227,7 @@ impl Registry {
     pub async fn deregister(
         &self,
         name: &str,
-    ) -> Result<(ServiceEntry, Vec<(SocketAddr, WsMessage)>)> {
+    ) -> Result<(ServiceEntry, Vec<(SocketAddr, WsMessage)>), Error> {
         // Remove service
         let entry = self
             .backend
@@ -248,7 +249,7 @@ impl Registry {
     }
 
     /// Add or update a service
-    pub async fn add_or_update(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>> {
+    pub async fn add_or_update(&self, entry: ServiceEntry) -> Result<Vec<(SocketAddr, WsMessage)>, Error> {
         info!("Adding/updating service: {} v{}", entry.name, entry.version);
 
         // Check if service exists
@@ -277,7 +278,7 @@ impl Registry {
     }
 
     /// Persist registry to disk (no-op if using persistent backend)
-    pub async fn persist(&self) -> Result<()> {
+    pub async fn persist(&self) -> Result<(), Error> {
         // Backend handles its own persistence
         Ok(())
     }

@@ -1,29 +1,30 @@
 //! Configuration parser with environment variable substitution
 
 use crate::{
-    Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Result, Service, ServiceType,
+    Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Service, ServiceType,
     resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
 use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
 use std::collections::HashMap;
 use std::path::Path;
+use std::result::Result;
 
 /// Parse a YAML configuration file
-pub fn parse_file(path: impl AsRef<Path>) -> Result<Config> {
+pub fn parse_file(path: impl AsRef<Path>) -> std::result::Result<Config, ConfigError> {
     let content = std::fs::read_to_string(path)?;
     parse_str(&content)
 }
 
 /// Parse YAML configuration from a string
-pub fn parse_str(content: &str) -> Result<Config> {
+pub fn parse_str(content: &str) -> Result<Config, ConfigError> {
     let config: Config = serde_yaml::from_str(content)?;
     validate_config(&config)?;
     Ok(config)
 }
 
 /// Validate configuration
-fn validate_config(config: &Config) -> Result<()> {
+fn validate_config(config: &Config) -> Result<(), ConfigError> {
     // Check version
     if config.version != "1.0" {
         return Err(ConfigError::ValidationError(format!(
@@ -58,7 +59,7 @@ fn validate_config(config: &Config) -> Result<()> {
 }
 
 /// Substitute environment variables in a string
-pub fn substitute_env_vars(input: &str) -> Result<String> {
+pub fn substitute_env_vars(input: &str) -> Result<String, ConfigError> {
     let re = Regex::new(r"\$\{([^}]+)\}").unwrap();
     let mut result = input.to_string();
     let mut errors = Vec::new();
@@ -102,7 +103,7 @@ pub fn substitute_env_vars(input: &str) -> Result<String> {
 pub fn substitute_service_refs(
     input: &str,
     service_ips: &HashMap<String, String>,
-) -> Result<String> {
+) -> Result<String, ConfigError> {
     let re = Regex::new(r"\$\{([^}]+)\.ip\}").unwrap();
     let mut result = input.to_string();
 
@@ -124,7 +125,7 @@ pub fn substitute_service_refs(
 pub fn process_service_env(
     service: &Service,
     service_ips: &HashMap<String, String>,
-) -> Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ConfigError> {
     let mut processed_env = HashMap::new();
 
     for (key, value) in &service.env {
@@ -139,7 +140,10 @@ pub fn process_service_env(
 }
 
 /// Convert configuration to orchestrator types
-pub fn convert_to_orchestrator(config: &Config, service_name: &str) -> Result<ServiceConfig> {
+pub fn convert_to_orchestrator(
+    config: &Config,
+    service_name: &str,
+) -> Result<ServiceConfig, ConfigError> {
     convert_to_orchestrator_with_context(config, service_name, None)
 }
 
@@ -148,7 +152,7 @@ pub fn convert_to_orchestrator_with_context(
     config: &Config,
     service_name: &str,
     context: Option<&ResolutionContext>,
-) -> Result<ServiceConfig> {
+) -> Result<ServiceConfig, ConfigError> {
     let service = config
         .services
         .get(service_name)

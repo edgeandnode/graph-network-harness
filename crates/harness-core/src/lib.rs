@@ -15,14 +15,14 @@ pub mod task;
 pub mod task_state_machine;
 pub mod typed_action;
 
-pub use error::{Error, Result};
+pub use error::Error;
 
 /// Convenience prelude for harness-core users
 pub mod prelude {
     pub use crate::action::{Action, ActionRegistry};
     pub use crate::client::TestClient;
     pub use crate::daemon::{BaseDaemon, Daemon};
-    pub use crate::error::{Error, Result};
+    pub use crate::error::Error;
     pub use crate::service::{
         ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState,
         StatefulService,

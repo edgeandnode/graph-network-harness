@@ -6,11 +6,12 @@
 //! - WireGuard configuration generation
 //! - Network path optimization
 
-use crate::error::Result;
+use crate::error::Error;
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::result::Result;
 
 pub mod ip_allocator;
 pub mod resolver;
@@ -97,7 +98,7 @@ pub struct NetworkManager {
 
 impl NetworkManager {
     /// Create a new network manager
-    pub fn new(config: NetworkConfig) -> Result<Self> {
+    pub fn new(config: NetworkConfig) -> Result<Self, Error> {
         let ip_allocator = IpAllocator::new(config.wireguard_subnet)?;
         let topology = NetworkTopology::new();
         let resolver = ServiceResolver::new();
@@ -111,13 +112,13 @@ impl NetworkManager {
     }
 
     /// Discover network topology from current services
-    pub async fn discover_topology(&mut self) -> Result<&NetworkTopology> {
+    pub async fn discover_topology(&mut self) -> Result<&NetworkTopology, Error> {
         self.topology.discover(&self.config).await?;
         Ok(&self.topology)
     }
 
     /// Register a service with its network information
-    pub async fn register_service(&mut self, service: ServiceNetwork) -> Result<()> {
+    pub async fn register_service(&mut self, service: ServiceNetwork) -> Result<(), Error> {
         // Allocate WireGuard IP if needed
         if matches!(service.location, NetworkLocation::WireGuard { .. })
             && service.wireguard_ip.is_none()
@@ -132,7 +133,7 @@ impl NetworkManager {
     }
 
     /// Resolve the best IP address for service-to-service communication
-    pub fn resolve_service_ip(&self, from_service: &str, to_service: &str) -> Result<IpAddr> {
+    pub fn resolve_service_ip(&self, from_service: &str, to_service: &str) -> Result<IpAddr, Error> {
         self.resolver
             .resolve(from_service, to_service, &self.topology)
     }
@@ -148,7 +149,7 @@ impl NetworkManager {
     }
 
     /// Generate environment variables for a service
-    pub fn generate_environment(&self, service_name: &str) -> Result<HashMap<String, String>> {
+    pub fn generate_environment(&self, service_name: &str) -> Result<HashMap<String, String>, Error> {
         let mut env = HashMap::new();
 
         // Add all service addresses

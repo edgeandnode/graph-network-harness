@@ -8,12 +8,13 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::command::Command;
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 use crate::launcher::Launcher;
 use crate::process::{ExitStatus, ProcessHandle};
 use crate::stdin::StdinHandle;
 use crate::target::Target;
+use std::result::Result;
 
 /// Launcher for executing processes locally
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +50,7 @@ impl Launcher for LocalLauncher {
         &self,
         target: &Self::Target,
         mut command: Command,
-    ) -> Result<(Self::EventStream, Self::Handle)> {
+    ) -> Result<(Self::EventStream, Self::Handle), Error> {
         match target {
             Target::Command | Target::ManagedProcess(_) => {
                 // Take stdin channel if provided
@@ -114,7 +115,7 @@ impl ProcessHandle for LocalProcessHandle {
         Some(self.child.id())
     }
 
-    async fn wait(&mut self) -> Result<ExitStatus> {
+    async fn wait(&mut self) -> Result<ExitStatus, Error> {
         let status = self
             .child
             .status()
@@ -131,7 +132,7 @@ impl ProcessHandle for LocalProcessHandle {
         })
     }
 
-    async fn terminate(&mut self) -> Result<()> {
+    async fn terminate(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -152,7 +153,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn kill(&mut self) -> Result<()> {
+    async fn kill(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -173,7 +174,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn interrupt(&mut self) -> Result<()> {
+    async fn interrupt(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -193,7 +194,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn reload(&mut self) -> Result<()> {
+    async fn reload(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};

@@ -1,9 +1,10 @@
 //! IP address allocation for WireGuard mesh network
 
-use crate::error::{Error, Result};
+use crate::error::Error;
 use ipnet::IpNet;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::result::Result;
 
 /// IP address allocator for the WireGuard subnet
 pub struct IpAllocator {
@@ -22,7 +23,7 @@ pub struct IpAllocator {
 
 impl IpAllocator {
     /// Create a new IP allocator for the given subnet
-    pub fn new(subnet: IpNet) -> Result<Self> {
+    pub fn new(subnet: IpNet) -> Result<Self, Error> {
         let mut allocator = Self {
             subnet,
             allocations: HashMap::new(),
@@ -37,7 +38,7 @@ impl IpAllocator {
     }
 
     /// Reserve the gateway IP (.1)
-    fn reserve_gateway(&mut self) -> Result<()> {
+    fn reserve_gateway(&mut self) -> Result<(), Error> {
         let gateway_ip = match self.subnet {
             IpNet::V4(net) => {
                 let base = u32::from(net.network());
@@ -55,7 +56,7 @@ impl IpAllocator {
     }
 
     /// Allocate an IP address for a service
-    pub fn allocate(&mut self, service_name: &str) -> Result<IpAddr> {
+    pub fn allocate(&mut self, service_name: &str) -> Result<IpAddr, Error> {
         // Check if already allocated
         if let Some(&ip) = self.allocations.get(service_name) {
             return Ok(ip);
@@ -73,7 +74,7 @@ impl IpAllocator {
     }
 
     /// Allocate a specific IP address for a service
-    pub fn allocate_specific(&mut self, service_name: &str, ip: IpAddr) -> Result<()> {
+    pub fn allocate_specific(&mut self, service_name: &str, ip: IpAddr) -> Result<(), Error> {
         // Check if IP is in subnet
         if !self.subnet.contains(&ip) {
             return Err(Error::Operation(format!(
@@ -123,7 +124,7 @@ impl IpAllocator {
     }
 
     /// Find the next available IP address
-    fn find_next_available(&mut self) -> Result<IpAddr> {
+    fn find_next_available(&mut self) -> Result<IpAddr, Error> {
         // Always start from the beginning (.2) to reuse released IPs
         let start_ip = match self.subnet {
             IpNet::V4(net) => {
@@ -154,7 +155,7 @@ impl IpAllocator {
     }
 
     /// Increment an IP address
-    fn increment_ip(&self, ip: IpAddr) -> Result<IpAddr> {
+    fn increment_ip(&self, ip: IpAddr) -> Result<IpAddr, Error> {
         match ip {
             IpAddr::V4(v4) => {
                 let val = u32::from(v4);

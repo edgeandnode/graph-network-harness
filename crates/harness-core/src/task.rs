@@ -16,7 +16,11 @@ use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::{Error, Result};
+use crate::Error;
+use std::result::Result;
+
+#[cfg(test)]
+use command_executor::event::ProcessEventType;
 
 /// Trait for deployment tasks that perform one-time setup operations
 ///
@@ -45,13 +49,13 @@ pub trait DeploymentTask: Send + Sync + 'static {
     /// Check if the task has already been completed (for idempotency)
     ///
     /// This enables tasks to be safely retried without causing duplicate work.
-    async fn is_completed(&self) -> Result<bool>;
+    async fn is_completed(&self) -> Result<bool, Error>;
 
     /// Execute the task action, returning a stream of events
     ///
     /// The task should check `is_completed()` before performing work to
     /// ensure idempotency.
-    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>>;
+    async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error>;
 
     /// Process command executor events into task-specific events
     ///
@@ -142,7 +146,7 @@ where
     }
 
     /// Execute a task using JSON input, returning typed events
-    pub async fn execute_json(&self, input: Value) -> Result<Receiver<T::Event>> {
+    pub async fn execute_json(&self, input: Value) -> Result<Receiver<T::Event>, Error> {
         // Deserialize JSON to typed action
         let action: T::Action = serde_json::from_value(input)
             .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
@@ -162,14 +166,14 @@ pub trait JsonTask: Send + Sync {
     fn description(&self) -> &str;
 
     /// Check if the task is completed
-    async fn is_completed(&self) -> Result<bool>;
+    async fn is_completed(&self) -> Result<bool, Error>;
 
     /// Execute the task using JSON input
     /// Returns a receiver for JSON events and a future that must be spawned to perform the conversion
     async fn execute_json(
         &self,
         input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)>;
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error>;
 
     /// Get the action schema
     fn action_schema(&self) -> &Value;
@@ -194,14 +198,14 @@ where
         self.inner.description()
     }
 
-    async fn is_completed(&self) -> Result<bool> {
+    async fn is_completed(&self) -> Result<bool, Error> {
         self.inner.is_completed().await
     }
 
     async fn execute_json(
         &self,
         input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>)> {
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         // Get typed event receiver
         let event_rx = self.execute_json(input).await?;
 
@@ -250,7 +254,7 @@ impl TaskStack {
     /// Register a task in the stack
     ///
     /// The task must implement JsonSchema for its Action and Event types.
-    pub fn register<T>(&mut self, instance_name: String, task: T) -> Result<()>
+    pub fn register<T>(&mut self, instance_name: String, task: T) -> Result<(), Error>
     where
         T: DeploymentTask + 'static,
         T::Action: JsonSchema,
@@ -294,7 +298,7 @@ impl TaskStack {
         instance_name: &str,
         input: Value,
         spawner: &S,
-    ) -> Result<Receiver<Value>> {
+    ) -> Result<Receiver<Value>, Error> {
         let task = self.get(instance_name).ok_or_else(|| {
             Error::service_type(format!("Task instance '{instance_name}' not found"))
         })?;
@@ -308,7 +312,7 @@ impl TaskStack {
     }
 
     /// Check if a task is completed
-    pub async fn is_completed(&self, instance_name: &str) -> Result<bool> {
+    pub async fn is_completed(&self, instance_name: &str) -> Result<bool, Error> {
         let task = self.get(instance_name).ok_or_else(|| {
             Error::service_type(format!("Task instance '{instance_name}' not found"))
         })?;
@@ -371,11 +375,11 @@ mod tests {
             "A test deployment task"
         }
 
-        async fn is_completed(&self) -> Result<bool> {
+        async fn is_completed(&self) -> Result<bool, Error> {
             Ok(self.completed.load(std::sync::atomic::Ordering::SeqCst))
         }
 
-        async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>> {
+        async fn execute(&self, action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(10);
             let completed = self.completed.clone();
 
@@ -518,11 +522,11 @@ mod tests {
             "Task that translates process events"
         }
 
-        async fn is_completed(&self) -> Result<bool> {
+        async fn is_completed(&self) -> Result<bool, Error> {
             Ok(self.completed.load(std::sync::atomic::Ordering::SeqCst))
         }
 
-        async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>> {
+        async fn execute(&self, _action: Self::Action) -> Result<Receiver<Self::Event>, Error> {
             let (tx, rx) = async_channel::bounded(10);
             let completed = self.completed.clone();
 

@@ -92,7 +92,7 @@ impl GraphTestDaemon {
                             .and_then(|s| s.parse::<u64>().ok())
                             .unwrap_or(31337);
 
-                        // Extract port from args if it's a process target
+                        // Extract port from args based on target type
                         let port = match &service_config.orchestration.target {
                             ServiceTarget::Process { args, .. } => args
                                 .iter()
@@ -102,6 +102,16 @@ impl GraphTestDaemon {
                                 .unwrap_or(8545),
                             ServiceTarget::Docker { ports, .. } => {
                                 ports.first().cloned().unwrap_or(8545)
+                            }
+                            ServiceTarget::Layered { command, .. } => {
+                                // For layered targets, extract from command args
+                                command
+                                    .args
+                                    .iter()
+                                    .position(|arg| arg == "--port")
+                                    .and_then(|pos| command.args.get(pos + 1))
+                                    .and_then(|port_str| port_str.parse::<u16>().ok())
+                                    .unwrap_or(8545)
                             }
                             _ => 8545,
                         };
@@ -126,6 +136,7 @@ impl GraphTestDaemon {
                             ServiceTarget::Docker { ports, .. } => {
                                 ports.first().cloned().unwrap_or(5432)
                             }
+                            ServiceTarget::Layered { .. } => 5432, // Default port for layered
                             _ => 5432,
                         };
 
@@ -144,6 +155,7 @@ impl GraphTestDaemon {
                                 let gateway_port = ports.get(1).cloned().unwrap_or(8080);
                                 (api_port, gateway_port)
                             }
+                            ServiceTarget::Layered { .. } => (5001, 8080), // Default ports for layered
                             _ => (5001, 8080),
                         };
 

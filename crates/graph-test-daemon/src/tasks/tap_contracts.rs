@@ -4,7 +4,9 @@
 //! contracts with proper verification and error recovery using the statig crate.
 
 use async_trait::async_trait;
-use command_executor::{Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher};
+use command_executor::{
+    Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher,
+};
 use futures::StreamExt;
 use harness_core::{Error, Result};
 use serde::{Deserialize, Serialize};
@@ -138,37 +140,45 @@ impl TapContractsDeployTaskStateMachine {
 
     /// Check if Graph contracts are deployed
     async fn check_graph_contracts(context: &mut TapContractsContext) -> Result<bool> {
-        let graph_addresses_file = context.working_dir.parent()
+        let graph_addresses_file = context
+            .working_dir
+            .parent()
             .ok_or_else(|| Error::daemon("Working directory has no parent"))?
             .join("graph-contracts/deployed-addresses.json");
-        
+
         if !graph_addresses_file.exists() {
             info!("Graph contracts not yet deployed");
             return Ok(false);
         }
-        
-        let contents = async_fs::read_to_string(&graph_addresses_file).await
+
+        let contents = async_fs::read_to_string(&graph_addresses_file)
+            .await
             .map_err(|e| Error::daemon(format!("Failed to read Graph addresses: {}", e)))?;
-        
+
         let json: serde_json::Value = serde_json::from_str(&contents)
             .map_err(|e| Error::daemon(format!("Failed to parse Graph addresses: {}", e)))?;
-        
+
         if let Some(chain_data) = json.get("1337") {
             if let Some(contracts) = chain_data.as_object() {
                 for (name, data) in contracts {
                     if let Some(address) = data.as_str() {
-                        context.graph_addresses.insert(name.clone(), address.to_string());
+                        context
+                            .graph_addresses
+                            .insert(name.clone(), address.to_string());
                     }
                 }
             }
         }
-        
+
         if context.graph_addresses.is_empty() {
             info!("No Graph contract addresses found");
             return Ok(false);
         }
-        
-        info!("Found {} Graph contract addresses", context.graph_addresses.len());
+
+        info!(
+            "Found {} Graph contract addresses",
+            context.graph_addresses.len()
+        );
         Ok(true)
     }
 
@@ -193,35 +203,42 @@ impl TapContractsDeployTaskStateMachine {
     /// Deploy TAP contracts using forge
     async fn deploy_contracts(context: &mut TapContractsContext) -> Result<()> {
         info!("Deploying TAP contracts");
-        
+
         // TAP contracts typically include:
         // 1. TAP Verifier
         // 2. TAP Collector
         // 3. Escrow contracts
-        
+
         let mut cmd = Command::new("forge");
-        cmd.args(["script", "script/Deploy.s.sol", "--rpc-url", &context.ethereum_url, "--broadcast"])
-            .current_dir(&context.working_dir)
-            .env("ETHEREUM_URL", &context.ethereum_url);
-        
+        cmd.args([
+            "script",
+            "script/Deploy.s.sol",
+            "--rpc-url",
+            &context.ethereum_url,
+            "--broadcast",
+        ])
+        .current_dir(&context.working_dir)
+        .env("ETHEREUM_URL", &context.ethereum_url);
+
         // Add Graph contract addresses as environment variables
         for (name, address) in &context.graph_addresses {
             cmd.env(format!("GRAPH_{}", name.to_uppercase()), address);
         }
-        
-        let (mut event_stream, mut handle) = context.executor
+
+        let (mut event_stream, mut handle) = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to launch forge: {}", e)))?;
-        
+
         let mut completed_count = 0;
         let total_contracts = 3; // TAP typically has 3 main contracts
-        
+
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
                 if let Some(data) = &event.data {
                     debug!("Forge output: {}", data);
-                    
+
                     // Forge output format: "Contract deployed: 0x..."
                     if data.contains("Contract deployed:") || data.contains("deployed at") {
                         if let Some(address) = extract_address(data) {
@@ -232,28 +249,38 @@ impl TapContractsDeployTaskStateMachine {
                             } else {
                                 "Escrow"
                             };
-                            
-                            context.deployed_addresses.insert(contract_name.to_string(), address.clone());
+
+                            context
+                                .deployed_addresses
+                                .insert(contract_name.to_string(), address.clone());
                             completed_count += 1;
-                            
+
                             let progress = 20 + (completed_count * 40 / total_contracts) as u8;
-                            context.set_progress(progress, format!("Deployed {} contracts", completed_count));
+                            context.set_progress(
+                                progress,
+                                format!("Deployed {} contracts", completed_count),
+                            );
                         }
                     }
                 }
             }
         }
-        
+
         // Wait for process to complete and check exit status
-        let exit_status = handle.wait().await
+        let exit_status = handle
+            .wait()
+            .await
             .map_err(|e| Error::daemon(format!("Failed to wait for forge: {}", e)))?;
-        
+
         if !exit_status.success() {
             return Err(Error::daemon("TAP contract deployment failed"));
         }
-        
-        info!("Deployed {} TAP contracts", context.deployed_addresses.len());
-        
+
+        info!(
+            "Deployed {} TAP contracts",
+            context.deployed_addresses.len()
+        );
+
         // Save deployed addresses
         let addresses_file = context.working_dir.join("tap-addresses.json");
         let json = serde_json::json!({
@@ -261,46 +288,57 @@ impl TapContractsDeployTaskStateMachine {
         });
         let contents = serde_json::to_string_pretty(&json)
             .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {}", e)))?;
-        async_fs::write(&addresses_file, contents).await
+        async_fs::write(&addresses_file, contents)
+            .await
             .map_err(|e| Error::daemon(format!("Failed to write addresses file: {}", e)))?;
-        
+
         Ok(())
     }
 
     /// Deploy the TAP subgraph
     async fn deploy_subgraph(context: &mut TapContractsContext) -> Result<()> {
         info!("Deploying TAP subgraph");
-        
+
         // Create subgraph
         let mut cmd = Command::new("npx");
         cmd.args([
-            "graph", "create", "tap-subgraph",
-            "--node", "http://localhost:8020"
+            "graph",
+            "create",
+            "tap-subgraph",
+            "--node",
+            "http://localhost:8020",
         ])
         .current_dir(&context.working_dir);
-        
-        let _ = context.executor
+
+        let _ = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to create TAP subgraph: {}", e)))?;
-        
+
         context.set_progress(70, "Created TAP subgraph, deploying...");
-        
+
         // Deploy subgraph
         let mut cmd = Command::new("npx");
         cmd.args([
-            "graph", "deploy", "tap-subgraph",
-            "--node", "http://localhost:8020",
-            "--ipfs", "http://localhost:5001",
-            "--version-label", "v0.0.1"
+            "graph",
+            "deploy",
+            "tap-subgraph",
+            "--node",
+            "http://localhost:8020",
+            "--ipfs",
+            "http://localhost:5001",
+            "--version-label",
+            "v0.0.1",
         ])
         .current_dir(&context.working_dir);
-        
-        let (mut event_stream, mut handle) = context.executor
+
+        let (mut event_stream, mut handle) = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to deploy TAP subgraph: {}", e)))?;
-        
+
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
                 if let Some(data) = &event.data {
@@ -313,21 +351,23 @@ impl TapContractsDeployTaskStateMachine {
                 }
             }
         }
-        
+
         // Wait for process to complete and check exit status
-        let exit_status = handle.wait().await
-            .map_err(|e| Error::daemon(format!("Failed to wait for TAP subgraph deployment: {}", e)))?;
-        
+        let exit_status = handle.wait().await.map_err(|e| {
+            Error::daemon(format!("Failed to wait for TAP subgraph deployment: {}", e))
+        })?;
+
         if !exit_status.success() {
             return Err(Error::daemon("TAP subgraph deployment failed"));
         }
-        
+
         if let Some(ref id) = context.subgraph_deployment_id {
             let marker = context.working_dir.join(".tap-deployed");
-            async_fs::write(&marker, id.as_bytes()).await
+            async_fs::write(&marker, id.as_bytes())
+                .await
                 .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {}", e)))?;
         }
-        
+
         Ok(())
     }
 
@@ -367,7 +407,7 @@ impl TapContractsDeployTaskStateMachine {
                 context.set_progress(5, "Starting TAP deployment");
                 Transition(State::checking_prerequisites())
             }
-            _ => Super
+            _ => Super,
         }
     }
 
@@ -376,13 +416,13 @@ impl TapContractsDeployTaskStateMachine {
     async fn checking_prerequisites(&mut self, event: &TapContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(10, "Checking prerequisites");
-        
+
         // Check if already deployed
         if Self::check_subgraph_exists(context).await {
             context.set_progress(100, "TAP already deployed");
             return Transition(State::completed());
         }
-        
+
         // Check if Graph contracts are deployed
         match Self::check_graph_contracts(context).await {
             Ok(true) => {
@@ -413,7 +453,7 @@ impl TapContractsDeployTaskStateMachine {
                 // Periodically check if Graph contracts are ready
                 match Self::check_graph_contracts(context).await {
                     Ok(true) => Transition(State::preparing()),
-                    _ => Super
+                    _ => Super,
                 }
             }
         }
@@ -424,12 +464,12 @@ impl TapContractsDeployTaskStateMachine {
     async fn preparing(&mut self, event: &TapContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(20, "Preparing environment");
-        
+
         if let Err(e) = Self::verify_environment(context) {
             context.set_progress(0, format!("Environment verification failed: {}", e));
             return Transition(State::failed());
         }
-        
+
         context.set_progress(25, "Environment ready");
         Transition(State::deploying_contracts())
     }
@@ -439,17 +479,20 @@ impl TapContractsDeployTaskStateMachine {
     async fn deploying_contracts(&mut self, event: &TapContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(30, "Deploying TAP contracts");
-        
+
         if let Err(e) = Self::deploy_contracts(context).await {
             context.set_progress(0, format!("TAP contract deployment failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("Retrying TAP contract deployment (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "Retrying TAP contract deployment (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(65, "TAP contracts deployed");
         Transition(State::deploying_subgraph())
     }
@@ -459,17 +502,20 @@ impl TapContractsDeployTaskStateMachine {
     async fn deploying_subgraph(&mut self, event: &TapContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(70, "Deploying TAP subgraph");
-        
+
         if let Err(e) = Self::deploy_subgraph(context).await {
             context.set_progress(0, format!("TAP subgraph deployment failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("Retrying from beginning (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "Retrying from beginning (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(90, "TAP subgraph deployed");
         Transition(State::verifying())
     }
@@ -479,17 +525,20 @@ impl TapContractsDeployTaskStateMachine {
     async fn verifying(&mut self, event: &TapContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(95, "Verifying TAP deployment");
-        
+
         if let Err(e) = Self::verify_deployment(context) {
             context.set_progress(0, format!("Verification failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("TAP verification failed, retrying (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "TAP verification failed, retrying (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(100, "TAP deployment verified");
         Transition(State::completed())
     }
@@ -509,7 +558,10 @@ impl TapContractsDeployTaskStateMachine {
             TapContractsEvent::Retry => {
                 if context.can_retry() {
                     context.retry_count += 1;
-                    info!("Retrying TAP deployment (attempt {}/{})", context.retry_count, context.max_retries);
+                    info!(
+                        "Retrying TAP deployment (attempt {}/{})",
+                        context.retry_count, context.max_retries
+                    );
                     context.set_progress(5, "Retrying TAP deployment");
                     Transition(State::checking_prerequisites())
                 } else {
@@ -517,7 +569,7 @@ impl TapContractsDeployTaskStateMachine {
                     Super
                 }
             }
-            _ => Super
+            _ => Super,
         }
     }
 }
@@ -558,50 +610,88 @@ pub async fn deploy_tap_contracts(ethereum_url: String, working_dir: PathBuf) ->
     let context = TapContractsContext::new(ethereum_url, working_dir);
     let state_machine = TapContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();
-    
+
     // Start the deployment
     machine.handle(&TapContractsEvent::Start).await;
-    
+
     // Check final state
     match machine.state() {
         State::Completed {} => {
             info!("TAP contracts deployment completed successfully");
             Ok(())
         }
-        State::WaitingForGraphContracts {} => {
-            Err(Error::daemon("TAP contracts deployment waiting for Graph contracts"))
-        }
-        State::Failed {} => {
-            Err(Error::daemon("TAP contracts deployment failed"))
-        }
-        _ => {
-            Err(Error::daemon(
-                "TAP contracts deployment ended in unexpected state"
-            ))
-        }
+        State::WaitingForGraphContracts {} => Err(Error::daemon(
+            "TAP contracts deployment waiting for Graph contracts",
+        )),
+        State::Failed {} => Err(Error::daemon("TAP contracts deployment failed")),
+        _ => Err(Error::daemon(
+            "TAP contracts deployment ended in unexpected state",
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Removed unused statig prelude import
     use tempfile::TempDir;
 
     #[smol_potat::test]
     async fn test_state_machine_initialization() {
         let context = TapContractsContext::new(
             "http://localhost:8545".to_string(),
-            std::path::PathBuf::from("/tmp/test")
+            std::path::PathBuf::from("/tmp/test"),
         );
-        let machine = TapContractsDeployTaskStateMachine::new(context);
-        // State is managed internally by statig
+        let state_machine = TapContractsDeployTaskStateMachine::new(context);
+        let machine = state_machine.state_machine();
+
+        // Initial state should be idle
+        assert!(matches!(machine.state(), State::Idle {}));
+    }
+
+    #[smol_potat::test]
+    async fn test_already_deployed_check() {
+        let temp_dir = TempDir::new().unwrap();
+        let marker = temp_dir.path().join(".tap-deployed");
+        async_fs::write(&marker, "QmTest").await.unwrap();
+
+        let context = TapContractsContext::new(
+            "http://localhost:8545".to_string(),
+            temp_dir.path().to_path_buf(),
+        );
+
+        // Just test the check function, don't start the full state machine
+        assert!(TapContractsDeployTaskStateMachine::check_subgraph_exists(&context).await);
+    }
+
+    #[smol_potat::test]
+    async fn test_state_transitions() {
+        let temp_dir = TempDir::new().unwrap();
+        let context = TapContractsContext::new(
+            "http://localhost:8545".to_string(),
+            temp_dir.path().to_path_buf(),
+        );
+
+        let state_machine = TapContractsDeployTaskStateMachine::new(context);
+        let mut machine = state_machine.state_machine();
+
+        // Test that we can handle the Start event
+        // Note: This won't actually deploy anything, just test state transitions
+        machine.handle(&TapContractsEvent::Start).await;
+
+        // After start, we should transition from idle
+        // The exact state depends on prerequisites check
+        assert!(!matches!(machine.state(), State::Idle {}));
     }
 
     #[test]
     fn test_extract_address() {
         let line = "Contract deployed: 0x5FbDB2315678afecb367f032d93F642f64180aa3";
         let result = extract_address(line);
-        assert_eq!(result, Some("0x5FbDB2315678afecb367f032d93F642f64180aa3".to_string()));
+        assert_eq!(
+            result,
+            Some("0x5FbDB2315678afecb367f032d93F642f64180aa3".to_string())
+        );
     }
 
     #[test]

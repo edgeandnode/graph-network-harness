@@ -8,7 +8,6 @@ pub mod docker;
 pub mod layered;
 pub mod process;
 pub mod registry;
-pub mod remote_ssh;
 pub mod stream_utils;
 pub mod traits;
 
@@ -16,11 +15,8 @@ pub use attached::{DockerAttachedExecutor, SystemdAttachedExecutor};
 pub use docker::DockerExecutor;
 pub use layered::LayeredServiceExecutor;
 pub use process::ProcessExecutor;
-pub use remote_ssh::RemoteSshExecutor;
 pub use registry::ExecutorRegistry;
-pub use traits::{
-    AttachedService, EventStreamable, ManagedService,
-};
+pub use traits::{AttachedService, EventStreamable, ManagedService};
 
 use crate::{Error, config::ServiceConfig, health::HealthStatus};
 use async_trait::async_trait;

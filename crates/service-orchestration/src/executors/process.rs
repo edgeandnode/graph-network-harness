@@ -10,9 +10,7 @@ use crate::{
     health::{HealthChecker, HealthStatus},
 };
 use async_trait::async_trait;
-use command_executor::{
-    Command, Executor, ProcessHandle, backends::LocalLauncher, target::Target,
-};
+use command_executor::{Command, Executor, ProcessHandle, backends::LocalLauncher, target::Target};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;

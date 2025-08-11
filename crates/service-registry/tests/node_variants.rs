@@ -1,6 +1,5 @@
 //! Integration tests for different node execution variants
 
-
 mod common;
 
 /// Test local process execution variant

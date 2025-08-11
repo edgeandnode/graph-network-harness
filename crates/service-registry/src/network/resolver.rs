@@ -85,7 +85,10 @@ impl ServiceResolver {
                 } else {
                     // Otherwise use host IP and hope for routing
                     to.host_ip.ok_or_else(|| {
-                        Error::Operation(format!("Service {} has no accessible IP", to.service_name))
+                        Error::Operation(format!(
+                            "Service {} has no accessible IP",
+                            to.service_name
+                        ))
                     })
                 }
             }

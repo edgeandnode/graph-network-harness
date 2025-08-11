@@ -94,9 +94,7 @@ pub async fn run(
 
     for service_name in &ordered_services {
         if !config.services.contains_key(service_name) {
-            eprintln!(
-                "Warning: Service '{service_name}' not found in configuration"
-            );
+            eprintln!("Warning: Service '{service_name}' not found in configuration");
             continue;
         }
 

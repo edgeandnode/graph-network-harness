@@ -52,8 +52,8 @@ pub use context::OrchestrationContext;
 pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
-    LayeredServiceExecutor, ManagedService, ProcessExecutor, RemoteSshExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
-    layered::LayerConfig,
+    LayeredServiceExecutor, ManagedService, ProcessExecutor, RunningService, ServiceExecutor,
+    SystemdAttachedExecutor, layered::LayerConfig,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager};

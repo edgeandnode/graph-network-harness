@@ -67,7 +67,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("Graph Test Daemon is running");
-    
+
     // Auto-start services if requested
     if matches.get_flag("auto-start") {
         info!("Auto-starting Graph Protocol stack...");

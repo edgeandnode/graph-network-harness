@@ -1,7 +1,7 @@
 //! Integration test for launch_stack with real services
 
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 #[smol_potat::test]
 async fn test_launch_stack_starts_services() -> anyhow::Result<()> {
@@ -53,29 +53,32 @@ tasks:
     // Write test config to a temporary file
     let config_path = "/tmp/test-launch-stack.yaml";
     fs::write(config_path, test_config)?;
-    
+
     // Try to load and parse the config
     use service_orchestration::StackConfig;
     let config: StackConfig = serde_yaml::from_str(test_config)?;
-    
+
     // Verify the config structure
     assert_eq!(config.name, "test-stack");
     assert_eq!(config.services.len(), 2);
     assert_eq!(config.tasks.len(), 1);
-    
+
     // Verify dependency graph can be built
     use service_orchestration::DependencyGraph;
     let graph = DependencyGraph::from_stack_config(&config);
-    
+
     // Get topological sort to verify order
     let order = graph.topological_sort()?;
-    
+
     // Should be: echo-service, then test-task and sleep-service
     assert!(order.len() >= 3);
-    
+
     // The first should be echo-service (no dependencies)
-    assert_eq!(order[0], service_orchestration::DependencyNode::Service("echo-service".to_string()));
-    
+    assert_eq!(
+        order[0],
+        service_orchestration::DependencyNode::Service("echo-service".to_string())
+    );
+
     println!("Dependency order verified:");
     for node in &order {
         match node {
@@ -87,64 +90,68 @@ tasks:
             }
         }
     }
-    
+
     // Clean up
     fs::remove_file(config_path).ok();
-    
+
     // Note: We don't actually create and launch a daemon here because:
     // 1. The service types (postgres, anvil) are registered in GraphTestDaemon, not here
     // 2. Actually starting processes would require more setup
-    // 
+    //
     // This test verifies:
     // - Config can be parsed
     // - Dependency graph works
     // - The structure is ready for launch_stack to use
-    
+
     Ok(())
 }
 
 #[smol_potat::test]
 async fn test_service_manager_with_process() -> anyhow::Result<()> {
-    use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget};
+    use service_orchestration::{ServiceConfig, ServiceManager, ServiceTarget};
     use std::collections::HashMap;
-    
+
     // Create a service manager
     let manager = ServiceManager::new().await?;
-    
+
     // Create a simple echo service config
     let config = ServiceConfig {
         name: "test-echo".to_string(),
         target: ServiceTarget::Process {
             binary: "echo".to_string(),
-            args: vec!["hello".to_string(), "from".to_string(), "service".to_string()],
+            args: vec![
+                "hello".to_string(),
+                "from".to_string(),
+                "service".to_string(),
+            ],
             env: HashMap::new(),
             working_dir: None,
         },
         dependencies: vec![],
         health_check: None,
     };
-    
+
     // Start the service
     let running_service = manager.start_service("test-echo", config).await?;
-    
+
     // Verify service was started
     assert!(running_service.pid.is_some());
     println!("Started service with PID: {:?}", running_service.pid);
-    
+
     // Check service status
     let status = manager.get_service_status("test-echo").await?;
     println!("Service status: {:?}", status);
-    
+
     // List services
     let services = manager.list_services().await?;
     assert!(services.contains(&"test-echo".to_string()));
-    
+
     // Stop the service
     manager.stop_service("test-echo").await?;
-    
+
     // Verify service is gone
     let services_after = manager.list_services().await?;
     assert!(!services_after.contains(&"test-echo".to_string()));
-    
+
     Ok(())
 }

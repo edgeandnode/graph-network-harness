@@ -11,14 +11,14 @@ use std::collections::HashMap;
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum Dependency {
     /// Dependency on a service
-    Service { 
+    Service {
         /// Name of the service this depends on
-        service: String 
+        service: String,
     },
     /// Dependency on a task
-    Task { 
+    Task {
         /// Name of the task this depends on
-        task: String 
+        task: String,
     },
 }
 
@@ -96,7 +96,7 @@ pub enum ServiceTarget {
         /// Environment variables
         env: HashMap<String, String>,
     },
-    
+
     /// Layered execution with composed execution contexts
     #[serde(rename = "layered")]
     Layered {

@@ -1,22 +1,21 @@
-//! SSH integration tests for RemoteSSH executor
+//! SSH integration tests for LayeredServiceExecutor with SSH layer
 //!
 //! These tests require Docker to be running and will create a container
 //! with SSH server to test actual SSH connectivity.
 
 #![cfg(all(feature = "ssh-tests", feature = "docker-tests"))]
-
 // We need to allow unsafe for atexit handlers
 #![allow(unsafe_code)]
 
 use anyhow::{Context, Result};
 use service_orchestration::{
-    RemoteSshExecutor, ServiceConfig, ServiceExecutor, ServiceTarget, RemoteMode,
+    CommandSpec, LayerConfig, LayeredServiceExecutor, ServiceConfig, ServiceExecutor, ServiceTarget,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 use tracing::info;
 
 // Global container state
@@ -61,7 +60,8 @@ fn install_signal_handlers() {
         };
         use std::thread;
 
-        let mut signals = Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
+        let mut signals =
+            Signals::new([SIGINT, SIGTERM]).expect("Failed to register signal handler");
 
         thread::spawn(move || {
             #[allow(clippy::never_loop)]
@@ -113,16 +113,17 @@ fn install_atexit_handler() {
 }
 
 /// Ensure the SSH container is running for tests
-#[allow(clippy::await_holding_lock)]
 async fn ensure_container_running() -> Result<()> {
     use command_executor::{Command, Executor, Target, backends::LocalLauncher};
-    
-    let _lock = INIT_MUTEX.lock().unwrap();
 
-    // Install cleanup handlers
-    install_signal_handlers();
-    install_panic_handler();
-    install_atexit_handler();
+    {
+        let _lock = INIT_MUTEX.lock().unwrap();
+
+        // Install cleanup handlers
+        install_signal_handlers();
+        install_panic_handler();
+        install_atexit_handler();
+    } // Lock is dropped here
 
     // Check if container is already running
     let executor = Executor::local("container-check");
@@ -175,12 +176,16 @@ async fn ensure_container_running() -> Result<()> {
     if !ssh_key_path.exists() {
         info!("Generating SSH keys for test");
         std::fs::create_dir_all(&ssh_keys_dir)?;
-        
+
         let keygen_cmd = Command::builder("ssh-keygen")
-            .arg("-t").arg("ed25519")
-            .arg("-f").arg(ssh_key_path.to_str().unwrap())
-            .arg("-N").arg("")
-            .arg("-C").arg("test@service-orchestration")
+            .arg("-t")
+            .arg("ed25519")
+            .arg("-f")
+            .arg(ssh_key_path.to_str().unwrap())
+            .arg("-N")
+            .arg("")
+            .arg("-C")
+            .arg("test@service-orchestration")
             .build();
 
         executor.execute(&Target::Command, keygen_cmd).await?;
@@ -208,16 +213,28 @@ async fn ensure_container_running() -> Result<()> {
     let run_cmd = Command::builder("docker")
         .arg("run")
         .arg("-d")
-        .arg("--name").arg(CONTAINER_NAME)
-        .arg("-p").arg("2224:22")
+        .arg("--name")
+        .arg(CONTAINER_NAME)
+        .arg("-p")
+        .arg("2224:22")
         .arg("--privileged")
-        .arg("-v").arg(format!("{}:/home/testuser/.ssh:ro", ssh_keys_dir.to_str().unwrap()))
-        .arg("--tmpfs").arg("/run")
-        .arg("--tmpfs").arg("/run/lock")
-        .arg("--tmpfs").arg("/tmp")
-        .arg("-e").arg("container=docker")
-        .arg("--stop-signal").arg("SIGRTMIN+3")
-        .arg("--security-opt").arg("seccomp:unconfined")
+        .arg("-v")
+        .arg(format!(
+            "{}:/home/testuser/.ssh:ro",
+            ssh_keys_dir.to_str().unwrap()
+        ))
+        .arg("--tmpfs")
+        .arg("/run")
+        .arg("--tmpfs")
+        .arg("/run/lock")
+        .arg("--tmpfs")
+        .arg("/tmp")
+        .arg("-e")
+        .arg("container=docker")
+        .arg("--stop-signal")
+        .arg("SIGRTMIN+3")
+        .arg("--security-opt")
+        .arg("seccomp:unconfined")
         .arg("command-executor-systemd-ssh-working:latest")
         .build();
 
@@ -240,7 +257,7 @@ async fn ensure_container_running() -> Result<()> {
 
 async fn wait_for_container_ready() -> Result<()> {
     use command_executor::{Command, Executor, Target, backends::LocalLauncher};
-    
+
     let executor = Executor::local("container-wait");
     let max_attempts = 30;
 
@@ -288,21 +305,28 @@ fn get_ssh_key_path() -> Result<PathBuf> {
         }
     };
 
-    Ok(workspace_root.join("crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519"))
+    Ok(
+        workspace_root
+            .join("crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519"),
+    )
 }
 
 /// Read a file from the remote container
 async fn read_remote_file(path: &str) -> Result<String> {
     use command_executor::{Command, Executor, Target, backends::LocalLauncher};
-    
+
     let executor = Executor::local("file-reader");
     let ssh_key_path = get_ssh_key_path()?;
-    
+
     let ssh_cmd = Command::builder("ssh")
-        .arg("-p").arg("2224")
-        .arg("-i").arg(ssh_key_path.to_str().unwrap())
-        .arg("-o").arg("StrictHostKeyChecking=no")
-        .arg("-o").arg("UserKnownHostsFile=/dev/null")
+        .arg("-p")
+        .arg("2224")
+        .arg("-i")
+        .arg(ssh_key_path.to_str().unwrap())
+        .arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("UserKnownHostsFile=/dev/null")
         .arg("testuser@localhost")
         .arg("cat")
         .arg(path)
@@ -312,30 +336,39 @@ async fn read_remote_file(path: &str) -> Result<String> {
     Ok(result.output)
 }
 
-/// Test that RemoteSSH executor can start a simple process over SSH
+/// Test that LayeredServiceExecutor can start a simple process over SSH
 #[smol_potat::test]
-async fn test_remote_ssh_basic_command() -> Result<()> {
+async fn test_layered_ssh_basic_command() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
-
-    // Create a service config for a simple echo command
-    let mut env = HashMap::new();
-    env.insert("SSH_PORT".to_string(), "2224".to_string());
-    env.insert("SSH_IDENTITY_FILE".to_string(), ssh_key_path.to_string_lossy().to_string());
-    // Disable host key checking for test
-    env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
 
     let config = ServiceConfig {
         name: "test-echo".to_string(),
-        target: ServiceTarget::Remote {
-            host: "localhost".to_string(),
-            user: "testuser".to_string(),
-            mode: RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "localhost".to_string(),
+                    user: "testuser".to_string(),
+                    env: HashMap::new(),
+                    port: Some(2224),
+                    identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                    options: vec![
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                        "-o".to_string(),
+                        "UserKnownHostsFile=/dev/null".to_string(),
+                    ],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: CommandSpec {
                 binary: "echo".to_string(),
                 args: vec!["Hello from SSH test".to_string()],
             },
-            env,
         },
         dependencies: vec![],
         health_check: None,
@@ -344,7 +377,7 @@ async fn test_remote_ssh_basic_command() -> Result<()> {
     // Start the service
     let service = executor.start(config).await?;
     assert_eq!(service.name, "test-echo");
-    
+
     // Give it a moment to complete
     smol::Timer::after(Duration::from_millis(100)).await;
 
@@ -354,29 +387,39 @@ async fn test_remote_ssh_basic_command() -> Result<()> {
     Ok(())
 }
 
-/// Test that RemoteSSH executor can run a long-running process
+/// Test that LayeredServiceExecutor can run a long-running process
 #[smol_potat::test]
-async fn test_remote_ssh_long_running_process() -> Result<()> {
+async fn test_layered_ssh_long_running_process() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
-
-    // Create a service config for a sleep command
-    let mut env = HashMap::new();
-    env.insert("SSH_PORT".to_string(), "2224".to_string());
-    env.insert("SSH_IDENTITY_FILE".to_string(), ssh_key_path.to_string_lossy().to_string());
-    env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
 
     let config = ServiceConfig {
         name: "test-sleep".to_string(),
-        target: ServiceTarget::Remote {
-            host: "localhost".to_string(),
-            user: "testuser".to_string(),
-            mode: RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "localhost".to_string(),
+                    user: "testuser".to_string(),
+                    env: HashMap::new(),
+                    port: Some(2224),
+                    identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                    options: vec![
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                        "-o".to_string(),
+                        "UserKnownHostsFile=/dev/null".to_string(),
+                    ],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: CommandSpec {
                 binary: "sleep".to_string(),
                 args: vec!["10".to_string()],
             },
-            env,
         },
         dependencies: vec![],
         health_check: None,
@@ -388,7 +431,10 @@ async fn test_remote_ssh_long_running_process() -> Result<()> {
 
     // Verify it's running
     let health = executor.health_check(&service).await?;
-    assert!(matches!(health, service_orchestration::HealthStatus::Healthy));
+    assert!(matches!(
+        health,
+        service_orchestration::HealthStatus::Healthy
+    ));
 
     // Stop it before it completes
     executor.stop(&service).await?;
@@ -397,31 +443,43 @@ async fn test_remote_ssh_long_running_process() -> Result<()> {
 
 /// Test environment variable forwarding over SSH
 #[smol_potat::test]
-async fn test_remote_ssh_environment_forwarding() -> Result<()> {
+async fn test_layered_ssh_environment_forwarding() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
 
-    // Create a service config that prints an environment variable
     let mut env = HashMap::new();
-    env.insert("SSH_PORT".to_string(), "2224".to_string());
-    env.insert("SSH_IDENTITY_FILE".to_string(), ssh_key_path.to_string_lossy().to_string());
-    env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
     env.insert("TEST_VARIABLE".to_string(), "Hello from test".to_string());
 
     let config = ServiceConfig {
         name: "test-env".to_string(),
-        target: ServiceTarget::Remote {
-            host: "localhost".to_string(),
-            user: "testuser".to_string(),
-            mode: RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "localhost".to_string(),
+                    user: "testuser".to_string(),
+                    env,
+                    port: Some(2224),
+                    identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                    options: vec![
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                        "-o".to_string(),
+                        "UserKnownHostsFile=/dev/null".to_string(),
+                    ],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: CommandSpec {
                 binary: "sh".to_string(),
                 args: vec![
                     "-c".to_string(),
                     "echo TEST_VARIABLE=$TEST_VARIABLE > /tmp/test-env-output.txt".to_string(),
                 ],
             },
-            env,
         },
         dependencies: vec![],
         health_check: None,
@@ -429,7 +487,7 @@ async fn test_remote_ssh_environment_forwarding() -> Result<()> {
 
     // Start the service
     let service = executor.start(config).await?;
-    
+
     // Give it time to write the file
     smol::Timer::after(Duration::from_millis(200)).await;
 
@@ -438,39 +496,56 @@ async fn test_remote_ssh_environment_forwarding() -> Result<()> {
 
     // Verify the environment variable was passed through
     let output = read_remote_file("/tmp/test-env-output.txt").await?;
-    assert!(output.contains("TEST_VARIABLE=Hello from test"), "Environment variable not forwarded correctly");
+    assert!(
+        output.contains("TEST_VARIABLE=Hello from test"),
+        "Environment variable not forwarded correctly"
+    );
     Ok(())
 }
 
 /// Test multiple concurrent SSH services
 #[smol_potat::test]
-async fn test_remote_ssh_concurrent_services() -> Result<()> {
+async fn test_layered_ssh_concurrent_services() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
 
     let mut services = vec![];
 
     // Start 3 concurrent services
     for i in 0..3 {
-        let mut env = HashMap::new();
-        env.insert("SSH_PORT".to_string(), "2224".to_string());
-        env.insert("SSH_IDENTITY_FILE".to_string(), ssh_key_path.to_string_lossy().to_string());
-        env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
-
         let config = ServiceConfig {
             name: format!("test-concurrent-{}", i),
-            target: ServiceTarget::Remote {
-                host: "localhost".to_string(),
-                user: "testuser".to_string(),
-                mode: RemoteMode::Process {
+            target: ServiceTarget::Layered {
+                layers: vec![
+                    LayerConfig::Ssh {
+                        host: "localhost".to_string(),
+                        user: "testuser".to_string(),
+                        env: HashMap::new(),
+                        port: Some(2224),
+                        identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                        options: vec![
+                            "-o".to_string(),
+                            "StrictHostKeyChecking=no".to_string(),
+                            "-o".to_string(),
+                            "UserKnownHostsFile=/dev/null".to_string(),
+                        ],
+                    },
+                    LayerConfig::Local {
+                        env: HashMap::new(),
+                        working_dir: None,
+                    },
+                ],
+                command: CommandSpec {
                     binary: "sh".to_string(),
                     args: vec![
                         "-c".to_string(),
-                        format!("echo 'Service {}' > /tmp/concurrent-{}.txt && sleep 2", i, i),
+                        format!(
+                            "echo 'Service {}' > /tmp/concurrent-{}.txt && sleep 2",
+                            i, i
+                        ),
                     ],
                 },
-                env,
             },
             dependencies: vec![],
             health_check: None,
@@ -486,7 +561,10 @@ async fn test_remote_ssh_concurrent_services() -> Result<()> {
     // Verify all are running
     for service in &services {
         let health = executor.health_check(service).await?;
-        assert!(matches!(health, service_orchestration::HealthStatus::Healthy));
+        assert!(matches!(
+            health,
+            service_orchestration::HealthStatus::Healthy
+        ));
     }
 
     // Stop all services
@@ -504,27 +582,37 @@ async fn test_remote_ssh_concurrent_services() -> Result<()> {
 
 /// Test SSH with custom port
 #[smol_potat::test]
-async fn test_remote_ssh_custom_port() -> Result<()> {
+async fn test_layered_ssh_custom_port() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
-
-    // Use the custom port 2224
-    let mut env = HashMap::new();
-    env.insert("SSH_PORT".to_string(), "2224".to_string());
-    env.insert("SSH_IDENTITY_FILE".to_string(), ssh_key_path.to_string_lossy().to_string());
-    env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
 
     let config = ServiceConfig {
         name: "test-custom-port".to_string(),
-        target: ServiceTarget::Remote {
-            host: "localhost".to_string(),
-            user: "testuser".to_string(),
-            mode: RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "localhost".to_string(),
+                    user: "testuser".to_string(),
+                    env: HashMap::new(),
+                    port: Some(2224),
+                    identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                    options: vec![
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                        "-o".to_string(),
+                        "UserKnownHostsFile=/dev/null".to_string(),
+                    ],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: CommandSpec {
                 binary: "hostname".to_string(),
                 args: vec![],
             },
-            env,
         },
         dependencies: vec![],
         health_check: None,
@@ -540,27 +628,37 @@ async fn test_remote_ssh_custom_port() -> Result<()> {
 
 /// Test SSH with key file authentication
 #[smol_potat::test]
-async fn test_remote_ssh_key_authentication() -> Result<()> {
+async fn test_layered_ssh_key_authentication() -> Result<()> {
     ensure_container_running().await?;
-    let executor = RemoteSshExecutor::new();
+    let executor = LayeredServiceExecutor::new();
     let ssh_key_path = get_ssh_key_path()?;
-
-    // Test with SSH_KEY_PATH instead of SSH_IDENTITY_FILE
-    let mut env = HashMap::new();
-    env.insert("SSH_PORT".to_string(), "2224".to_string());
-    env.insert("SSH_KEY_PATH".to_string(), ssh_key_path.to_string_lossy().to_string());
-    env.insert("SSH_OPTIONS".to_string(), "-o StrictHostKeyChecking=no,-o UserKnownHostsFile=/dev/null".to_string());
 
     let config = ServiceConfig {
         name: "test-key-auth".to_string(),
-        target: ServiceTarget::Remote {
-            host: "localhost".to_string(),
-            user: "testuser".to_string(),
-            mode: RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "localhost".to_string(),
+                    user: "testuser".to_string(),
+                    env: HashMap::new(),
+                    port: Some(2224),
+                    identity_file: Some(ssh_key_path.to_string_lossy().to_string()),
+                    options: vec![
+                        "-o".to_string(),
+                        "StrictHostKeyChecking=no".to_string(),
+                        "-o".to_string(),
+                        "UserKnownHostsFile=/dev/null".to_string(),
+                    ],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: CommandSpec {
                 binary: "whoami".to_string(),
                 args: vec![],
             },
-            env,
         },
         dependencies: vec![],
         health_check: None,

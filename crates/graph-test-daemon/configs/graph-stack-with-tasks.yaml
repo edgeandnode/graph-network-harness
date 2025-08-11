@@ -163,20 +163,25 @@ services:
       env:
         REDIS_URL: redis://localhost:6379
 
-  # Example of remote service
+  # Example of remote service using layered executor
   remote-indexer:
     service_type: indexer-service
     name: indexer-service
     target:
-      type: remote-ssh
-      host: indexer.example.com
-      user: ubuntu
-      binary: indexer-service
-      args:
-        - --port
-        - "7600"
-        - --network-subgraph-endpoint
-        - http://graph-node:8000/subgraphs/name/graph-network
+      type: layered
+      layers:
+        - type: ssh
+          host: indexer.example.com
+          user: ubuntu
+        - type: local
+          working_dir: /opt/indexer
+      command:
+        binary: indexer-service
+        args:
+          - --port
+          - "7600"
+          - --network-subgraph-endpoint
+          - http://graph-node:8000/subgraphs/name/graph-network
       env:
         INDEXER_AGENT_ETHEREUM: http://anvil:8545
     dependencies:

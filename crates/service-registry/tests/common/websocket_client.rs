@@ -59,7 +59,6 @@ impl WebSocketTestClient {
         Ok(serde_json::to_value(endpoints)?)
     }
 
-
     /// Start a service
     pub async fn start_service(&self, name: &str) -> Result<()> {
         self.handle

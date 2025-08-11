@@ -38,7 +38,6 @@ pub enum Error {
     #[error("YAML serialization error: {0}")]
     Yaml(#[from] serde_yaml::Error),
 
-
     /// Command execution error
     #[error("Command execution error: {0}")]
     CommandExecution(#[from] command_executor::Error),

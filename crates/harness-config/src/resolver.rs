@@ -72,11 +72,11 @@ pub enum Variable {
         default: Option<String>,
     },
     /// Service reference
-    ServiceRef { 
+    ServiceRef {
         /// Name of the service being referenced
-        service: String, 
+        service: String,
         /// Property of the service being accessed
-        property: String 
+        property: String,
     },
 }
 
@@ -421,10 +421,7 @@ mod tests {
         for case in invalid_cases {
             let result = find_variables(case);
             assert_eq!(result.len(), 1);
-            assert!(
-                result[0].is_err(),
-                "Should reject invalid env var: {case}"
-            );
+            assert!(result[0].is_err(), "Should reject invalid env var: {case}");
         }
     }
 

@@ -24,8 +24,9 @@ fn create_test_builder() -> DaemonBuilder {
     // Each test gets a unique temp directory to avoid conflicts
     let temp_dir = tempfile::tempdir().unwrap();
 
-    // Leak the tempdir so it doesn't get cleaned up during the test
-    let path = temp_dir.into_path();
+    // Keep the tempdir so it doesn't get cleaned up during the test
+    let path = temp_dir.path().to_path_buf();
+    let _ = temp_dir.keep(); // Prevent cleanup
 
     DaemonBuilder::new().with_state_dir(path)
 }

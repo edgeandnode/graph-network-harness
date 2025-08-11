@@ -228,10 +228,7 @@ pub fn convert_to_orchestrator_with_context(
         }
     };
 
-    let health_check = service
-        .health_check
-        .as_ref()
-        .map(convert_health_check);
+    let health_check = service.health_check.as_ref().map(convert_health_check);
 
     Ok(ServiceConfig {
         name: service_name.to_string(),

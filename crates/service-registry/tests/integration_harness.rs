@@ -1,6 +1,5 @@
 //! Integration tests for service registry with real harness deployments
 
-
 mod common;
 
 /// Integration test that deploys a real service through the registry
@@ -272,7 +271,6 @@ async fn test_event_subscription_integration() {
         panic!("Expected ServiceDeregistered event");
     }
 }
-
 
 /// Test multi-node service coordination
 #[smol_potat::test]

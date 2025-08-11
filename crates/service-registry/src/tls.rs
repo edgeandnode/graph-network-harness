@@ -4,8 +4,8 @@ use crate::error::{Error, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use rustls::{ClientConfig, ServerConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
 #[derive(Clone)]
@@ -56,7 +56,9 @@ impl TlsServerConfig {
             .map_err(|e| Error::Operation(format!("Failed to parse certificates: {e}")))?;
 
         if certs.is_empty() {
-            return Err(Error::Operation("No certificates found in file".to_string()));
+            return Err(Error::Operation(
+                "No certificates found in file".to_string(),
+            ));
         }
 
         // Parse private key

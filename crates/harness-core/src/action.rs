@@ -103,9 +103,7 @@ impl ActionRegistry {
         let name = info.name.clone();
 
         if self.actions.contains_key(&name) {
-            return Err(Error::action(format!(
-                "Action '{name}' already registered"
-            )));
+            return Err(Error::action(format!("Action '{name}' already registered")));
         }
 
         // Wrap the function to match our signature

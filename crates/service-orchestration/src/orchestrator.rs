@@ -256,9 +256,7 @@ impl DependencyOrchestrator {
                     }
                     Err(e) => {
                         warn!("Failed to execute {:?}: {}", node, e);
-                        return Err(Error::Other(format!(
-                            "Execution failed for {node:?}: {e}"
-                        )));
+                        return Err(Error::Other(format!("Execution failed for {node:?}: {e}")));
                     }
                 }
             }
@@ -340,9 +338,7 @@ fn create_service_handle(
                 .wait_for_service(dep_name, 30)
                 .await
                 .map_err(|e| {
-                    crate::Error::Other(format!(
-                        "Failed waiting for dependency '{dep_name}': {e}"
-                    ))
+                    crate::Error::Other(format!("Failed waiting for dependency '{dep_name}': {e}"))
                 })?;
         }
 
@@ -375,9 +371,10 @@ fn create_service_handle(
         info!("Starting service '{}' with executor", name);
 
         // Start the service using the executor with modified config
-        let running_service = executor.start(modified_config).await.map_err(|e| {
-            crate::Error::Other(format!("Failed to start service '{name}': {e}"))
-        })?;
+        let running_service = executor
+            .start(modified_config)
+            .await
+            .map_err(|e| crate::Error::Other(format!("Failed to start service '{name}': {e}")))?;
 
         // Register service in registry with Starting state
         let now = Utc::now();

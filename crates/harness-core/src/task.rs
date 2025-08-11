@@ -573,12 +573,10 @@ mod tests {
                         None
                     }
                 }
-                ProcessEventType::Exited { code, .. } => {
-                    code.map(|code| TranslatingEvent {
-                        event_type: "exit".to_string(),
-                        message: format!("Process exited with code {code}"),
-                    })
-                }
+                ProcessEventType::Exited { code, .. } => code.map(|code| TranslatingEvent {
+                    event_type: "exit".to_string(),
+                    message: format!("Process exited with code {code}"),
+                }),
                 _ => None,
             }
         }

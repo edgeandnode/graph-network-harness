@@ -3,8 +3,8 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, ProcessExecutor, RemoteSshExecutor,
-    ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
+    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, LayerConfig, LayeredServiceExecutor,
+    ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -80,17 +80,28 @@ fn test_docker_service_config() {
 }
 
 #[test]
-fn test_remote_ssh_service_config() {
+fn test_layered_ssh_service_config() {
     let config = ServiceConfig {
         name: "remote-api".to_string(),
-        target: ServiceTarget::Remote {
-            host: "192.168.1.100".to_string(),
-            user: "deploy".to_string(),
-            mode: service_orchestration::RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "192.168.1.100".to_string(),
+                    user: "deploy".to_string(),
+                    env: HashMap::new(),
+                    port: None,
+                    identity_file: None,
+                    options: vec![],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: service_orchestration::CommandSpec {
                 binary: "./api-server".to_string(),
                 args: vec!["--port".to_string(), "3000".to_string()],
             },
-            env: HashMap::new(),
         },
         dependencies: vec![service_orchestration::Dependency::Service {
             service: "database".to_string(),
@@ -98,9 +109,9 @@ fn test_remote_ssh_service_config() {
         health_check: None,
     };
 
-    // Test that RemoteSSH executor can handle this config
-    let remote_executor = RemoteSshExecutor::new();
-    assert!(remote_executor.can_handle(&config));
+    // Test that LayeredServiceExecutor can handle this config
+    let layered_executor = LayeredServiceExecutor::new();
+    assert!(layered_executor.can_handle(&config));
 
     // Test that other executors cannot handle this config
     let process_executor = ProcessExecutor::new();
@@ -163,7 +174,6 @@ async fn test_health_checker_basic_functionality() {
     let result = checker.check_health(&fail_config).await.unwrap();
     assert!(matches!(result, HealthStatus::Unhealthy(_)));
 }
-
 
 #[smol_potat::test]
 async fn test_service_manager_initialization() {
@@ -232,7 +242,7 @@ fn test_service_status_serialization() {
 fn test_executor_type_detection() {
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
-    let remote_executor = RemoteSshExecutor::new();
+    let layered_executor = LayeredServiceExecutor::new();
 
     let process_config = ServiceConfig {
         name: "test".to_string(),
@@ -258,16 +268,27 @@ fn test_executor_type_detection() {
         health_check: None,
     };
 
-    let remote_config = ServiceConfig {
+    let layered_config = ServiceConfig {
         name: "test".to_string(),
-        target: ServiceTarget::Remote {
-            host: "test.example.com".to_string(),
-            user: "test".to_string(),
-            mode: service_orchestration::RemoteMode::Process {
+        target: ServiceTarget::Layered {
+            layers: vec![
+                LayerConfig::Ssh {
+                    host: "test.example.com".to_string(),
+                    user: "test".to_string(),
+                    env: HashMap::new(),
+                    port: None,
+                    identity_file: None,
+                    options: vec![],
+                },
+                LayerConfig::Local {
+                    env: HashMap::new(),
+                    working_dir: None,
+                },
+            ],
+            command: service_orchestration::CommandSpec {
                 binary: "test".to_string(),
                 args: vec![],
             },
-            env: HashMap::new(),
         },
         dependencies: vec![],
         health_check: None,
@@ -276,15 +297,15 @@ fn test_executor_type_detection() {
     // Test that each executor only handles its own type
     assert!(process_executor.can_handle(&process_config));
     assert!(!process_executor.can_handle(&docker_config));
-    assert!(!process_executor.can_handle(&remote_config));
+    assert!(!process_executor.can_handle(&layered_config));
 
     assert!(!docker_executor.can_handle(&process_config));
     assert!(docker_executor.can_handle(&docker_config));
-    assert!(!docker_executor.can_handle(&remote_config));
+    assert!(!docker_executor.can_handle(&layered_config));
 
-    assert!(!remote_executor.can_handle(&process_config));
-    assert!(!remote_executor.can_handle(&docker_config));
-    assert!(remote_executor.can_handle(&remote_config));
+    assert!(!layered_executor.can_handle(&process_config));
+    assert!(!layered_executor.can_handle(&docker_config));
+    assert!(layered_executor.can_handle(&layered_config));
 }
 
 #[test]

@@ -4,7 +4,9 @@
 //! contracts with proper verification and error recovery using the statig crate.
 
 use async_trait::async_trait;
-use command_executor::{Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher};
+use command_executor::{
+    Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher,
+};
 use futures::StreamExt;
 use harness_core::{Error, Result};
 use serde::{Deserialize, Serialize};
@@ -135,27 +137,33 @@ impl GraphContractsDeployTaskStateMachine {
     /// Load expected addresses from contracts.json
     async fn load_expected_addresses(context: &mut GraphContractsContext) -> Result<()> {
         let contracts_file = context.working_dir.join("contracts.json");
-        
+
         if contracts_file.exists() {
-            let contents = async_fs::read_to_string(&contracts_file).await
+            let contents = async_fs::read_to_string(&contracts_file)
+                .await
                 .map_err(|e| Error::daemon(format!("Failed to read contracts.json: {}", e)))?;
-            
+
             let json: serde_json::Value = serde_json::from_str(&contents)
                 .map_err(|e| Error::daemon(format!("Failed to parse contracts.json: {}", e)))?;
-            
+
             if let Some(chain_data) = json.get("1337") {
                 if let Some(contracts) = chain_data.as_object() {
                     for (name, data) in contracts {
                         if let Some(address) = data.get("address").and_then(|a| a.as_str()) {
-                            context.expected_addresses.insert(name.clone(), address.to_string());
+                            context
+                                .expected_addresses
+                                .insert(name.clone(), address.to_string());
                         }
                     }
                 }
             }
-            
-            info!("Loaded {} expected contract addresses", context.expected_addresses.len());
+
+            info!(
+                "Loaded {} expected contract addresses",
+                context.expected_addresses.len()
+            );
         }
-        
+
         Ok(())
     }
 
@@ -173,9 +181,9 @@ impl GraphContractsDeployTaskStateMachine {
             return Err(Error::daemon("package.json not found in working directory"));
         }
 
-        let hardhat_config = context.working_dir.join("hardhat.config.js").exists() 
+        let hardhat_config = context.working_dir.join("hardhat.config.js").exists()
             || context.working_dir.join("hardhat.config.ts").exists();
-        
+
         if !hardhat_config {
             return Err(Error::daemon("hardhat.config not found"));
         }
@@ -186,48 +194,56 @@ impl GraphContractsDeployTaskStateMachine {
     /// Deploy contracts using hardhat
     async fn deploy_contracts(context: &mut GraphContractsContext) -> Result<()> {
         info!("Deploying Graph Protocol contracts");
-        
+
         let mut cmd = Command::new("npx");
         cmd.args(["hardhat", "deploy", "--network", "localhost"])
             .current_dir(&context.working_dir)
             .env("ETHEREUM_URL", &context.ethereum_url);
-        
-        let (mut event_stream, mut handle) = context.executor
+
+        let (mut event_stream, mut handle) = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to launch hardhat: {}", e)))?;
-        
+
         let mut completed_count = 0;
         let total_contracts = 12;
-        
+
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
                 if let Some(data) = &event.data {
                     debug!("Hardhat output: {}", data);
-                    
+
                     if data.contains("deployed at") {
                         if let Some((name, address)) = extract_deployment_info(data) {
-                            context.deployed_addresses.insert(name.clone(), address.clone());
+                            context
+                                .deployed_addresses
+                                .insert(name.clone(), address.clone());
                             completed_count += 1;
-                            
+
                             let progress = 20 + (completed_count * 40 / total_contracts) as u8;
-                            context.set_progress(progress, format!("Deployed {} contracts", completed_count));
+                            context.set_progress(
+                                progress,
+                                format!("Deployed {} contracts", completed_count),
+                            );
                         }
                     }
                 }
             }
         }
-        
+
         // Wait for process to complete and check exit status
-        let exit_status = handle.wait().await
+        let exit_status = handle
+            .wait()
+            .await
             .map_err(|e| Error::daemon(format!("Failed to wait for hardhat: {}", e)))?;
-        
+
         if !exit_status.success() {
             return Err(Error::daemon("Contract deployment failed"));
         }
-        
+
         info!("Deployed {} contracts", context.deployed_addresses.len());
-        
+
         // Save deployed addresses
         let addresses_file = context.working_dir.join("deployed-addresses.json");
         let json = serde_json::json!({
@@ -235,46 +251,57 @@ impl GraphContractsDeployTaskStateMachine {
         });
         let contents = serde_json::to_string_pretty(&json)
             .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {}", e)))?;
-        async_fs::write(&addresses_file, contents).await
+        async_fs::write(&addresses_file, contents)
+            .await
             .map_err(|e| Error::daemon(format!("Failed to write addresses file: {}", e)))?;
-        
+
         Ok(())
     }
 
     /// Deploy the graph-network subgraph
     async fn deploy_subgraph(context: &mut GraphContractsContext) -> Result<()> {
         info!("Deploying graph-network subgraph");
-        
+
         // Create subgraph
         let mut cmd = Command::new("npx");
         cmd.args([
-            "graph", "create", "graph-network",
-            "--node", "http://localhost:8020"
+            "graph",
+            "create",
+            "graph-network",
+            "--node",
+            "http://localhost:8020",
         ])
         .current_dir(&context.working_dir);
-        
-        let _ = context.executor
+
+        let _ = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to create subgraph: {}", e)))?;
-        
+
         context.set_progress(70, "Created subgraph, deploying...");
-        
+
         // Deploy subgraph
         let mut cmd = Command::new("npx");
         cmd.args([
-            "graph", "deploy", "graph-network",
-            "--node", "http://localhost:8020",
-            "--ipfs", "http://localhost:5001",
-            "--version-label", "v0.0.1"
+            "graph",
+            "deploy",
+            "graph-network",
+            "--node",
+            "http://localhost:8020",
+            "--ipfs",
+            "http://localhost:5001",
+            "--version-label",
+            "v0.0.1",
         ])
         .current_dir(&context.working_dir);
-        
-        let (mut event_stream, mut handle) = context.executor
+
+        let (mut event_stream, mut handle) = context
+            .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
             .map_err(|e| Error::daemon(format!("Failed to deploy subgraph: {}", e)))?;
-        
+
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
                 if let Some(data) = &event.data {
@@ -287,21 +314,24 @@ impl GraphContractsDeployTaskStateMachine {
                 }
             }
         }
-        
+
         // Wait for process to complete and check exit status
-        let exit_status = handle.wait().await
+        let exit_status = handle
+            .wait()
+            .await
             .map_err(|e| Error::daemon(format!("Failed to wait for subgraph deployment: {}", e)))?;
-        
+
         if !exit_status.success() {
             return Err(Error::daemon("Subgraph deployment failed"));
         }
-        
+
         if let Some(ref id) = context.subgraph_deployment_id {
             let marker = context.working_dir.join(".graph-network-deployed");
-            async_fs::write(&marker, id.as_bytes()).await
+            async_fs::write(&marker, id.as_bytes())
+                .await
                 .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {}", e)))?;
         }
-        
+
         Ok(())
     }
 
@@ -347,7 +377,7 @@ impl GraphContractsDeployTaskStateMachine {
                 context.set_progress(5, "Starting deployment");
                 Transition(State::checking_prerequisites())
             }
-            _ => Super
+            _ => Super,
         }
     }
 
@@ -359,22 +389,22 @@ impl GraphContractsDeployTaskStateMachine {
         match event {
             GraphContractsEvent::Start => {
                 context.set_progress(10, "Checking prerequisites");
-                
+
                 // Load expected addresses
                 if let Err(e) = Self::load_expected_addresses(context).await {
                     context.set_progress(0, format!("Failed to load expected addresses: {}", e));
                     return Transition(State::failed());
                 }
-                
+
                 // Check if already deployed
                 if Self::check_subgraph_exists(context).await {
                     context.set_progress(100, "Already deployed");
                     return Transition(State::completed());
                 }
-                
+
                 Transition(State::preparing())
             }
-            _ => Super
+            _ => Super,
         }
     }
 
@@ -383,12 +413,12 @@ impl GraphContractsDeployTaskStateMachine {
     async fn preparing(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(15, "Preparing environment");
-        
+
         if let Err(e) = Self::verify_environment(context) {
             context.set_progress(0, format!("Environment verification failed: {}", e));
             return Transition(State::failed());
         }
-        
+
         context.set_progress(20, "Environment ready");
         Transition(State::deploying_contracts())
     }
@@ -398,17 +428,20 @@ impl GraphContractsDeployTaskStateMachine {
     async fn deploying_contracts(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(25, "Deploying contracts");
-        
+
         if let Err(e) = Self::deploy_contracts(context).await {
             context.set_progress(0, format!("Contract deployment failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("Retrying contract deployment (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "Retrying contract deployment (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(65, "Contracts deployed");
         Transition(State::deploying_subgraph())
     }
@@ -418,17 +451,20 @@ impl GraphContractsDeployTaskStateMachine {
     async fn deploying_subgraph(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(70, "Deploying subgraph");
-        
+
         if let Err(e) = Self::deploy_subgraph(context).await {
             context.set_progress(0, format!("Subgraph deployment failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("Retrying from beginning (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "Retrying from beginning (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(90, "Subgraph deployed");
         Transition(State::verifying())
     }
@@ -438,17 +474,20 @@ impl GraphContractsDeployTaskStateMachine {
     async fn verifying(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &mut self.context;
         context.set_progress(95, "Verifying deployment");
-        
+
         if let Err(e) = Self::verify_deployment(context) {
             context.set_progress(0, format!("Verification failed: {}", e));
             if context.can_retry() {
                 context.retry_count += 1;
-                warn!("Verification failed, retrying (attempt {}/{})", context.retry_count, context.max_retries);
+                warn!(
+                    "Verification failed, retrying (attempt {}/{})",
+                    context.retry_count, context.max_retries
+                );
                 return Transition(State::preparing());
             }
             return Transition(State::failed());
         }
-        
+
         context.set_progress(100, "Deployment verified");
         Transition(State::completed())
     }
@@ -468,7 +507,10 @@ impl GraphContractsDeployTaskStateMachine {
             GraphContractsEvent::Retry => {
                 if context.can_retry() {
                     context.retry_count += 1;
-                    info!("Retrying deployment (attempt {}/{})", context.retry_count, context.max_retries);
+                    info!(
+                        "Retrying deployment (attempt {}/{})",
+                        context.retry_count, context.max_retries
+                    );
                     context.set_progress(5, "Retrying deployment");
                     Transition(State::checking_prerequisites())
                 } else {
@@ -476,7 +518,7 @@ impl GraphContractsDeployTaskStateMachine {
                     Super
                 }
             }
-            _ => Super
+            _ => Super,
         }
     }
 }
@@ -513,43 +555,43 @@ pub async fn deploy_graph_contracts(ethereum_url: String, working_dir: PathBuf) 
     let context = GraphContractsContext::new(ethereum_url, working_dir);
     let state_machine = GraphContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();
-    
+
     // Start the deployment
     machine.handle(&GraphContractsEvent::Start).await;
-    
+
     // The state machine will automatically progress through states
     // We could add more event handling here if needed
-    
+
     // Check final state
     match machine.state() {
         State::Completed {} => {
             info!("Graph contracts deployment completed successfully");
             Ok(())
         }
-        State::Failed {} => {
-            Err(Error::daemon("Graph contracts deployment failed"))
-        }
-        _ => {
-            Err(Error::daemon(
-                "Graph contracts deployment ended in unexpected state"
-            ))
-        }
+        State::Failed {} => Err(Error::daemon("Graph contracts deployment failed")),
+        _ => Err(Error::daemon(
+            "Graph contracts deployment ended in unexpected state",
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Removed unused statig prelude import
     use tempfile::TempDir;
 
     #[smol_potat::test]
     async fn test_state_machine_initialization() {
         let context = GraphContractsContext::new(
             "http://localhost:8545".to_string(),
-            std::path::PathBuf::from("/tmp/test")
+            std::path::PathBuf::from("/tmp/test"),
         );
-        let machine = GraphContractsDeployTaskStateMachine::new(context);
-        // State is managed internally by statig
+        let state_machine = GraphContractsDeployTaskStateMachine::new(context);
+        let machine = state_machine.state_machine();
+
+        // Initial state should be idle
+        assert!(matches!(machine.state(), State::Idle {}));
     }
 
     #[smol_potat::test]
@@ -557,13 +599,34 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let marker = temp_dir.path().join(".graph-network-deployed");
         async_fs::write(&marker, "QmTest").await.unwrap();
-        
+
         let context = GraphContractsContext::new(
             "http://localhost:8545".to_string(),
-            temp_dir.path().to_path_buf()
+            temp_dir.path().to_path_buf(),
         );
-        
+
+        // Just test the check function, don't start the full state machine
         assert!(GraphContractsDeployTaskStateMachine::check_subgraph_exists(&context).await);
+    }
+
+    #[smol_potat::test]
+    async fn test_state_transitions() {
+        let temp_dir = TempDir::new().unwrap();
+        let context = GraphContractsContext::new(
+            "http://localhost:8545".to_string(),
+            temp_dir.path().to_path_buf(),
+        );
+
+        let state_machine = GraphContractsDeployTaskStateMachine::new(context);
+        let mut machine = state_machine.state_machine();
+
+        // Test that we can handle the Start event
+        // Note: This won't actually deploy anything, just test state transitions
+        machine.handle(&GraphContractsEvent::Start).await;
+
+        // After start, we should transition from idle
+        // The exact state depends on prerequisites check
+        assert!(!matches!(machine.state(), State::Idle {}));
     }
 
     #[test]
@@ -572,7 +635,10 @@ mod tests {
         let result = extract_deployment_info(line);
         assert_eq!(
             result,
-            Some(("Controller".to_string(), "0x5FbDB2315678afecb367f032d93F642f64180aa3".to_string()))
+            Some((
+                "Controller".to_string(),
+                "0x5FbDB2315678afecb367f032d93F642f64180aa3".to_string()
+            ))
         );
     }
 

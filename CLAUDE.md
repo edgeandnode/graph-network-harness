@@ -4,6 +4,67 @@ Don't be overconfident. Use the scientitic method to evaluate assumptions!
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Task Implementation Architecture
+
+### IMPORTANT: Use State Machines for All Deployment Tasks
+
+When implementing any deployment task (one-time operations like contract deployment, configuration, etc.), you MUST use the state machine infrastructure we've built. This ensures robustness, idempotency, and proper error handling.
+
+#### Key Files to Reference:
+- **Infrastructure**: `crates/harness-core/src/task_state_machine.rs` - Generic state machine framework
+- **Example Implementation**: `crates/graph-test-daemon/src/tasks/graph_contracts_machine.rs` - Graph contracts deployment using statig
+- **Documentation**: `crates/graph-test-daemon/docs/TASKS-VS-SERVICES.md` - Clear distinction between tasks and services
+
+#### How to Implement a New Task:
+
+1. **Create a State Machine Implementation**:
+   ```rust
+   // In crates/graph-test-daemon/src/tasks/your_task_state.rs
+   pub struct YourTaskStateMachine {
+       state: TaskExecutionState,
+       // task-specific fields
+   }
+   
+   #[async_trait]
+   impl TaskStateMachine for YourTaskStateMachine {
+       async fn check_prerequisites(&mut self, context: &mut TaskContext) -> Result<bool> {
+           // Check if task is already done (idempotency)
+       }
+       
+       async fn prepare(&mut self, context: &mut TaskContext) -> Result<()> {
+           // Validate environment, check dependencies
+       }
+       
+       async fn execute(&mut self, context: &mut TaskContext) -> Result<()> {
+           // Perform the actual task
+       }
+       
+       async fn verify(&mut self, context: &mut TaskContext) -> Result<()> {
+           // Verify task completed successfully
+       }
+       
+       async fn rollback(&mut self, context: &mut TaskContext) -> Result<()> {
+           // Clean up on failure
+       }
+   }
+   ```
+
+2. **State Machine Benefits**:
+   - **Idempotency**: `check_prerequisites` ensures tasks don't duplicate work
+   - **Retry Logic**: Built-in retry with configurable max attempts
+   - **Progress Tracking**: Update progress (0-100%) throughout execution
+   - **Rollback**: Clean failure recovery
+   - **Clear States**: Idle → CheckingPrerequisites → Preparing → Executing → Verifying → Completed
+
+3. **When to Use State Machines vs Simple Tasks**:
+   - **Use State Machines for**: Contract deployments, blockchain operations, complex multi-step tasks, anything requiring verification
+   - **Use Simple DeploymentTask for**: Quick config generation, simple file operations
+
+4. **Runtime Compatibility**:
+   - Use `async-fs` instead of `tokio::fs` for file operations
+   - Use `async-process` instead of `tokio::process` for commands
+   - Use `async-runtime-compat` with smol feature for runtime agnostic code
+
 ## Common Development Commands
 
 ### Building

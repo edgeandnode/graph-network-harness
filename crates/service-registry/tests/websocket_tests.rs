@@ -1,6 +1,5 @@
 //! WebSocket integration tests
 
-
 mod common;
 
 /// Test basic WebSocket connection and operations

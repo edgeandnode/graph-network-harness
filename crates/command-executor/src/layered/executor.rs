@@ -193,9 +193,7 @@ mod tests {
             Err(e) => {
                 // Some test environments might not support process execution
                 // This is ok as long as the executor was created successfully
-                eprintln!(
-                    "Execution failed (may be expected in test environment): {e}"
-                );
+                eprintln!("Execution failed (may be expected in test environment): {e}");
             }
         }
     }

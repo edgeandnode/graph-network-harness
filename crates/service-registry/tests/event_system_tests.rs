@@ -3,7 +3,6 @@
 //! These tests validate the registry's event subscription and notification
 //! system which will be used by the WebSocket API once implemented.
 
-
 mod common;
 
 /// Test registry with WebSocket-style event handling

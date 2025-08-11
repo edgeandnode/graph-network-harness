@@ -251,9 +251,11 @@ impl AttachmentLayer for DockerAttachmentLayer {
         use crate::Command;
 
         // Transform commands to use docker exec
-        let _docker_prefix = ["docker".to_string(),
+        let _docker_prefix = [
+            "docker".to_string(),
             "exec".to_string(),
-            self.container_id.clone()];
+            self.container_id.clone(),
+        ];
 
         // Transform status command - check if container is running
         target.status_command = Command::new("docker")

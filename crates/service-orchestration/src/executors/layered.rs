@@ -11,8 +11,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use command_executor::{
-    Command, ProcessHandle, backends::LocalLauncher,
-    layered::{LayeredExecutor as CmdLayeredExecutor, SshLayer, DockerLayer, LocalLayer},
+    Command, ProcessHandle,
+    backends::LocalLauncher,
+    layered::{DockerLayer, LayeredExecutor as CmdLayeredExecutor, LocalLayer, SshLayer},
 };
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
@@ -98,93 +99,113 @@ impl LayeredServiceExecutor {
     }
 
     /// Build a layered executor from configuration
-    fn build_executor(layers: &[LayerConfig], env: &HashMap<String, String>) -> CmdLayeredExecutor<LocalLauncher> {
+    fn build_executor(
+        layers: &[LayerConfig],
+        env: &HashMap<String, String>,
+    ) -> CmdLayeredExecutor<LocalLauncher> {
         let mut executor = CmdLayeredExecutor::new(LocalLauncher);
 
         for layer_config in layers {
             match layer_config {
-                LayerConfig::Local { env: layer_env, working_dir } => {
+                LayerConfig::Local {
+                    env: layer_env,
+                    working_dir,
+                } => {
                     let mut local_layer = LocalLayer::new();
-                    
+
                     // Apply layer-specific environment
                     for (key, value) in layer_env {
                         local_layer = local_layer.with_env(key, value);
                     }
-                    
+
                     // Apply global environment
                     for (key, value) in env {
                         local_layer = local_layer.with_env(key, value);
                     }
-                    
+
                     if let Some(wd) = working_dir {
                         local_layer = local_layer.with_working_dir(wd);
                     }
-                    
+
                     executor = executor.with_layer(local_layer);
                 }
-                
-                LayerConfig::Ssh { host, user, env: layer_env, port, identity_file, options } => {
+
+                LayerConfig::Ssh {
+                    host,
+                    user,
+                    env: layer_env,
+                    port,
+                    identity_file,
+                    options,
+                } => {
                     let destination = format!("{user}@{host}");
                     let mut ssh_layer = SshLayer::new(destination);
-                    
+
                     // Apply layer-specific environment
                     for (key, value) in layer_env {
                         ssh_layer = ssh_layer.with_env(key, value);
                     }
-                    
+
                     // Apply global environment
                     for (key, value) in env {
                         ssh_layer = ssh_layer.with_env(key, value);
                     }
-                    
+
                     // Apply SSH-specific configuration
                     if let Some(p) = port {
                         ssh_layer = ssh_layer.with_port(*p);
                     }
-                    
+
                     if let Some(key_file) = identity_file {
                         ssh_layer = ssh_layer.with_identity_file(key_file);
                     }
-                    
+
                     for option in options {
                         ssh_layer = ssh_layer.with_option(option);
                     }
-                    
+
                     // Enable agent forwarding by default
                     ssh_layer = ssh_layer.with_agent_forwarding(true);
-                    
+
                     executor = executor.with_layer(ssh_layer);
                 }
-                
-                LayerConfig::Docker { container, user, working_dir, env: layer_env, interactive, tty } => {
+
+                LayerConfig::Docker {
+                    container,
+                    user,
+                    working_dir,
+                    env: layer_env,
+                    interactive,
+                    tty,
+                } => {
                     let mut docker_layer = DockerLayer::new(container);
-                    
+
                     // Apply layer-specific environment
                     for (key, value) in layer_env {
                         docker_layer = docker_layer.with_env(key, value);
                     }
-                    
+
                     // Apply global environment
                     for (key, value) in env {
                         docker_layer = docker_layer.with_env(key, value);
                     }
-                    
+
                     if let Some(u) = user {
                         docker_layer = docker_layer.with_user(u);
                     }
-                    
+
                     if let Some(wd) = working_dir {
                         docker_layer = docker_layer.with_working_dir(wd);
                     }
-                    
+
                     if *interactive {
                         docker_layer = docker_layer.with_interactive(true);
                     }
-                    
+
                     if *tty {
                         docker_layer = docker_layer.with_tty(true);
                     }
-                    
+
                     executor = executor.with_layer(docker_layer);
                 }
             }
@@ -210,14 +231,20 @@ impl Default for LayeredServiceExecutor {
 impl ServiceExecutor for LayeredServiceExecutor {
     async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Layered { layers, command } = &config.target else {
-            return Err(Error::Config("LayeredServiceExecutor can only handle Layered targets".to_string()));
+            return Err(Error::Config(
+                "LayeredServiceExecutor can only handle Layered targets".to_string(),
+            ));
         };
 
-        info!("Starting layered service: {} with {} layers", config.name, layers.len());
+        info!(
+            "Starting layered service: {} with {} layers",
+            config.name,
+            layers.len()
+        );
 
         // Get environment variables from config
         let env = config.target.env();
-        
+
         // Build the layered executor with all layers
         let executor = Self::build_executor(layers, &env);
 
@@ -230,9 +257,10 @@ impl ServiceExecutor for LayeredServiceExecutor {
         debug!("Executing layered command: {:?}", cmd);
 
         // Execute command through layers
-        let (event_stream, handle) = executor.execute_command(cmd).await.map_err(|e| {
-            Error::CommandExecutor(e)
-        })?;
+        let (event_stream, handle) = executor
+            .execute_command(cmd)
+            .await
+            .map_err(Error::CommandExecutor)?;
 
         // Get process PID (may not be available for remote processes)
         let pid = handle.pid();
@@ -294,7 +322,10 @@ impl ServiceExecutor for LayeredServiceExecutor {
                 }
             }
         } else {
-            warn!("Layered service {} not found in running processes", service.name);
+            warn!(
+                "Layered service {} not found in running processes",
+                service.name
+            );
             return Err(Error::ServiceNotFound(service.name.clone()));
         }
 
@@ -308,7 +339,7 @@ impl ServiceExecutor for LayeredServiceExecutor {
         debug!("Health checking layered service: {}", service.name);
 
         let processes = self.running_processes.lock().await;
-        
+
         if let Some(_process_info) = processes.get(&service.id.to_string()) {
             // Use configured health check if available
             if let Some(health_check) = &service.config.health_check {
@@ -318,7 +349,9 @@ impl ServiceExecutor for LayeredServiceExecutor {
                 return Ok(HealthStatus::Healthy);
             }
         } else {
-            Ok(HealthStatus::Unhealthy("Layered service not found".to_string()))
+            Ok(HealthStatus::Unhealthy(
+                "Layered service not found".to_string(),
+            ))
         }
     }
 
@@ -326,7 +359,10 @@ impl ServiceExecutor for LayeredServiceExecutor {
         &self,
         service: &RunningService,
     ) -> std::result::Result<EventStream, Error> {
-        debug!("Creating event stream for layered service: {}", service.name);
+        debug!(
+            "Creating event stream for layered service: {}",
+            service.name
+        );
 
         // Get the event stream for this service
         let processes = self.running_processes.lock().await;
@@ -348,7 +384,7 @@ impl ServiceExecutor for LayeredServiceExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ServiceConfig, ServiceTarget, CommandSpec};
+    use crate::config::{CommandSpec, ServiceConfig, ServiceTarget};
 
     #[test]
     fn test_can_handle() {
@@ -358,16 +394,14 @@ mod tests {
         let layered_config = ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Layered {
-                layers: vec![
-                    LayerConfig::Ssh {
-                        host: "example.com".to_string(),
-                        user: "testuser".to_string(),
-                        env: HashMap::new(),
-                        port: None,
-                        identity_file: None,
-                        options: vec![],
-                    },
-                ],
+                layers: vec![LayerConfig::Ssh {
+                    host: "example.com".to_string(),
+                    user: "testuser".to_string(),
+                    env: HashMap::new(),
+                    port: None,
+                    identity_file: None,
+                    options: vec![],
+                }],
                 command: CommandSpec {
                     binary: "echo".to_string(),
                     args: vec!["hello".to_string()],
@@ -416,13 +450,11 @@ mod tests {
             },
         ];
 
-        let global_env = HashMap::from([
-            ("GLOBAL_VAR".to_string(), "value".to_string()),
-        ]);
+        let global_env = HashMap::from([("GLOBAL_VAR".to_string(), "value".to_string())]);
 
         // Test that build_executor doesn't panic
         let _executor = LayeredServiceExecutor::build_executor(&layers, &global_env);
-        
+
         // We can't easily inspect the layers inside the executor,
         // but we've verified it builds without errors
     }

@@ -362,7 +362,6 @@ impl WsClientHandle {
         }
     }
 
-
     /// Close the connection
     pub async fn close(&self) -> Result<()> {
         self.tx

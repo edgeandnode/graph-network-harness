@@ -1,18 +1,96 @@
-# RemoteSSH Executor
+# SSH Execution via Layered Executor
 
-The RemoteSSH executor enables running services on remote hosts via SSH.
+**Note: The dedicated RemoteSSH executor has been removed in favor of the more flexible LayeredServiceExecutor with SSH layers.**
 
 ## Current Implementation
 
-The RemoteSSH executor currently supports:
-- SSH key authentication (via `SSH_IDENTITY_FILE` or `SSH_KEY_PATH`)
-- SSH agent forwarding
+SSH execution is now handled by the `LayeredServiceExecutor` which supports:
+- SSH key authentication
+- SSH agent forwarding  
 - Custom SSH ports and options
 - Environment variable forwarding
-- Process execution on remote hosts
+- **Multi-hop SSH (jump hosts)**
+- **SSH + Docker execution**
+- **Arbitrary layer composition**
 
 ## Configuration Example
 
+```yaml
+services:
+  my-service:
+    target:
+      type: layered
+      layers:
+        - type: ssh
+          host: "192.168.1.100"
+          user: "deploy"
+          port: 22
+          identity_file: "/home/user/.ssh/id_rsa"
+        - type: local
+          working_dir: "/opt/services"
+    command:
+      binary: "/usr/bin/my-service"
+      args: ["--config", "/etc/my-service/config.yaml"]
+    env:
+      SERVICE_ENV: "production"
+```
+
+## Advanced Scenarios
+
+### Multi-hop SSH (Jump Host)
+```yaml
+services:
+  remote-service:
+    target:
+      type: layered
+      layers:
+        - type: ssh
+          host: "jumphost.example.com"
+          user: "admin"
+        - type: ssh  
+          host: "internal-server"
+          user: "deploy"
+        - type: local
+```
+
+### SSH + Docker Execution
+```yaml
+services:
+  containerized-service:
+    target:
+      type: layered
+      layers:
+        - type: ssh
+          host: "docker-host.example.com" 
+          user: "deploy"
+        - type: docker
+          container: "my-service-container"
+          user: "appuser"
+        - type: local
+```
+
+### SSH into Test Container
+```yaml
+services:
+  test-service:
+    target:
+      type: layered  
+      layers:
+        - type: ssh
+          host: "graph-container"
+          user: "root"
+          port: 2222
+          identity_file: "~/.ssh/graph_test_key"
+        - type: local
+          working_dir: "/opt/graph"
+    command:
+      binary: "systemctl"
+      args: ["start", "my-service"]
+```
+
+## Migration from RemoteSSH
+
+Old configuration:
 ```yaml
 services:
   my-service:
@@ -20,84 +98,31 @@ services:
     host: "192.168.1.100"
     user: "deploy"
     binary: "/usr/bin/my-service"
-    args: ["--config", "/etc/my-service/config.yaml"]
-    env:
-      SSH_PORT: "22"
-      SSH_IDENTITY_FILE: "/home/user/.ssh/id_rsa"
-      SERVICE_ENV: "production"
+    args: ["--config", "/etc/config.yaml"]
 ```
 
-## Current Limitations
-
-### Single Layer Execution
-The RemoteSSH executor is currently hard-coded to use only a LocalLauncher with an SSH layer:
-
-```rust
-let executor = LayeredExecutor::new(LocalLauncher)
-    .with_layer(ssh_layer);
-```
-
-This means it cannot currently support:
-- Multi-hop SSH (jump hosts)
-- SSH + Docker execution
-- SSH + other execution layers
-
-### Future Improvements
-
-To support more complex remote execution scenarios, we could:
-
-1. **Extend RemoteMode** to support layered configurations:
+New configuration:
 ```yaml
 services:
-  complex-service:
-    type: remote-ssh
-    host: "jump.example.com"
-    user: "jump-user"
-    mode:
-      type: ssh  # SSH to another host
-      host: "target.internal"
-      user: "app-user"
-      mode:
-        type: docker
-        container: "my-app"
-        command: ["python", "app.py"]
-```
-
-2. **Create a LayeredServiceTarget** that explicitly defines execution layers:
-```yaml
-services:
-  layered-service:
-    type: layered
-    layers:
-      - type: ssh
-        host: "remote.example.com"
-        user: "deploy"
-      - type: docker
-        container: "app-container"
+  my-service:
+    target:
+      type: layered
+      layers:
+        - type: ssh
+          host: "192.168.1.100"
+          user: "deploy"
+        - type: local
     command:
-      binary: "node"
-      args: ["server.js"]
+      binary: "/usr/bin/my-service" 
+      args: ["--config", "/etc/config.yaml"]
 ```
 
-3. **Make RemoteSSH executor configurable** to accept custom launchers or additional layers.
+## Benefits of Layered Approach
 
-## Testing
+1. **Composability** - Mix and match execution layers
+2. **Flexibility** - Support complex deployment scenarios
+3. **Reusability** - Layer configurations can be shared
+4. **Extensibility** - Easy to add new layer types
+5. **Testing** - Simplified testing with container-based execution
 
-The RemoteSSH executor includes comprehensive integration tests that use Docker containers with SSH servers. To run the tests:
-
-1. Generate SSH test keys:
-```bash
-./scripts/generate-ssh-test-keys.sh
-```
-
-2. Run the tests (requires Docker):
-```bash
-cargo test -p service-orchestration --features ssh-tests,docker-tests
-```
-
-## Security Considerations
-
-- SSH keys should never be committed to version control
-- Use SSH agent forwarding carefully in production
-- Consider using dedicated SSH keys for service orchestration
-- Enable strict host key checking in production environments
+The layered executor architecture enables much more powerful remote execution scenarios while maintaining simplicity for basic SSH use cases.

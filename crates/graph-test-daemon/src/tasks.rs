@@ -1071,14 +1071,15 @@ fn process_subgraph_event(
                 }
             }
         }
-        ProcessEventType::Exited { code, .. } => {
-            if let Some(code) = code {
-                if *code != 0 {
-                    return Some(SubgraphDeployEvent::Error {
-                        message: format!("Graph CLI failed with exit code {}", code),
-                    });
-                }
+        ProcessEventType::Exited { code: Some(code), .. } => {
+            if *code != 0 {
+                return Some(SubgraphDeployEvent::Error {
+                    message: format!("Graph CLI failed with exit code {code}"),
+                });
             }
+        }
+        ProcessEventType::Exited { code: None, .. } => {
+            // Exit without code, nothing to do
         }
         _ => {}
     }

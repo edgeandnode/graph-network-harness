@@ -63,10 +63,8 @@ impl EventStreamable for SystemdAttachedExecutor {
                     .clone();
 
                 // Use local executor to run journalctl
-                let executor = command_executor::Executor::new(
-                    format!("journald-{unit_name}"),
-                    LocalLauncher,
-                );
+                let executor =
+                    command_executor::Executor::new(format!("journald-{unit_name}"), LocalLauncher);
 
                 let (events, _handle) = executor.launch(&Target::Command, cmd).await?;
 
@@ -307,9 +305,7 @@ impl LocalProcessAttachedExecutor {
                 .parse::<u32>()
                 .map_err(|_| Error::Config("Invalid PID format".to_string()))
         } else {
-            Err(Error::Config(format!(
-                "Process '{process_name}' not found"
-            )))
+            Err(Error::Config(format!("Process '{process_name}' not found")))
         }
     }
 

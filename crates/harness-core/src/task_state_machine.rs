@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use statig::prelude::*;
+// Removed unused statig prelude import
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::{Duration, Instant};
@@ -40,7 +40,10 @@ pub enum TaskEvent {
     /// Start the task
     Start,
     /// Prerequisites have been checked
-    PrerequisitesChecked { already_complete: bool },
+    PrerequisitesChecked {
+        /// Whether the task was already complete when checked
+        already_complete: bool,
+    },
     /// Preparation is complete
     PreparedSuccessfully,
     /// Execution completed
@@ -195,7 +198,10 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
             }
 
             // After checking prerequisites
-            (TaskExecutionState::CheckingPrerequisites, TaskEvent::PrerequisitesChecked { already_complete }) => {
+            (
+                TaskExecutionState::CheckingPrerequisites,
+                TaskEvent::PrerequisitesChecked { already_complete },
+            ) => {
                 if already_complete {
                     self.context.set_progress(100, "Already completed");
                     TaskExecutionState::Completed
@@ -224,7 +230,8 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
             }
 
             (TaskExecutionState::Verifying, TaskEvent::VerificationFailed(reason)) => {
-                self.context.set_progress(85, format!("Verification failed: {}", reason));
+                self.context
+                    .set_progress(85, format!("Verification failed: {reason}"));
                 if self.context.can_retry() {
                     self.context.increment_retry();
                     TaskExecutionState::Preparing // Retry from preparation
@@ -246,7 +253,7 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
                     self.context.increment_retry();
                     TaskExecutionState::Preparing // Retry from preparation
                 } else {
-                    self.context.set_progress(0, format!("Failed: {}", error));
+                    self.context.set_progress(0, format!("Failed: {error}"));
                     TaskExecutionState::RollingBack
                 }
             }
@@ -290,15 +297,19 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
 
         loop {
             let state = self.inner.get_state();
-            
+
             match state {
                 TaskExecutionState::CheckingPrerequisites => {
                     match self.inner.check_prerequisites(&mut self.context).await {
                         Ok(already_complete) => {
-                            self.process_event(TaskEvent::PrerequisitesChecked { already_complete }).await?;
+                            self.process_event(TaskEvent::PrerequisitesChecked {
+                                already_complete,
+                            })
+                            .await?;
                         }
                         Err(e) => {
-                            self.process_event(TaskEvent::ErrorOccurred(e.to_string())).await?;
+                            self.process_event(TaskEvent::ErrorOccurred(e.to_string()))
+                                .await?;
                         }
                     }
                 }
@@ -309,7 +320,8 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
                             self.process_event(TaskEvent::PreparedSuccessfully).await?;
                         }
                         Err(e) => {
-                            self.process_event(TaskEvent::ErrorOccurred(e.to_string())).await?;
+                            self.process_event(TaskEvent::ErrorOccurred(e.to_string()))
+                                .await?;
                         }
                     }
                 }
@@ -320,21 +332,21 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
                             self.process_event(TaskEvent::ExecutionCompleted).await?;
                         }
                         Err(e) => {
-                            self.process_event(TaskEvent::ErrorOccurred(e.to_string())).await?;
+                            self.process_event(TaskEvent::ErrorOccurred(e.to_string()))
+                                .await?;
                         }
                     }
                 }
 
-                TaskExecutionState::Verifying => {
-                    match self.inner.verify(&mut self.context).await {
-                        Ok(()) => {
-                            self.process_event(TaskEvent::VerificationPassed).await?;
-                        }
-                        Err(e) => {
-                            self.process_event(TaskEvent::VerificationFailed(e.to_string())).await?;
-                        }
+                TaskExecutionState::Verifying => match self.inner.verify(&mut self.context).await {
+                    Ok(()) => {
+                        self.process_event(TaskEvent::VerificationPassed).await?;
                     }
-                }
+                    Err(e) => {
+                        self.process_event(TaskEvent::VerificationFailed(e.to_string()))
+                            .await?;
+                    }
+                },
 
                 TaskExecutionState::RollingBack => {
                     match self.inner.rollback(&mut self.context).await {
@@ -349,8 +361,7 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
                             );
                             // Force transition to failed state even if rollback fails
                             self.inner.set_state(TaskExecutionState::Failed(format!(
-                                "Rollback failed: {}",
-                                e
+                                "Rollback failed: {e}"
                             )));
                         }
                     }
@@ -373,7 +384,7 @@ impl<T: TaskStateMachine> TaskStateMachineWrapper<T> {
                         retries = self.context.retry_count,
                         "Task failed"
                     );
-                    return Err(Error::daemon(format!("Task failed: {}", reason)));
+                    return Err(Error::daemon(format!("Task failed: {reason}")));
                 }
 
                 TaskExecutionState::Idle => {
@@ -453,7 +464,9 @@ mod tests {
 
         async fn execute(&mut self, context: &mut TaskContext) -> Result<()> {
             context.set_progress(50, "Executing test task");
-            context.data.insert("test_key".to_string(), serde_json::json!("test_value"));
+            context
+                .data
+                .insert("test_key".to_string(), serde_json::json!("test_value"));
             Ok(())
         }
 
@@ -560,28 +573,31 @@ mod tests {
 
         let result = wrapper.run().await;
         assert!(result.is_err());
-        assert!(matches!(wrapper.inner.get_state(), TaskExecutionState::Failed(_)));
+        assert!(matches!(
+            wrapper.inner.get_state(),
+            TaskExecutionState::Failed(_)
+        ));
         assert_eq!(wrapper.context.retry_count, 2);
     }
 
     #[test]
     fn test_task_context() {
         let mut context = TaskContext::new("test".to_string(), 5);
-        
+
         assert_eq!(context.progress, 0);
         assert!(context.can_retry());
-        
+
         context.set_progress(50, "Half way");
         assert_eq!(context.progress, 50);
         assert_eq!(context.status_message, "Half way");
-        
+
         // Test retry logic
         for _ in 0..5 {
             context.increment_retry();
         }
         assert!(!context.can_retry());
         assert_eq!(context.retry_count, 5);
-        
+
         // Test progress clamping
         context.set_progress(150, "Over 100");
         assert_eq!(context.progress, 100);
@@ -592,7 +608,7 @@ mod tests {
         let mut context = TaskContext::new("test".to_string(), 3);
         context.set_progress(75, "Three quarters done");
         context.retry_count = 1;
-        
+
         let progress: TaskProgress = (&context).into();
         assert_eq!(progress.name, "test");
         assert_eq!(progress.progress, 75);

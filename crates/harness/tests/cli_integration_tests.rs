@@ -183,7 +183,9 @@ async fn test_cli_environment_variables() -> Result<()> {
     let ctx = CliTestContext::new().await?;
 
     // Test: Use environment variable for daemon port
-    std::env::set_var("HARNESS_DAEMON_PORT", ctx.daemon_port.to_string());
+    unsafe {
+        std::env::set_var("HARNESS_DAEMON_PORT", ctx.daemon_port.to_string());
+    }
     let output = Command::new(&ctx.harness_binary)
         .args(&["daemon", "status"])
         .output()?;

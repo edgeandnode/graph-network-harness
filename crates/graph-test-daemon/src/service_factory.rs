@@ -3,7 +3,7 @@
 //! This module provides a factory that creates service instances that implement
 //! both the Service trait and ServiceSetup trait.
 
-use harness_core::service::ServiceSetup;
+// Removed unused ServiceSetup import
 use std::sync::Arc;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
@@ -25,12 +25,12 @@ pub enum GraphService {
 #[async_trait::async_trait]
 impl harness_core::service::Service for GraphService {
     type Action = serde_json::Value; // Generic action for the enum
-    type Event = serde_json::Value;  // Generic event for the enum
-    
+    type Event = serde_json::Value; // Generic event for the enum
+
     fn service_type() -> &'static str {
         "graph-service-enum" // Generic type for the enum
     }
-    
+
     fn name(&self) -> &str {
         match self {
             GraphService::GraphNode(service) => service.name(),
@@ -49,7 +49,10 @@ impl harness_core::service::Service for GraphService {
         }
     }
 
-    async fn dispatch_action(&self, _action: Self::Action) -> harness_core::Result<async_channel::Receiver<Self::Event>> {
+    async fn dispatch_action(
+        &self,
+        _action: Self::Action,
+    ) -> harness_core::Result<async_channel::Receiver<Self::Event>> {
         // For the enum, we'd need to route actions to the appropriate service
         // For now, return an empty receiver
         let (_tx, rx) = async_channel::unbounded();

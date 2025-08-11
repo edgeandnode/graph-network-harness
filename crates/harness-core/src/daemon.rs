@@ -5,7 +5,7 @@
 
 use async_runtime_compat::prelude::*;
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use service_orchestration::{
     DependencyGraph, DependencyNode, ServiceConfig, ServiceStatus, StackConfig,
 };
@@ -60,7 +60,7 @@ pub struct BaseDaemon {
 
     /// Whether the daemon is running
     running: Arc<std::sync::atomic::AtomicBool>,
-    
+
     /// Stack configuration if provided
     stack_config: Option<StackConfig>,
 }
@@ -95,33 +95,37 @@ impl BaseDaemon {
     pub fn task_stack(&self) -> &TaskStack {
         &self.task_stack
     }
-    
+
     /// Launch all services in the stack in dependency order
     pub async fn launch_stack(&self) -> Result<()> {
-        let config = self.stack_config.as_ref()
+        let config = self
+            .stack_config
+            .as_ref()
             .ok_or_else(|| Error::daemon("No stack configuration provided"))?;
-            
+
         info!("Launching stack: {}", config.name);
-        
+
         // Build dependency graph from config
         let graph = DependencyGraph::from_stack_config(config);
-        
+
         // Get topological sort for startup order
-        let start_order = graph.topological_sort()
-            .map_err(|e| Error::daemon(format!("Failed to resolve dependencies: {}", e)))?;
-        
+        let start_order = graph
+            .topological_sort()
+            .map_err(|e| Error::daemon(format!("Failed to resolve dependencies: {e}")))?;
+
         info!("Starting services in dependency order: {:?}", start_order);
-        
+
         // Start each service in order
         for node in start_order {
             match node {
                 DependencyNode::Service(name) => {
                     // Get the service config
-                    let service_instance = config.services.get(&name)
-                        .ok_or_else(|| Error::daemon(format!("Service {} not found in config", name)))?;
-                    
+                    let service_instance = config.services.get(&name).ok_or_else(|| {
+                        Error::daemon(format!("Service {name} not found in config"))
+                    })?;
+
                     info!("Starting service: {}", name);
-                    
+
                     // Convert to ServiceConfig for ServiceManager
                     let service_config = ServiceConfig {
                         name: name.clone(),
@@ -129,93 +133,116 @@ impl BaseDaemon {
                         dependencies: service_instance.orchestration.dependencies.clone(),
                         health_check: service_instance.orchestration.health_check.clone(),
                     };
-                    
+
                     // Start the service via ServiceManager
-                    self.service_manager.start_service(&name, service_config).await
-                        .map_err(|e| Error::daemon(format!("Failed to start service {}: {}", name, e)))?;
-                    
+                    self.service_manager
+                        .start_service(&name, service_config)
+                        .await
+                        .map_err(|e| {
+                            Error::daemon(format!("Failed to start service {name}: {e}"))
+                        })?;
+
                     // Wait for health check if configured
                     if let Some(health_check) = &service_instance.orchestration.health_check {
-                        let timeout = Duration::from_secs(health_check.timeout as u64);
+                        let timeout = Duration::from_secs(health_check.timeout);
                         self.wait_for_service_health(&name, timeout).await?;
                     }
-                    
+
                     info!("Service {} started successfully", name);
                 }
                 DependencyNode::Task(name) => {
                     info!("Processing task: {}", name);
-                    
+
                     // Execute the task
-                    self.execute_task(&name).await
-                        .map_err(|e| Error::daemon(format!("Failed to execute task {}: {}", name, e)))?;
-                    
+                    self.execute_task(&name).await.map_err(|e| {
+                        Error::daemon(format!("Failed to execute task {name}: {e}"))
+                    })?;
+
                     info!("Task {} executed successfully", name);
                 }
             }
         }
-        
+
         info!("All services launched successfully");
         Ok(())
     }
-    
+
     /// Execute a task
     async fn execute_task(&self, task_name: &str) -> Result<()> {
         use async_runtime_compat::smol::SmolSpawner;
-        
+
         info!("Executing task: {}", task_name);
-        
-        let config = self.stack_config.as_ref()
+
+        let config = self
+            .stack_config
+            .as_ref()
             .ok_or_else(|| Error::daemon("No stack configuration provided"))?;
-        
+
         // Get the task config
-        let task_config = config.tasks.get(task_name)
-            .ok_or_else(|| Error::daemon(format!("Task {} not found in config", task_name)))?;
-        
+        let task_config = config
+            .tasks
+            .get(task_name)
+            .ok_or_else(|| Error::daemon(format!("Task {task_name} not found in config")))?;
+
         // Check if task is already completed via TaskStack
-        if self.task_stack.is_completed(task_name).await.unwrap_or(false) {
+        if self
+            .task_stack
+            .is_completed(task_name)
+            .await
+            .unwrap_or(false)
+        {
             info!("Task {} is already completed, skipping", task_name);
             return Ok(());
         }
-        
+
         // Check if we have a registered task for this task_type
         if self.task_stack.get(task_name).is_some() {
             // Execute the task using the TaskStack which handles spawning
             info!("Executing registered task: {}", task_name);
-            
+
             // Create a simple action with the config parameters
             let action = json!({
                 "config": task_config.config,
                 "target": task_config.target
             });
-            
+
             // Execute using TaskStack's execute method which handles spawning
             let spawner = SmolSpawner;
             let event_rx = self.task_stack.execute(task_name, action, &spawner).await?;
-            
+
             // Wait for task to complete by consuming all events
             while let Ok(event) = event_rx.recv().await {
                 info!("Task {} event: {:?}", task_name, event);
             }
-            
+
             info!("Task {} completed successfully", task_name);
         } else {
             // No registered task implementation, execute directly via command-executor
-            info!("Executing task {} via command executor (no registered implementation)", task_name);
-            
+            info!(
+                "Executing task {} via command executor (no registered implementation)",
+                task_name
+            );
+
             // For now, we'll just log that we would execute it
             // In a real implementation, we'd use command-executor to run the target
-            warn!("Direct task execution not yet implemented for task: {}", task_name);
+            warn!(
+                "Direct task execution not yet implemented for task: {}",
+                task_name
+            );
         }
-        
+
         Ok(())
     }
-    
+
     /// Wait for a service to become healthy
     async fn wait_for_service_health(&self, service_name: &str, timeout: Duration) -> Result<()> {
-        info!("Waiting for service {} to become healthy (timeout: {:?})", service_name, timeout);
-        
+        info!(
+            "Waiting for service {} to become healthy (timeout: {:?})",
+            service_name, timeout
+        );
+
         let start = std::time::Instant::now();
-        
+
         loop {
             // Check service status
             match self.service_manager.get_service_status(service_name).await {
@@ -226,8 +253,7 @@ impl BaseDaemon {
                 Ok(status) => {
                     if start.elapsed() > timeout {
                         return Err(Error::daemon(format!(
-                            "Service {} failed to become healthy within timeout. Current status: {:?}",
-                            service_name, status
+                            "Service {service_name} failed to become healthy within timeout. Current status: {status:?}"
                         )));
                     }
                     // Continue waiting
@@ -237,8 +263,7 @@ impl BaseDaemon {
                     warn!("Error checking health for service {}: {}", service_name, e);
                     if start.elapsed() > timeout {
                         return Err(Error::daemon(format!(
-                            "Service {} health check timed out: {}",
-                            service_name, e
+                            "Service {service_name} health check timed out: {e}"
                         )));
                     }
                     sleep(Duration::from_secs(1)).await;
@@ -367,7 +392,7 @@ impl DaemonBuilder {
         self.config = Some(config);
         self
     }
-    
+
     /// Set typed stack configuration for orchestration
     pub fn with_stack_config(mut self, config: StackConfig) -> Self {
         self.stack_config = Some(config);

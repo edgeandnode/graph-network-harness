@@ -6,7 +6,9 @@
 use crate::{
     Error,
     config::{HealthCheck, ServiceConfig, ServiceStatus},
-    executors::{DockerExecutor, ProcessExecutor, RemoteSshExecutor, RunningService, ServiceExecutor},
+    executors::{
+        DockerExecutor, LayeredServiceExecutor, ProcessExecutor, RunningService, ServiceExecutor,
+    },
     health::{HealthChecker, HealthMonitor, HealthStatus},
 };
 use service_registry::{
@@ -66,7 +68,10 @@ impl ServiceManager {
         let mut executors: HashMap<String, Arc<dyn ServiceExecutor>> = HashMap::new();
         executors.insert("process".to_string(), Arc::new(ProcessExecutor::new()));
         executors.insert("docker".to_string(), Arc::new(DockerExecutor::new()));
-        executors.insert("remote-ssh".to_string(), Arc::new(RemoteSshExecutor::new()));
+        executors.insert(
+            "layered".to_string(),
+            Arc::new(LayeredServiceExecutor::new()),
+        );
 
         Ok(Self {
             registry,
@@ -203,7 +208,6 @@ impl ServiceManager {
         info!("Successfully stopped service: {}", name);
         Ok(())
     }
-
 
     /// Get the status of a service
     pub async fn get_service_status(

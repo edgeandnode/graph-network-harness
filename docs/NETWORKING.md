@@ -36,9 +36,13 @@ Services running on remote machines accessible via SSH.
    services:
      remote-service:
        target:
-         type: remote-ssh
-         host: "10.42.0.10"  # WireGuard IP
-         user: "appuser"
+         type: layered
+         layers:
+           - type: ssh
+             host: "10.42.0.10"  # WireGuard IP
+             user: "appuser"
+           - type: local
+       command:
          binary: "myapp"
          args: []
          env: {}
@@ -75,9 +79,13 @@ services:
 services:
   api-server:
     target:
-      type: remote-ssh
-      host: "192.168.1.100"
-      user: "deploy"
+      type: layered
+      layers:
+        - type: ssh
+          host: "192.168.1.100"
+          user: "deploy"
+        - type: local
+    command:
       binary: "api-server"
       args: []
       env: {}
@@ -89,9 +97,13 @@ services:
 services:
   secure-service:
     target:
-      type: remote-ssh
-      host: "10.42.0.5"  # WireGuard IP
-      user: "secure"
+      type: layered
+      layers:
+        - type: ssh
+          host: "10.42.0.5"  # WireGuard IP
+          user: "secure"
+        - type: local
+    command:
       binary: "secure-service"
       args: []
       env: {}

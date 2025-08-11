@@ -348,7 +348,7 @@ impl Service for AnvilService {
                     let _ = tx
                         .send(AnvilEvent::BlockMined {
                             block_number: 1000 + i,
-                            block_hash: format!("0x{:064x}", i),
+                            block_hash: format!("0x{i:064x}"),
                         })
                         .await;
 

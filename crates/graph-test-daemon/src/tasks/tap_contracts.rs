@@ -3,16 +3,14 @@
 //! This module implements a robust state machine for deploying TAP (Timeline Aggregation Protocol)
 //! contracts with proper verification and error recovery using the statig crate.
 
-use async_trait::async_trait;
 use command_executor::{
-    Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher,
+    Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
 use harness_core::{Error, Result};
-use serde::{Deserialize, Serialize};
 use statig::prelude::*;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
 /// States for the TAP contracts deployment state machine
@@ -153,10 +151,10 @@ impl TapContractsDeployTaskStateMachine {
 
         let contents = async_fs::read_to_string(&graph_addresses_file)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to read Graph addresses: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to read Graph addresses: {e}")))?;
 
         let json: serde_json::Value = serde_json::from_str(&contents)
-            .map_err(|e| Error::daemon(format!("Failed to parse Graph addresses: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to parse Graph addresses: {e}")))?;
 
         if let Some(chain_data) = json.get("1337") {
             if let Some(contracts) = chain_data.as_object() {
@@ -229,7 +227,7 @@ impl TapContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to launch forge: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to launch forge: {e}")))?;
 
         let mut completed_count = 0;
         let total_contracts = 3; // TAP typically has 3 main contracts
@@ -258,7 +256,7 @@ impl TapContractsDeployTaskStateMachine {
                             let progress = 20 + (completed_count * 40 / total_contracts) as u8;
                             context.set_progress(
                                 progress,
-                                format!("Deployed {} contracts", completed_count),
+                                format!("Deployed {completed_count} contracts"),
                             );
                         }
                     }
@@ -270,7 +268,7 @@ impl TapContractsDeployTaskStateMachine {
         let exit_status = handle
             .wait()
             .await
-            .map_err(|e| Error::daemon(format!("Failed to wait for forge: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to wait for forge: {e}")))?;
 
         if !exit_status.success() {
             return Err(Error::daemon("TAP contract deployment failed"));
@@ -287,10 +285,10 @@ impl TapContractsDeployTaskStateMachine {
             "1337": context.deployed_addresses
         });
         let contents = serde_json::to_string_pretty(&json)
-            .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {e}")))?;
         async_fs::write(&addresses_file, contents)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to write addresses file: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to write addresses file: {e}")))?;
 
         Ok(())
     }
@@ -314,7 +312,7 @@ impl TapContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to create TAP subgraph: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to create TAP subgraph: {e}")))?;
 
         context.set_progress(70, "Created TAP subgraph, deploying...");
 
@@ -337,7 +335,7 @@ impl TapContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to deploy TAP subgraph: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to deploy TAP subgraph: {e}")))?;
 
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
@@ -354,7 +352,7 @@ impl TapContractsDeployTaskStateMachine {
 
         // Wait for process to complete and check exit status
         let exit_status = handle.wait().await.map_err(|e| {
-            Error::daemon(format!("Failed to wait for TAP subgraph deployment: {}", e))
+            Error::daemon(format!("Failed to wait for TAP subgraph deployment: {e}"))
         })?;
 
         if !exit_status.success() {
@@ -365,7 +363,7 @@ impl TapContractsDeployTaskStateMachine {
             let marker = context.working_dir.join(".tap-deployed");
             async_fs::write(&marker, id.as_bytes())
                 .await
-                .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {}", e)))?;
+                .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {e}")))?;
         }
 
         Ok(())
@@ -382,7 +380,7 @@ impl TapContractsDeployTaskStateMachine {
         let expected = ["TAPVerifier", "TAPCollector", "Escrow"];
         for name in &expected {
             if !context.deployed_addresses.contains_key(*name) {
-                return Err(Error::daemon(format!("Missing TAP contract: {}", name)));
+                return Err(Error::daemon(format!("Missing TAP contract: {name}")));
             }
         }
 
@@ -395,7 +393,18 @@ impl TapContractsDeployTaskStateMachine {
     }
 }
 
-// Implement statig state machine
+/// State machine implementation for TAP contracts deployment
+///
+/// This state machine manages the lifecycle of deploying TAP (Timeline Aggregation Protocol) contracts:
+/// - Idle: Initial state waiting for deployment to start  
+/// - CheckingPrerequisites: Verifying Graph contracts are deployed (dependency)
+/// - WaitingForGraphContracts: Waiting for Graph Protocol contracts to be ready
+/// - Preparing: Setting up environment and verifying working directory
+/// - DeployingContracts: Deploying TAP smart contracts using forge
+/// - DeployingSubgraph: Deploying the TAP subgraph to Graph Node
+/// - Verifying: Validating that all deployments were successful
+/// - Completed: Successfully finished TAP deployment
+/// - Failed: Deployment failed, may retry if under retry limit
 #[statig::state_machine(initial = "State::idle()")]
 impl TapContractsDeployTaskStateMachine {
     /// Initial idle state
@@ -434,7 +443,7 @@ impl TapContractsDeployTaskStateMachine {
                 Transition(State::waiting_for_graph_contracts())
             }
             Err(e) => {
-                context.set_progress(0, format!("Failed to check Graph contracts: {}", e));
+                context.set_progress(0, format!("Failed to check Graph contracts: {e}"));
                 Transition(State::failed())
             }
         }
@@ -466,7 +475,7 @@ impl TapContractsDeployTaskStateMachine {
         context.set_progress(20, "Preparing environment");
 
         if let Err(e) = Self::verify_environment(context) {
-            context.set_progress(0, format!("Environment verification failed: {}", e));
+            context.set_progress(0, format!("Environment verification failed: {e}"));
             return Transition(State::failed());
         }
 
@@ -481,7 +490,7 @@ impl TapContractsDeployTaskStateMachine {
         context.set_progress(30, "Deploying TAP contracts");
 
         if let Err(e) = Self::deploy_contracts(context).await {
-            context.set_progress(0, format!("TAP contract deployment failed: {}", e));
+            context.set_progress(0, format!("TAP contract deployment failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(
@@ -504,7 +513,7 @@ impl TapContractsDeployTaskStateMachine {
         context.set_progress(70, "Deploying TAP subgraph");
 
         if let Err(e) = Self::deploy_subgraph(context).await {
-            context.set_progress(0, format!("TAP subgraph deployment failed: {}", e));
+            context.set_progress(0, format!("TAP subgraph deployment failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(
@@ -527,7 +536,7 @@ impl TapContractsDeployTaskStateMachine {
         context.set_progress(95, "Verifying TAP deployment");
 
         if let Err(e) = Self::verify_deployment(context) {
-            context.set_progress(0, format!("Verification failed: {}", e));
+            context.set_progress(0, format!("Verification failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(

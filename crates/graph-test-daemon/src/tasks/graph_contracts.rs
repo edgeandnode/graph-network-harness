@@ -3,16 +3,14 @@
 //! This module implements a robust state machine for deploying Graph Protocol
 //! contracts with proper verification and error recovery using the statig crate.
 
-use async_trait::async_trait;
 use command_executor::{
-    Command, Executor, ProcessEvent, ProcessEventType, ProcessHandle, backends::LocalLauncher,
+    Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
 use harness_core::{Error, Result};
-use serde::{Deserialize, Serialize};
 use statig::prelude::*;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::{debug, error, info, warn};
 
 /// States for the Graph contracts deployment state machine
@@ -141,10 +139,10 @@ impl GraphContractsDeployTaskStateMachine {
         if contracts_file.exists() {
             let contents = async_fs::read_to_string(&contracts_file)
                 .await
-                .map_err(|e| Error::daemon(format!("Failed to read contracts.json: {}", e)))?;
+                .map_err(|e| Error::daemon(format!("Failed to read contracts.json: {e}")))?;
 
             let json: serde_json::Value = serde_json::from_str(&contents)
-                .map_err(|e| Error::daemon(format!("Failed to parse contracts.json: {}", e)))?;
+                .map_err(|e| Error::daemon(format!("Failed to parse contracts.json: {e}")))?;
 
             if let Some(chain_data) = json.get("1337") {
                 if let Some(contracts) = chain_data.as_object() {
@@ -204,7 +202,7 @@ impl GraphContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to launch hardhat: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to launch hardhat: {e}")))?;
 
         let mut completed_count = 0;
         let total_contracts = 12;
@@ -224,7 +222,7 @@ impl GraphContractsDeployTaskStateMachine {
                             let progress = 20 + (completed_count * 40 / total_contracts) as u8;
                             context.set_progress(
                                 progress,
-                                format!("Deployed {} contracts", completed_count),
+                                format!("Deployed {completed_count} contracts"),
                             );
                         }
                     }
@@ -236,7 +234,7 @@ impl GraphContractsDeployTaskStateMachine {
         let exit_status = handle
             .wait()
             .await
-            .map_err(|e| Error::daemon(format!("Failed to wait for hardhat: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to wait for hardhat: {e}")))?;
 
         if !exit_status.success() {
             return Err(Error::daemon("Contract deployment failed"));
@@ -250,10 +248,10 @@ impl GraphContractsDeployTaskStateMachine {
             "1337": context.deployed_addresses
         });
         let contents = serde_json::to_string_pretty(&json)
-            .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to serialize addresses: {e}")))?;
         async_fs::write(&addresses_file, contents)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to write addresses file: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to write addresses file: {e}")))?;
 
         Ok(())
     }
@@ -277,7 +275,7 @@ impl GraphContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to create subgraph: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to create subgraph: {e}")))?;
 
         context.set_progress(70, "Created subgraph, deploying...");
 
@@ -300,7 +298,7 @@ impl GraphContractsDeployTaskStateMachine {
             .executor
             .launch(&command_executor::target::Target::Command, cmd)
             .await
-            .map_err(|e| Error::daemon(format!("Failed to deploy subgraph: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to deploy subgraph: {e}")))?;
 
         while let Some(event) = event_stream.next().await {
             if let ProcessEventType::Stdout = &event.event_type {
@@ -319,7 +317,7 @@ impl GraphContractsDeployTaskStateMachine {
         let exit_status = handle
             .wait()
             .await
-            .map_err(|e| Error::daemon(format!("Failed to wait for subgraph deployment: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to wait for subgraph deployment: {e}")))?;
 
         if !exit_status.success() {
             return Err(Error::daemon("Subgraph deployment failed"));
@@ -329,7 +327,7 @@ impl GraphContractsDeployTaskStateMachine {
             let marker = context.working_dir.join(".graph-network-deployed");
             async_fs::write(&marker, id.as_bytes())
                 .await
-                .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {}", e)))?;
+                .map_err(|e| Error::daemon(format!("Failed to write deployment marker: {e}")))?;
         }
 
         Ok(())
@@ -348,8 +346,7 @@ impl GraphContractsDeployTaskStateMachine {
                 if let Some(deployed) = context.deployed_addresses.get(name) {
                     if deployed != expected {
                         return Err(Error::daemon(format!(
-                            "Address mismatch for {}: expected {} but got {}",
-                            name, expected, deployed
+                            "Address mismatch for {name}: expected {expected} but got {deployed}"
                         )));
                     }
                 }
@@ -365,7 +362,16 @@ impl GraphContractsDeployTaskStateMachine {
     }
 }
 
-// Implement statig state machine
+/// State machine implementation for Graph contracts deployment
+///
+/// This state machine manages the lifecycle of deploying Graph Protocol smart contracts:
+/// - Idle: Initial state waiting for deployment to start
+/// - Preparing: Setting up environment and checking prerequisites
+/// - DeployingContracts: Deploying the smart contracts using hardhat
+/// - DeployingSubgraph: Deploying and configuring the Graph Protocol subgraph
+/// - Verifying: Validating that deployment was successful
+/// - Completed: Successfully finished deployment
+/// - Failed: Deployment failed and requires intervention
 #[statig::state_machine(initial = "State::idle()")]
 impl GraphContractsDeployTaskStateMachine {
     /// Initial idle state
@@ -392,7 +398,7 @@ impl GraphContractsDeployTaskStateMachine {
 
                 // Load expected addresses
                 if let Err(e) = Self::load_expected_addresses(context).await {
-                    context.set_progress(0, format!("Failed to load expected addresses: {}", e));
+                    context.set_progress(0, format!("Failed to load expected addresses: {e}"));
                     return Transition(State::failed());
                 }
 
@@ -415,7 +421,7 @@ impl GraphContractsDeployTaskStateMachine {
         context.set_progress(15, "Preparing environment");
 
         if let Err(e) = Self::verify_environment(context) {
-            context.set_progress(0, format!("Environment verification failed: {}", e));
+            context.set_progress(0, format!("Environment verification failed: {e}"));
             return Transition(State::failed());
         }
 
@@ -430,7 +436,7 @@ impl GraphContractsDeployTaskStateMachine {
         context.set_progress(25, "Deploying contracts");
 
         if let Err(e) = Self::deploy_contracts(context).await {
-            context.set_progress(0, format!("Contract deployment failed: {}", e));
+            context.set_progress(0, format!("Contract deployment failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(
@@ -453,7 +459,7 @@ impl GraphContractsDeployTaskStateMachine {
         context.set_progress(70, "Deploying subgraph");
 
         if let Err(e) = Self::deploy_subgraph(context).await {
-            context.set_progress(0, format!("Subgraph deployment failed: {}", e));
+            context.set_progress(0, format!("Subgraph deployment failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(
@@ -476,7 +482,7 @@ impl GraphContractsDeployTaskStateMachine {
         context.set_progress(95, "Verifying deployment");
 
         if let Err(e) = Self::verify_deployment(context) {
-            context.set_progress(0, format!("Verification failed: {}", e));
+            context.set_progress(0, format!("Verification failed: {e}"));
             if context.can_retry() {
                 context.retry_count += 1;
                 warn!(

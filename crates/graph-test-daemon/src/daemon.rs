@@ -6,7 +6,6 @@
 use async_trait::async_trait;
 use harness_core::prelude::*;
 use harness_core::{Registry, ServiceManager};
-use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceTarget, StackConfig};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -29,10 +28,10 @@ impl GraphTestDaemon {
     pub async fn from_config<P: AsRef<Path>>(endpoint: SocketAddr, config_path: P) -> Result<Self> {
         // Load configuration from YAML file
         let config_content = std::fs::read_to_string(config_path.as_ref())
-            .map_err(|e| Error::daemon(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to read config file: {e}")))?;
 
         let config: GraphStackConfig = serde_yaml::from_str(&config_content)
-            .map_err(|e| Error::daemon(format!("Failed to parse config YAML: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to parse config YAML: {e}")))?;
 
         Self::from_stack_config(endpoint, config).await
     }
@@ -41,7 +40,7 @@ impl GraphTestDaemon {
     pub async fn from_stack_config(endpoint: SocketAddr, config: GraphStackConfig) -> Result<Self> {
         // Convert config to Value for validation
         let config_value = serde_json::to_value(&config)
-            .map_err(|e| Error::daemon(format!("Failed to convert config: {}", e)))?;
+            .map_err(|e| Error::daemon(format!("Failed to convert config: {e}")))?;
 
         // Build the base daemon with Graph-specific services
         let mut builder = BaseDaemon::builder()
@@ -134,7 +133,7 @@ impl GraphTestDaemon {
                         // Extract ports from target
                         let (api_port, gateway_port) = match &service_config.orchestration.target {
                             ServiceTarget::Docker { ports, .. } => {
-                                let api_port = ports.get(0).cloned().unwrap_or(5001);
+                                let api_port = ports.first().cloned().unwrap_or(5001);
                                 let gateway_port = ports.get(1).cloned().unwrap_or(8080);
                                 (api_port, gateway_port)
                             }
@@ -150,8 +149,7 @@ impl GraphTestDaemon {
                     }
                     unknown => {
                         return Err(Error::service_type(format!(
-                            "Unknown service type '{}' for instance '{}'",
-                            unknown, instance_name
+                            "Unknown service type '{unknown}' for instance '{instance_name}'"
                         )));
                     }
                 }

@@ -181,7 +181,7 @@ impl DeploymentTask for GraphContractsTask {
                     .executor
                     .launch(&Target::Command, cmd)
                     .await
-                    .map_err(|e| Error::daemon(format!("Failed to launch hardhat: {}", e)))?;
+                    .map_err(|e| Error::daemon(format!("Failed to launch hardhat: {e}")))?;
 
                 // Spawn task to translate ProcessEvents to GraphContractsEvents
                 let tx_clone = tx.clone();
@@ -295,7 +295,7 @@ fn process_hardhat_event(
             if let Some(code) = code {
                 if *code != 0 {
                     return Some(GraphContractsEvent::Error {
-                        message: format!("Deployment failed with exit code {}", code),
+                        message: format!("Deployment failed with exit code {code}"),
                     });
                 }
             }
@@ -974,7 +974,7 @@ impl DeploymentTask for SubgraphDeployTask {
                     .executor
                     .launch(&Target::Command, cmd)
                     .await
-                    .map_err(|e| Error::daemon(format!("Failed to launch graph-cli: {}", e)))?;
+                    .map_err(|e| Error::daemon(format!("Failed to launch graph-cli: {e}")))?;
 
                 // Process events
                 let tx_clone = tx.clone();
@@ -1071,7 +1071,9 @@ fn process_subgraph_event(
                 }
             }
         }
-        ProcessEventType::Exited { code: Some(code), .. } => {
+        ProcessEventType::Exited {
+            code: Some(code), ..
+        } => {
             if *code != 0 {
                 return Some(SubgraphDeployEvent::Error {
                     message: format!("Graph CLI failed with exit code {code}"),

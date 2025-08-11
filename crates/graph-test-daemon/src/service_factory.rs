@@ -3,8 +3,7 @@
 //! This module provides a factory that creates service instances that implement
 //! both the Service trait and ServiceSetup trait.
 
-// Removed unused ServiceSetup import
-use std::sync::Arc;
+use harness_core::service::ServiceSetup;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 

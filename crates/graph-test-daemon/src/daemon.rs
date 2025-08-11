@@ -63,7 +63,10 @@ impl GraphTestDaemon {
             let stack = builder.service_stack_mut();
 
             // Register services from configuration
-            for (instance_name, service_config) in &config.services {
+            for (instance_name, mut service_config) in config.services {
+                // Set the service name from the map key if not already set
+                service_config.orchestration.name = instance_name.clone();
+                
                 info!(
                     "Loading service '{}' with type '{}' using target '{:?}'",
                     instance_name, service_config.service_type, service_config.orchestration.target
@@ -81,7 +84,7 @@ impl GraphTestDaemon {
                             .cloned()
                             .unwrap_or_else(|| "localhost".to_string());
                         let graph_node = GraphNodeService::new(endpoint.clone());
-                        stack.register(instance_name.clone(), graph_node)?;
+                        stack.register(instance_name, graph_node)?;
                         info!("Registered Graph Node service with endpoint: {}", endpoint);
                     }
                     "anvil" => {
@@ -117,7 +120,7 @@ impl GraphTestDaemon {
                         };
 
                         let anvil = AnvilService::new(chain_id, port);
-                        stack.register(instance_name.clone(), anvil)?;
+                        stack.register(instance_name, anvil)?;
                         info!(
                             "Registered Anvil service with chain_id: {}, port: {}",
                             chain_id, port
@@ -141,7 +144,7 @@ impl GraphTestDaemon {
                         };
 
                         let postgres = PostgresService::new(db_name.clone(), port);
-                        stack.register(instance_name.clone(), postgres)?;
+                        stack.register(instance_name, postgres)?;
                         info!(
                             "Registered PostgreSQL service with db_name: {}, port: {}",
                             db_name, port
@@ -160,7 +163,7 @@ impl GraphTestDaemon {
                         };
 
                         let ipfs = IpfsService::new(api_port, gateway_port);
-                        stack.register(instance_name.clone(), ipfs)?;
+                        stack.register(instance_name, ipfs)?;
                         info!(
                             "Registered IPFS service with api_port: {}, gateway_port: {}",
                             api_port, gateway_port
@@ -168,7 +171,7 @@ impl GraphTestDaemon {
                     }
                     unknown => {
                         return Err(Error::service_type(format!(
-                            "Unknown service type '{unknown}' for instance '{instance_name}'"
+                            "Unknown service type '{}'", unknown
                         )));
                     }
                 }

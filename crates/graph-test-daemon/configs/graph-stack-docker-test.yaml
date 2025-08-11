@@ -5,44 +5,43 @@ description: Graph Protocol test environment in Docker container via SSH
 services:
   # Start with Anvil as the first service to test
   anvil:
-    service_type: anvil
-    orchestration:
-      target:
-        type: layered
-        layers:
-          - type: ssh
-            host: localhost
-            user: testuser
-            port: 2222
-            identity_file: tests/docker-test-env/ssh-keys/test_ed25519
-            env:
-              RUST_LOG: info
-          - type: local
-            working_dir: /workspace
-        command:
-          binary: /root/.foundry/bin/anvil
-          args:
-            - --host
-            - "0.0.0.0"
-            - --port
-            - "8545"
-            - --chain-id
-            - "31337"
-            - --block-time
-            - "1"
-    health_check:
-      command: curl
-      args:
-        - "-X"
-        - "POST"
-        - "-H"
-        - "Content-Type: application/json"
-        - "--data"
-        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-        - "http://localhost:8545"
-      interval: 2
-      timeout: 1
-      retries: 10
+    service_type: anvil  # Links to AnvilService implementation
+    target:
+      type: layered
+      layers:
+        - type: ssh
+          host: localhost
+          user: testuser
+          port: 2222
+          identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+          env:
+            RUST_LOG: info
+      command:
+        binary: /root/.foundry/bin/anvil
+        args:
+          - --host
+          - "0.0.0.0"
+          - --port
+          - "8545"
+          - --chain-id
+          - "31337"
+          - --block-time
+          - "1"
+      # Health check runs through the same SSH layer
+      health_check:
+        command: curl
+        args:
+          - "-X"
+          - "POST"
+          - "-H"
+          - "Content-Type: application/json"
+          - "--data"
+          - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+          - "http://localhost:8545"
+        interval: 2
+        timeout: 1
+        retries: 10
+    dependencies: []
 
   # PostgreSQL will be added later
   # postgres:

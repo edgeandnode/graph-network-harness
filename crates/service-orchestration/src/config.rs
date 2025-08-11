@@ -26,6 +26,7 @@ pub enum Dependency {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ServiceConfig {
     /// Unique service name
+    #[serde(default)]
     pub name: String,
     /// Where and how to run the service
     pub target: ServiceTarget,
@@ -104,6 +105,9 @@ pub enum ServiceTarget {
         layers: Vec<crate::executors::layered::LayerConfig>,
         /// Command to execute through the layers
         command: CommandSpec,
+        /// Optional health check to run through the same layers
+        #[serde(skip_serializing_if = "Option::is_none")]
+        health_check: Option<HealthCheck>,
     },
 }
 

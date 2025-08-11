@@ -3,6 +3,9 @@
 //! This module defines deployment tasks for Graph Protocol components that
 //! perform one-time setup operations like contract deployment.
 
+pub mod graph_contracts;
+pub mod tap_contracts;
+
 use async_channel::Receiver;
 use async_trait::async_trait;
 use command_executor::{

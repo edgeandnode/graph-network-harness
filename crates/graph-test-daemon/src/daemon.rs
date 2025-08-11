@@ -7,8 +7,7 @@ use async_trait::async_trait;
 use harness_core::prelude::*;
 use harness_core::{Registry, ServiceManager};
 use serde::{Deserialize, Serialize};
-use service_orchestration::{HealthCheck, ServiceInstanceConfig, ServiceTarget, StackConfig};
-use std::collections::HashMap;
+use service_orchestration::{ServiceTarget, StackConfig};
 use std::net::SocketAddr;
 use std::path::Path;
 use tracing::info;
@@ -47,7 +46,8 @@ impl GraphTestDaemon {
         // Build the base daemon with Graph-specific services
         let mut builder = BaseDaemon::builder()
             .with_endpoint(endpoint)
-            .with_config(config_value);
+            .with_config(config_value)
+            .with_stack_config(config.clone());
 
         // Create service registry for dynamic service creation
         let service_registry = ServiceRegistry::new();
@@ -187,12 +187,13 @@ impl GraphTestDaemon {
             .register_action(
                 "setup-test-stack",
                 "Set up a complete Graph Protocol test stack",
-                |params| async move {
+                |_params| async move {
                     info!("Setting up Graph Protocol test stack");
+                    // Note: Actual stack launch happens via launch_stack() method
+                    // This action is a placeholder for WebSocket API compatibility
                     Ok(json!({
                         "status": "success",
-                        "services": ["anvil", "ipfs", "postgres", "graph-node"],
-                        "message": "Test stack initialized"
+                        "message": "To launch stack, call launch_stack() method or use --auto-start CLI flag"
                     }))
                 },
             )?
@@ -213,6 +214,12 @@ impl GraphTestDaemon {
         let base = builder.build().await?;
 
         Ok(Self { base })
+    }
+
+    /// Launch all services in the stack in dependency order
+    pub async fn launch_stack(&self) -> Result<()> {
+        // Delegate to the base daemon's launch_stack implementation
+        self.base.launch_stack().await
     }
 }
 

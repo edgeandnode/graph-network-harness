@@ -12,6 +12,7 @@ pub mod daemon;
 pub mod error;
 pub mod service;
 pub mod task;
+pub mod task_state_machine;
 pub mod typed_action;
 
 pub use error::{Error, Result};

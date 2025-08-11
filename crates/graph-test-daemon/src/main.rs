@@ -37,6 +37,12 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Path to YAML configuration file")
                 .required(true),
         )
+        .arg(
+            Arg::new("auto-start")
+                .long("auto-start")
+                .help("Automatically launch all services on startup")
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     let endpoint: SocketAddr = matches
@@ -61,6 +67,16 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("Graph Test Daemon is running");
+    
+    // Auto-start services if requested
+    if matches.get_flag("auto-start") {
+        info!("Auto-starting Graph Protocol stack...");
+        if let Err(e) = daemon.launch_stack().await {
+            error!("Failed to launch stack: {}", e);
+            return Err(e.into());
+        }
+        info!("Stack launched successfully");
+    }
 
     // Keep the daemon running
     // In a real implementation, this would handle signals and graceful shutdown

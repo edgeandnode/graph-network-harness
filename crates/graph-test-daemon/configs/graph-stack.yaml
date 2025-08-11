@@ -8,7 +8,7 @@ services:
     service_type: postgres  # Links to PostgresService for actions
     name: postgres
     target:
-      type: Docker
+      type: docker
       image: postgres:14
       env:
         POSTGRES_USER: graph-node
@@ -27,7 +27,7 @@ services:
     service_type: ipfs  # Links to IpfsService for actions
     name: ipfs
     target:
-      type: Docker
+      type: docker
       image: ipfs/go-ipfs:latest
       env: {}
       ports: [5001, 8080]  # API and Gateway ports
@@ -43,7 +43,7 @@ services:
     service_type: anvil  # Links to AnvilService for actions
     name: anvil
     target:
-      type: Process
+      type: process
       binary: anvil
       args:
         - --host
@@ -81,7 +81,7 @@ services:
     service_type: graph-node  # Links to GraphNodeService for actions
     name: graph-node
     target:
-      type: Docker
+      type: docker
       image: graphprotocol/graph-node:latest
       env:
         postgres_host: postgres
@@ -93,7 +93,10 @@ services:
         GRAPH_LOG: info
         GRAPH_ENDPOINT: localhost
       ports: [8000, 8001, 8020, 8030, 8040]
-    dependencies: ["postgres", "ipfs", "anvil"]
+    dependencies:
+      - service: postgres
+      - service: ipfs
+      - service: anvil
     health_check:
       command: curl
       args:

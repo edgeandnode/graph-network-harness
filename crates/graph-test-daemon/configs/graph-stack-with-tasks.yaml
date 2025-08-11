@@ -168,7 +168,7 @@ services:
     service_type: indexer-service
     name: indexer-service
     target:
-      type: remote
+      type: remote-ssh
       host: indexer.example.com
       user: ubuntu
       binary: indexer-service

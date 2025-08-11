@@ -66,7 +66,7 @@ impl GraphTestDaemon {
             for (instance_name, mut service_config) in config.services {
                 // Set the service name from the map key if not already set
                 service_config.orchestration.name = instance_name.clone();
-                
+
                 info!(
                     "Loading service '{}' with type '{}' using target '{:?}'",
                     instance_name, service_config.service_type, service_config.orchestration.target
@@ -171,7 +171,8 @@ impl GraphTestDaemon {
                     }
                     unknown => {
                         return Err(Error::service_type(format!(
-                            "Unknown service type '{}'", unknown
+                            "Unknown service type '{}'",
+                            unknown
                         )));
                     }
                 }

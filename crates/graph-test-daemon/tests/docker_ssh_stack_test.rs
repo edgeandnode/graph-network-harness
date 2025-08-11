@@ -93,10 +93,10 @@ async fn test_graph_stack_via_ssh_docker() -> Result<()> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
     let manifest_path = PathBuf::from(&manifest_dir);
     let config_path = manifest_path.join("configs/graph-stack-docker-test.yaml");
-    
+
     // Change to the manifest directory so relative paths in the config work
     std::env::set_current_dir(&manifest_path)?;
-    
+
     info!("Loading configuration from: {:?}", config_path);
 
     // Create the daemon with configuration

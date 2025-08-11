@@ -190,9 +190,14 @@ impl ServiceTarget {
                 mode: mode.clone(),
                 env: new_env,
             },
-            ServiceTarget::Layered { layers, command } => ServiceTarget::Layered {
+            ServiceTarget::Layered {
+                layers,
+                command,
+                health_check,
+            } => ServiceTarget::Layered {
                 layers: layers.clone(),
                 command: command.clone(),
+                health_check: health_check.clone(),
             },
         }
     }

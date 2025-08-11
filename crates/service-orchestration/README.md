@@ -11,7 +11,7 @@ This library crate implements the core service orchestration layer with the foll
 - **Event Streaming**: Real-time service event monitoring via `stream_events` API
 - **Health Monitoring**: Configurable health checks for service status tracking
 - **Service Registry Integration**: Automatic service registration and discovery
-- **Package Deployment**: Deploy service packages to remote targets (WireGuard and LAN)
+- **Package Deployment**: Deploy service packages to remote targets (SSH and LAN)
 
 This is a library crate consumed by other crates that pass `ServiceConfig` structs to orchestrate services. For detailed configuration options, see the `config` module documentation.
 
@@ -62,7 +62,6 @@ The library supports multiple execution backends through the `ServiceTarget` enu
 - **Local Process**: Execute services as local processes with PID tracking
 - **Docker Container**: Manage Docker containers with full lifecycle support  
 - **Remote**: Deploy to remote hosts via SSH connections (replaces Remote LAN)
-- ~~**WireGuard Package**: Deploy pre-built packages to WireGuard peers~~ (deprecated - use Remote with WireGuard IPs)
 
 Each target type has specific configuration requirements. See the `config::ServiceTarget` documentation for complete details on configuring each backend type.
 

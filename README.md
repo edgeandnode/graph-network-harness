@@ -111,7 +111,6 @@ cargo xtask test --package service-registry
 
 Core orchestration is complete (ADR-007 ~80% implemented). The framework is functional with CLI support for YAML-based service management targeting Local, LAN, and Remote (SSH) environments. 
 
-**Note**: Built-in WireGuard management has been deprecated. Users should configure WireGuard networking separately and use Remote targets with WireGuard IPs. See [docs/WIREGUARD-DEPRECATION.md](docs/WIREGUARD-DEPRECATION.md) for migration guidance.
 
 **Architecture**: The harness focuses on **service orchestration** rather than deployment. Users deploy binaries themselves (via CI/CD, manual deployment, etc.), and the harness orchestrates these already-deployed services across local and remote environments via SSH.
 

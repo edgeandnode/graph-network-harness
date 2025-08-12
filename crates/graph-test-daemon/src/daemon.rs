@@ -12,9 +12,9 @@ use std::path::Path;
 use std::result::Result;
 use tracing::info;
 
-use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
+use crate::service_factory::ServiceFactory;
 use crate::tasks::GraphContractsTask;
-use harness_core::config_traits::{ServiceFromConfig, TaskFromConfig};
+use harness_core::config_traits::TaskFromConfig;
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -56,44 +56,18 @@ impl GraphTestDaemon {
             .with_config(config_value)
             .with_stack_config(config.clone());
 
-        // Register services from configuration
-        {
-            // Register services from configuration
-            for (instance_name, mut service_config) in config.services {
-                // Set the service name from the map key if not already set
-                service_config.orchestration.name = instance_name.clone();
+        // Register services from configuration using the service factory
+        for (instance_name, mut service_config) in config.services {
+            // Set the service name from the map key if not already set
+            service_config.orchestration.name = instance_name.clone();
 
-                info!(
-                    "Loading service '{}' with type '{}' using target '{:?}'",
-                    instance_name, service_config.service_type, service_config.orchestration.target
-                );
-
-                // Use ServiceFromConfig to create service instances dynamically
-                match service_config.service_type.as_str() {
-                    "graph-node" => {
-                        let service = GraphNodeService::from_config(&service_config.orchestration)?;
-                        builder.register_service(instance_name, service)?;
-                    }
-                    "anvil" => {
-                        let service = AnvilService::from_config(&service_config.orchestration)?;
-                        builder.register_service(instance_name, service)?;
-                    }
-                    "postgres" => {
-                        let service = PostgresService::from_config(&service_config.orchestration)?;
-                        builder.register_service(instance_name, service)?;
-                    }
-                    "ipfs" => {
-                        let service = IpfsService::from_config(&service_config.orchestration)?;
-                        builder.register_service(instance_name, service)?;
-                    }
-                    unknown => {
-                        return Err(Error::service_type(format!(
-                            "Unknown service type '{}'",
-                            unknown
-                        )));
-                    }
-                }
-            }
+            // Use the service factory to register the service
+            ServiceFactory::register_service(
+                &mut builder,
+                instance_name,
+                &service_config.service_type,
+                &service_config.orchestration,
+            )?;
         }
 
         // Register tasks that have DeploymentTask implementation

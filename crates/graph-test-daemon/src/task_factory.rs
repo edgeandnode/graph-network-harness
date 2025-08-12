@@ -22,48 +22,38 @@ pub enum TaskHandle {
 }
 
 impl TaskHandle {
-    /// Get the task name
-    pub fn name(&self) -> &str {
-        match self {
-            TaskHandle::GraphContracts(task) => task.name(),
-            TaskHandle::SubgraphDeploy(task) => task.name(),
-            TaskHandle::TapContracts(task) => task.name(),
-        }
-    }
-
-    /// Check if the task is completed
-    pub async fn is_completed(&self) -> Result<bool, Error> {
-        match self {
-            TaskHandle::GraphContracts(task) => task.is_completed().await,
-            TaskHandle::SubgraphDeploy(task) => task.is_completed().await,
-            TaskHandle::TapContracts(task) => task.is_completed().await,
-        }
-    }
-
-    /// Execute the task with default action (DeployAll)
+    /// Execute the task and wait for completion
     pub async fn execute(&self) -> Result<(), Error> {
         match self {
             TaskHandle::GraphContracts(task) => {
-                // For now, just run the deploy method which uses the state machine
-                task.deploy().await
+                // Execute the task and consume state stream
+                let mut rx = task.execute().await?;
+                while let Ok(state) = rx.recv().await {
+                    tracing::info!("Graph contracts state: {:?}", state);
+                }
+                Ok(())
             }
             TaskHandle::SubgraphDeploy(task) => {
-                // SubgraphDeployTask needs DeploymentTask implementation
+                // SubgraphDeployTask needs to be updated to new pattern
                 task.deploy().await
             }
             TaskHandle::TapContracts(task) => {
-                // TapContractsTask needs DeploymentTask implementation
-                task.deploy().await
+                // Execute the task and consume state stream
+                let mut rx = task.execute().await?;
+                while let Ok(state) = rx.recv().await {
+                    tracing::info!("TAP contracts state: {:?}", state);
+                }
+                Ok(())
             }
         }
     }
 
-    /// Get the task description
-    pub fn description(&self) -> &str {
+    /// Get the task type
+    pub fn task_type(&self) -> &str {
         match self {
-            TaskHandle::GraphContracts(task) => task.description(),
-            TaskHandle::SubgraphDeploy(_task) => "Deploy subgraphs to Graph Node",
-            TaskHandle::TapContracts(_task) => "Deploy TAP contracts",
+            TaskHandle::GraphContracts(_) => "graph-contracts-deployment",
+            TaskHandle::SubgraphDeploy(_) => "subgraph-deployment",
+            TaskHandle::TapContracts(_) => "tap-contracts-deployment",
         }
     }
 }
@@ -140,10 +130,9 @@ mod tests {
             let task = TaskFactory::create_task(task_type);
             assert!(task.is_some(), "Failed to create task: {}", task_type);
 
-            // Verify we can call TaskHandle methods
+            // Verify we can get the task type
             let task = task.unwrap();
-            let result = task.is_completed().await;
-            assert!(result.is_ok());
+            assert!(!task.task_type().is_empty());
         }
     }
 
@@ -183,8 +172,6 @@ mod tests {
 
         // Verify the task can be used
         let task = task.unwrap();
-        assert_eq!(task.name(), "graph-contracts");
-        let is_completed = task.is_completed().await;
-        assert!(is_completed.is_ok());
+        assert_eq!(task.task_type(), "graph-contracts-deployment");
     }
 }

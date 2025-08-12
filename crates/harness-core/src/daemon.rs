@@ -191,35 +191,22 @@ impl BaseDaemon {
             .get(task_name)
             .ok_or_else(|| Error::daemon(format!("Task {task_name} not found in config")))?;
 
-        // Check if task is already completed via TaskStack
-        if self
-            .task_stack
-            .is_completed(task_name)
-            .await
-            .unwrap_or(false)
-        {
-            info!("Task {} is already completed, skipping", task_name);
-            return Ok(());
-        }
+        // Check if task is already completed by examining its state
+        // Tasks define their own completion states (e.g., Completed, Failed)
+        // We can't generically check this without knowing the specific state type
 
         // Check if we have a registered task for this task_type
         if self.task_stack.get(task_name).is_some() {
             // Execute the task using the TaskStack which handles spawning
             info!("Executing registered task: {}", task_name);
 
-            // Create a simple action with the config parameters
-            let action = json!({
-                "config": task_config.config,
-                "target": task_config.target
-            });
-
             // Execute using TaskStack's execute method which handles spawning
             let spawner = SmolSpawner;
-            let event_rx = self.task_stack.execute(task_name, action, &spawner).await?;
+            let state_rx = self.task_stack.execute(task_name, &spawner).await?;
 
-            // Wait for task to complete by consuming all events
-            while let Ok(event) = event_rx.recv().await {
-                info!("Task {} event: {:?}", task_name, event);
+            // Wait for task to complete by consuming all state updates
+            while let Ok(state) = state_rx.recv().await {
+                info!("Task {} state: {:?}", task_name, state);
             }
 
             info!("Task {} completed successfully", task_name);
@@ -443,7 +430,7 @@ impl DaemonBuilder {
     pub fn register_task<T>(&mut self, task_name: String, task: T) -> Result<&mut Self, Error>
     where
         T: DeploymentTask + 'static,
-        T::Event: schemars::JsonSchema,
+        T::State: schemars::JsonSchema,
     {
         // Log the task registration
         tracing::info!("Registering task '{}'", task_name);
@@ -634,7 +621,15 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use serde_json::json;
 
-    // Test service for validation
+    // Test types for validation
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+    enum TestTaskState {
+        Idle,
+        Running,
+        Completed,
+        Failed,
+    }
+    
     #[derive(Debug, Serialize, Deserialize, JsonSchema)]
     struct TestAction;
 
@@ -671,35 +666,42 @@ mod tests {
     }
 
     // Test task for validation
-    struct TestTask;
+    struct TestTask {
+        state: std::sync::Arc<std::sync::Mutex<TestTaskState>>,
+    }
+    
+    impl TestTask {
+        fn new() -> Self {
+            Self {
+                state: std::sync::Arc::new(std::sync::Mutex::new(TestTaskState::Idle)),
+            }
+        }
+    }
 
     #[async_trait]
     impl DeploymentTask for TestTask {
-        type Action = TestAction;
-        type Event = TestEvent;
-
-        fn task_type() -> &'static str {
-            "test-task"
-        }
-
-        fn name(&self) -> &str {
-            "test-task"
-        }
-
-        fn description(&self) -> &str {
-            "Test task"
-        }
-
-        async fn is_completed(&self) -> Result<bool, Error> {
-            Ok(true)
-        }
-
-        async fn execute(
-            &self,
-            _action: Self::Action,
-        ) -> Result<async_channel::Receiver<Self::Event>, Error> {
-            let (tx, rx) = async_channel::bounded(1);
-            tx.send(TestEvent).await.unwrap();
+        type State = TestTaskState;
+        const TASK_TYPE: &'static str = "test-task";
+        
+        async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+            let (tx, rx) = async_channel::bounded(3);
+            let state = self.state.clone();
+            
+            // Simulate task execution
+            smol::spawn(async move {
+                let _ = tx.send(TestTaskState::Running).await;
+                if let Ok(mut s) = state.lock() {
+                    *s = TestTaskState::Running;
+                }
+                
+                smol::Timer::after(std::time::Duration::from_millis(10)).await;
+                
+                let _ = tx.send(TestTaskState::Completed).await;
+                if let Ok(mut s) = state.lock() {
+                    *s = TestTaskState::Completed;
+                }
+            }).detach();
+            
             Ok(rx)
         }
     }
@@ -822,7 +824,7 @@ mod tests {
         let mut builder = BaseDaemon::builder();
         builder
             .task_stack_mut()
-            .register("test-task-instance".to_string(), TestTask)
+            .register("test-task-instance".to_string(), TestTask::new())
             .unwrap();
 
         let config = json!({
@@ -914,7 +916,7 @@ mod tests {
             .unwrap();
         builder
             .task_stack_mut()
-            .register("task1".to_string(), TestTask)
+            .register("task1".to_string(), TestTask::new())
             .unwrap();
 
         let config = json!({
@@ -959,7 +961,7 @@ mod tests {
             .unwrap();
         builder
             .task_stack_mut()
-            .register("task1".to_string(), TestTask)
+            .register("task1".to_string(), TestTask::new())
             .unwrap();
 
         let config = json!({
@@ -1058,11 +1060,11 @@ mod tests {
         // Register tasks
         builder
             .task_stack_mut()
-            .register("db-migrate".to_string(), TestTask)
+            .register("db-migrate".to_string(), TestTask::new())
             .unwrap();
         builder
             .task_stack_mut()
-            .register("cache-warm".to_string(), TestTask)
+            .register("cache-warm".to_string(), TestTask::new())
             .unwrap();
 
         let config = json!({
@@ -1126,11 +1128,11 @@ mod tests {
         let mut builder = BaseDaemon::builder();
         builder
             .task_stack_mut()
-            .register("task1".to_string(), TestTask)
+            .register("task1".to_string(), TestTask::new())
             .unwrap();
         builder
             .task_stack_mut()
-            .register("task2".to_string(), TestTask)
+            .register("task2".to_string(), TestTask::new())
             .unwrap();
 
         let config = json!({

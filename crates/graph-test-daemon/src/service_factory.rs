@@ -1,196 +1,108 @@
-//! Factory for creating services with ServiceSetup capabilities
+//! Factory for creating services from configuration
 //!
-//! This module provides a factory that creates service instances that implement
-//! both the Service trait and ServiceSetup trait.
+//! This module provides a factory that creates service instances from
+//! service configuration using the ServiceFromConfig trait.
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
-use harness_core::Error;
+use harness_core::{Error, config_traits::ServiceFromConfig, daemon::DaemonBuilder};
+use service_orchestration::ServiceConfig;
 use std::result::Result;
+use tracing::info;
 
-/// Enum containing all supported graph protocol services
-#[derive(Debug)]
-pub enum GraphService {
-    /// Graph Node service
-    GraphNode(GraphNodeService),
-    /// Anvil (local Ethereum) service  
-    Anvil(AnvilService),
-    /// PostgreSQL database service
-    Postgres(PostgresService),
-    /// IPFS service
-    Ipfs(IpfsService),
-}
-
-// Need to implement Service first, then ServiceSetup
-#[async_trait::async_trait]
-impl harness_core::service::Service for GraphService {
-    type Action = serde_json::Value; // Generic action for the enum
-    type Event = serde_json::Value; // Generic event for the enum
-
-    fn service_type() -> &'static str {
-        "graph-service-enum" // Generic type for the enum
-    }
-
-    fn name(&self) -> &str {
-        match self {
-            GraphService::GraphNode(service) => service.name(),
-            GraphService::Anvil(service) => service.name(),
-            GraphService::Postgres(service) => service.name(),
-            GraphService::Ipfs(service) => service.name(),
-        }
-    }
-
-    fn description(&self) -> &str {
-        match self {
-            GraphService::GraphNode(service) => service.description(),
-            GraphService::Anvil(service) => service.description(),
-            GraphService::Postgres(service) => service.description(),
-            GraphService::Ipfs(service) => service.description(),
-        }
-    }
-
-    fn event_stream(&self) -> async_channel::Receiver<Self::Event> {
-        // For the enum, we'd need to route to the appropriate service
-        // For now, return an empty receiver
-        let (_tx, rx) = async_channel::unbounded();
-        rx
-    }
-
-    async fn dispatch_action(&self, _action: Self::Action) -> Result<(), Error> {
-        // For the enum, we'd need to route actions to the appropriate service
-        // For now, just return Ok
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl harness_core::service::ServiceSetup for GraphService {
-    async fn is_setup_complete(&self) -> Result<bool, Error> {
-        match self {
-            GraphService::GraphNode(service) => service.is_setup_complete().await,
-            GraphService::Anvil(service) => service.is_setup_complete().await,
-            GraphService::Postgres(service) => service.is_setup_complete().await,
-            GraphService::Ipfs(service) => service.is_setup_complete().await,
-        }
-    }
-
-    async fn perform_setup(&self) -> Result<(), Error> {
-        match self {
-            GraphService::GraphNode(service) => service.perform_setup().await,
-            GraphService::Anvil(service) => service.perform_setup().await,
-            GraphService::Postgres(service) => service.perform_setup().await,
-            GraphService::Ipfs(service) => service.perform_setup().await,
-        }
-    }
-
-    async fn validate_setup(&self) -> Result<(), Error> {
-        match self {
-            GraphService::GraphNode(service) => service.validate_setup().await,
-            GraphService::Anvil(service) => service.validate_setup().await,
-            GraphService::Postgres(service) => service.validate_setup().await,
-            GraphService::Ipfs(service) => service.validate_setup().await,
-        }
-    }
-}
-
-/// Factory for creating services with setup capabilities
+/// Factory for creating Graph Protocol services
 pub struct ServiceFactory;
 
 impl ServiceFactory {
-    /// Create a service instance by type
-    pub fn create_service(service_type: &str) -> Option<GraphService> {
-        match service_type {
-            "graph-node" => Some(GraphService::GraphNode(GraphNodeService::default())),
-            "anvil" => Some(GraphService::Anvil(AnvilService::default())),
-            "postgres" => Some(GraphService::Postgres(PostgresService::default())),
-            "ipfs" => Some(GraphService::Ipfs(IpfsService::default())),
-            _ => None,
-        }
-    }
-
-    /// Create a service with setup capabilities
-    pub fn create_setup_service(service_type: &str) -> Option<GraphService> {
-        Self::create_service(service_type)
-    }
-
-    /// Create a service with specific configuration
-    pub fn create_configured_service(
+    /// Register a service with the daemon builder
+    /// 
+    /// This method uses the ServiceFromConfig trait to create the appropriate
+    /// service instance and registers it directly with the daemon builder.
+    pub fn register_service(
+        builder: &mut DaemonBuilder,
+        instance_name: String,
         service_type: &str,
-        config: &serde_json::Value,
-    ) -> Option<GraphService> {
+        config: &ServiceConfig,
+    ) -> Result<(), Error> {
+        info!(
+            "Registering service '{}' of type '{}' using target '{:?}'",
+            instance_name, service_type, config.target
+        );
+
         match service_type {
             "graph-node" => {
-                let endpoint = config
-                    .get("endpoint")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("http://localhost:8030")
-                    .to_string();
-                Some(GraphService::GraphNode(GraphNodeService::new(endpoint)))
+                let service = GraphNodeService::from_config(config)?;
+                builder.register_service(instance_name, service)?;
             }
             "anvil" => {
-                let chain_id = config
-                    .get("chain_id")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(1337);
-                let port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(8545) as u16;
-                Some(GraphService::Anvil(AnvilService::new(chain_id, port)))
+                let service = AnvilService::from_config(config)?;
+                builder.register_service(instance_name, service)?;
             }
             "postgres" => {
-                let db_name = config
-                    .get("db_name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("graph-node")
-                    .to_string();
-                let port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(5432) as u16;
-                Some(GraphService::Postgres(PostgresService::new(db_name, port)))
+                let service = PostgresService::from_config(config)?;
+                builder.register_service(instance_name, service)?;
             }
             "ipfs" => {
-                let api_port = config
-                    .get("api_port")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(5001) as u16;
-                let gateway_port = config
-                    .get("gateway_port")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(8080) as u16;
-                Some(GraphService::Ipfs(IpfsService::new(api_port, gateway_port)))
+                let service = IpfsService::from_config(config)?;
+                builder.register_service(instance_name, service)?;
             }
-            _ => None,
+            unknown => {
+                return Err(Error::service_type(format!(
+                    "Unknown service type '{}'",
+                    unknown
+                )));
+            }
         }
+        
+        Ok(())
+    }
+
+    /// Get the list of supported service types
+    pub fn supported_types() -> Vec<&'static str> {
+        vec!["graph-node", "anvil", "postgres", "ipfs"]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use harness_core::service::ServiceSetup;
+    use harness_core::daemon::BaseDaemon;
+    use service_orchestration::{ProcessCommand, ServiceTarget};
 
-    #[smol_potat::test]
-    async fn test_factory_creates_services() {
-        // Test creating each service type
-        let services = vec!["graph-node", "anvil", "postgres", "ipfs"];
-
-        for service_type in services {
-            let service = ServiceFactory::create_setup_service(service_type);
-            assert!(
-                service.is_some(),
-                "Failed to create service: {}",
-                service_type
-            );
-
-            // Verify we can call ServiceSetup methods
-            let service = service.unwrap();
-            let result = service.is_setup_complete().await;
-            assert!(result.is_ok());
+    fn create_test_config() -> ServiceConfig {
+        ServiceConfig {
+            name: "test-service".to_string(),
+            target: ServiceTarget::Process {
+                command: ProcessCommand::Legacy {
+                    command: "echo test".to_string(),
+                },
+                env: Default::default(),
+                working_dir: None,
+            },
+            dependencies: vec![],
+            health_check: None,
         }
     }
 
-    #[smol_potat::test]
-    async fn test_factory_with_config() {
-        let config = serde_json::json!({
-            "endpoint": "http://custom:8030"
-        });
+    #[test]
+    fn test_supported_types() {
+        let types = ServiceFactory::supported_types();
+        assert!(types.contains(&"graph-node"));
+        assert!(types.contains(&"anvil"));
+        assert!(types.contains(&"postgres"));
+        assert!(types.contains(&"ipfs"));
+    }
 
-        let service = ServiceFactory::create_configured_service("graph-node", &config);
-        assert!(service.is_some());
+    #[test]
+    fn test_unknown_service_type() {
+        let mut builder = BaseDaemon::builder();
+        let config = create_test_config();
+        let result = ServiceFactory::register_service(
+            &mut builder,
+            "test-service".to_string(),
+            "unknown-service",
+            &config,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unknown service type"));
     }
 }

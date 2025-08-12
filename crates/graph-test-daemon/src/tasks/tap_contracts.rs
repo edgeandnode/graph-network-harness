@@ -6,11 +6,14 @@
 // Allow missing docs for statig macro-generated code
 #![allow(missing_docs)]
 
+use async_trait::async_trait;
 use command_executor::{
     Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
-use harness_core::Error;
+use harness_core::{Error, config_traits::TaskFromConfig, task::DeploymentTask};
+use schemars::JsonSchema;
+use serde::Serialize;
 use service_orchestration::{ServiceTarget, TaskConfig};
 use statig::prelude::*;
 use std::collections::HashMap;
@@ -18,8 +21,8 @@ use std::path::PathBuf;
 use std::result::Result;
 use tracing::{debug, error, info, warn};
 
-/// Wrapper for TAP contracts deployment task
-#[derive(Debug)]
+/// TAP contracts deployment task with state machine
+#[derive(Debug, Clone)]
 pub struct TapContractsTask {
     /// Ethereum RPC URL
     ethereum_url: String,
@@ -35,28 +38,10 @@ impl TapContractsTask {
             working_dir: PathBuf::from(working_dir),
         }
     }
-
-    /// Get the task name
-    pub fn name(&self) -> &str {
-        "tap-contracts"
-    }
-
-    /// Check if the task is already completed
-    pub async fn is_completed(&self) -> Result<bool, Error> {
-        // Check if deployment marker exists
-        let deployment_marker = self.working_dir.join(".tap-deployed");
-        Ok(deployment_marker.exists())
-    }
-
-    /// Run the deployment using the state machine
-    pub async fn deploy(&self) -> Result<(), Error> {
-        deploy_tap_contracts(self.ethereum_url.clone(), self.working_dir.clone()).await
-    }
 }
 
-impl TapContractsTask {
-    /// Create from configuration
-    pub fn from_config(config: &TaskConfig) -> Result<Self, Error> {
+impl TaskFromConfig for TapContractsTask {
+    fn from_config(config: &TaskConfig) -> Result<Self, Error> {
         // Extract ethereum_url from environment
         let ethereum_url = config
             .target
@@ -78,8 +63,42 @@ impl TapContractsTask {
     }
 }
 
+#[async_trait]
+impl DeploymentTask for TapContractsTask {
+    type State = TapContractsDeployTaskState;
+    
+    const TASK_TYPE: &'static str = "tap-contracts-deployment";
+    
+    async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+        let (tx, rx) = async_channel::unbounded();
+        
+        // Clone what we need for the async task
+        let ethereum_url = self.ethereum_url.clone();
+        let working_dir = self.working_dir.clone();
+        
+        // Spawn the state machine execution
+        smol::spawn(async move {
+            // Send initial state
+            let _ = tx.send(TapContractsDeployTaskState::CheckingPrerequisites).await;
+            
+            // Run the deployment using the state machine
+            match deploy_tap_contracts(ethereum_url, working_dir).await {
+                Ok(()) => {
+                    let _ = tx.send(TapContractsDeployTaskState::Completed).await;
+                }
+                Err(e) => {
+                    error!("TAP deployment failed: {}", e);
+                    let _ = tx.send(TapContractsDeployTaskState::Failed).await;
+                }
+            }
+        }).detach();
+        
+        Ok(rx)
+    }
+}
+
 /// States for the TAP contracts deployment state machine
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub enum TapContractsDeployTaskState {
     /// Initial state - not started
     Idle,

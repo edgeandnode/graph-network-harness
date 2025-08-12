@@ -6,11 +6,14 @@
 // Allow missing docs for statig macro-generated code
 #![allow(missing_docs)]
 
+use async_trait::async_trait;
 use command_executor::{
     Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
-use harness_core::Error;
+use harness_core::{Error, config_traits::TaskFromConfig, task::DeploymentTask};
+use schemars::JsonSchema;
+use serde::Serialize;
 use service_orchestration::{ServiceTarget, TaskConfig};
 use statig::prelude::*;
 use std::path::PathBuf;
@@ -18,7 +21,7 @@ use std::result::Result;
 use tracing::{debug, error, info, warn};
 
 /// Wrapper for subgraph deployment task
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SubgraphDeployTask {
     /// Graph Node endpoint URL
     graph_node_url: String,
@@ -50,19 +53,7 @@ impl SubgraphDeployTask {
         }
     }
 
-    /// Get the task name
-    pub fn name(&self) -> &str {
-        "subgraph-deploy"
-    }
-
-    /// Check if the task is already completed
-    pub async fn is_completed(&self) -> Result<bool, Error> {
-        // Check if deployment marker exists
-        let deployment_marker = self.working_dir.join(".deployment");
-        Ok(deployment_marker.exists())
-    }
-
-    /// Run the deployment using the state machine
+    /// Run the deployment using the state machine (legacy method for compatibility)
     pub async fn deploy(&self) -> Result<(), Error> {
         deploy_subgraph(
             self.graph_node_url.clone(),
@@ -75,9 +66,45 @@ impl SubgraphDeployTask {
     }
 }
 
-impl SubgraphDeployTask {
-    /// Create from configuration
-    pub fn from_config(config: &TaskConfig) -> Result<Self, Error> {
+#[async_trait]
+impl DeploymentTask for SubgraphDeployTask {
+    type State = SubgraphDeployTaskState;
+    
+    const TASK_TYPE: &'static str = "subgraph-deployment";
+    
+    async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+        let (tx, rx) = async_channel::unbounded();
+        
+        // Clone what we need for the async task
+        let graph_node_url = self.graph_node_url.clone();
+        let ipfs_url = self.ipfs_url.clone();
+        let ethereum_url = self.ethereum_url.clone();
+        let working_dir = self.working_dir.clone();
+        let subgraph_name = self.subgraph_name.clone();
+        
+        // Spawn the state machine execution
+        smol::spawn(async move {
+            // Send initial state
+            let _ = tx.send(SubgraphDeployTaskState::CheckingPrerequisites).await;
+            
+            // Run the deployment using the state machine
+            match deploy_subgraph(graph_node_url, ipfs_url, ethereum_url, working_dir, subgraph_name).await {
+                Ok(()) => {
+                    let _ = tx.send(SubgraphDeployTaskState::Completed).await;
+                }
+                Err(e) => {
+                    error!("Subgraph deployment failed: {}", e);
+                    let _ = tx.send(SubgraphDeployTaskState::Failed).await;
+                }
+            }
+        }).detach();
+        
+        Ok(rx)
+    }
+}
+
+impl TaskFromConfig for SubgraphDeployTask {
+    fn from_config(config: &TaskConfig) -> Result<Self, Error> {
         // Extract URLs from environment
         let graph_node_url = config
             .target
@@ -126,7 +153,7 @@ impl SubgraphDeployTask {
 }
 
 /// States for the subgraph deployment state machine
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
 pub enum SubgraphDeployTaskState {
     /// Initial state - not started
     Idle,

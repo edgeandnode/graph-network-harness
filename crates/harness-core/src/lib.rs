@@ -14,8 +14,6 @@ pub mod error;
 pub mod json_service_adapter;
 pub mod service;
 pub mod task;
-pub mod task_state_machine;
-pub mod typed_action;
 
 pub use error::Error;
 
@@ -29,8 +27,7 @@ pub mod prelude {
         ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState,
         StatefulService,
     };
-    pub use crate::task::{DeploymentTask, JsonTask, TaskResult, TaskStack, TaskState};
-    pub use crate::typed_action::TypedAction;
+    pub use crate::task::{DeploymentTask, JsonTask, TaskStack};
 
     // Re-export commonly used types from dependencies
     pub use async_channel::Receiver;

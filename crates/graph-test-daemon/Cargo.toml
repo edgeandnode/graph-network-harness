@@ -36,6 +36,7 @@ chrono = { workspace = true }
 async-channel = { workspace = true }
 async-fs = { workspace = true }
 statig = { version = "0.3", features = ["async"] }
+regex = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -20,15 +20,13 @@ pub use services::{
     PostgresService,
 };
 pub use tasks::{
-    GraphContractsAction,
     // State machine exports (internal use)
     GraphContractsContext,
     GraphContractsDeployTaskState,
     GraphContractsDeployTaskStateMachine,
     GraphContractsEvent,
-    // Task types with their actions and events
+    // Task types
     GraphContractsTask,
-    GraphContractsTaskEvent,
     SubgraphContext,
     SubgraphDeployTask,
     SubgraphDeployTaskState,

@@ -39,9 +39,6 @@ indexmap = { workspace = true }
 # JSON Schema support
 schemars = { workspace = true }
 
-# State machine support
-statig = "0.3"
-
 # Re-export core functionality from existing crates
 service-orchestration = { path = "../service-orchestration", features = ["test-utils", "smol"] }
 service-registry = { path = "../service-registry" }

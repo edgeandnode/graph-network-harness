@@ -429,7 +429,7 @@ impl DaemonBuilder {
             instance_name,
             S::service_type()
         );
-        
+
         // Register with the service stack
         self.service_stack.register(instance_name, service)?;
 
@@ -447,7 +447,7 @@ impl DaemonBuilder {
     {
         // Log the task registration
         tracing::info!("Registering task '{}'", task_name);
-        
+
         self.task_stack.register(task_name, task)?;
         Ok(self)
     }

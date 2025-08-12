@@ -8,7 +8,7 @@ use harness_core::config_traits::ServiceFromConfig;
 use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use service_orchestration::{ServiceConfig, ServiceTarget};
+use service_orchestration::ServiceConfig;
 use tracing::info;
 
 /// Graph Node service that can deploy and manage subgraphs

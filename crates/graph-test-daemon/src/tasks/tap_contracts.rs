@@ -11,11 +11,72 @@ use command_executor::{
 };
 use futures::StreamExt;
 use harness_core::Error;
+use service_orchestration::{ServiceTarget, TaskConfig};
 use statig::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::result::Result;
 use tracing::{debug, error, info, warn};
+
+/// Wrapper for TAP contracts deployment task
+#[derive(Debug)]
+pub struct TapContractsTask {
+    /// Ethereum RPC URL
+    ethereum_url: String,
+    /// Working directory for contracts
+    working_dir: PathBuf,
+}
+
+impl TapContractsTask {
+    /// Create a new TAP contracts deployment task
+    pub fn new(ethereum_url: String, working_dir: String) -> Self {
+        Self {
+            ethereum_url,
+            working_dir: PathBuf::from(working_dir),
+        }
+    }
+
+    /// Get the task name
+    pub fn name(&self) -> &str {
+        "tap-contracts"
+    }
+
+    /// Check if the task is already completed
+    pub async fn is_completed(&self) -> Result<bool, Error> {
+        // Check if deployment marker exists
+        let deployment_marker = self.working_dir.join(".tap-deployed");
+        Ok(deployment_marker.exists())
+    }
+
+    /// Run the deployment using the state machine
+    pub async fn deploy(&self) -> Result<(), Error> {
+        deploy_tap_contracts(self.ethereum_url.clone(), self.working_dir.clone()).await
+    }
+}
+
+impl TapContractsTask {
+    /// Create from configuration
+    pub fn from_config(config: &TaskConfig) -> Result<Self, Error> {
+        // Extract ethereum_url from environment
+        let ethereum_url = config
+            .target
+            .env()
+            .get("ETHEREUM_URL")
+            .cloned()
+            .unwrap_or_else(|| "http://localhost:8545".to_string());
+
+        // Extract working directory from the Process variant or use default
+        let working_dir = if let ServiceTarget::Process { working_dir, .. } = &config.target {
+            working_dir
+                .clone()
+                .unwrap_or_else(|| "./contracts/tap-contracts".to_string())
+        } else {
+            "./contracts/tap-contracts".to_string()
+        };
+
+        Ok(TapContractsTask::new(ethereum_url, working_dir))
+    }
+}
 
 /// States for the TAP contracts deployment state machine
 #[derive(Debug, Clone, PartialEq)]

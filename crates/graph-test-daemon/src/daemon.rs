@@ -6,15 +6,15 @@
 use async_trait::async_trait;
 use harness_core::prelude::*;
 use harness_core::{Error, Registry, ServiceManager};
-use service_orchestration::{ServiceTarget, StackConfig};
+use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::result::Result;
 use tracing::info;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
-use harness_core::config_traits::ServiceFromConfig;
-use harness_core::json_service_adapter::JsonServiceAdapter;
+use crate::tasks::GraphContractsTask;
+use harness_core::config_traits::{ServiceFromConfig, TaskFromConfig};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -96,28 +96,26 @@ impl GraphTestDaemon {
             }
         }
 
-        // Register tasks
-        {
-            let tasks = builder.task_stack_mut();
-
-            // Register deployment tasks
-            tasks.register(
-                "deploy-graph-contracts".to_string(),
-                crate::tasks::GraphContractsTask::new(
-                    "http://localhost:8545".to_string(),
-                    "./contracts/graph-contracts".to_string(),
-                ),
-            )?;
-
-            tasks.register(
-                "deploy-tap-contracts".to_string(),
-                crate::tasks::TapContractsTask::new(
-                    "http://localhost:8545".to_string(),
-                    "./contracts/tap-contracts".to_string(),
-                ),
-            )?;
-
-            info!("Registered {} deployment tasks", tasks.list().len());
+        // Register tasks that have DeploymentTask implementation
+        // Currently only GraphContractsTask has the full implementation
+        if !config.tasks.is_empty() {
+            info!("Found {} configured tasks", config.tasks.len());
+            for (task_name, task_config) in config.tasks {
+                match task_config.task_type.as_str() {
+                    "graph-contracts-deployment" => {
+                        info!("Registering task '{}' with DeploymentTask trait", task_name);
+                        let task = GraphContractsTask::from_config(&task_config)?;
+                        builder.register_task(task_name, task)?;
+                    }
+                    other => {
+                        info!(
+                            "Task '{}' of type '{}' uses state machine (not registered with daemon)",
+                            task_name, other
+                        );
+                        // These tasks can be executed via TaskFactory when needed
+                    }
+                }
+            }
         }
 
         // Register Graph-specific actions on the base daemon

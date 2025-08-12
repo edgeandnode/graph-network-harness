@@ -189,7 +189,7 @@ impl ServiceFromConfig for IpfsService {
             .get_param_u16("api_port")
             .or_else(|| {
                 if let ServiceTarget::Docker { ports, .. } = &config.target {
-                    ports.get(0).cloned()
+                    ports.first().cloned()
                 } else {
                     None
                 }

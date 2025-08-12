@@ -6,16 +6,207 @@
 // Allow missing docs for statig macro-generated code
 #![allow(missing_docs)]
 
+use async_trait::async_trait;
 use command_executor::{
     Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
 };
 use futures::StreamExt;
-use harness_core::Error;
+use harness_core::{Error, config_traits::TaskFromConfig, task::DeploymentTask};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use service_orchestration::{ServiceTarget, TaskConfig};
 use statig::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::result::Result;
 use tracing::{debug, error, info, warn};
+
+/// Actions for Graph contracts deployment task
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type")]
+pub enum GraphContractsAction {
+    /// Deploy all Graph Protocol contracts
+    DeployAll,
+    /// Check if deployment is complete
+    CheckStatus,
+}
+
+/// Events from Graph contracts deployment task
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "event")]
+pub enum GraphContractsTaskEvent {
+    /// Deployment started
+    Started,
+    /// Progress update
+    Progress {
+        /// Progress percentage (0-100)
+        percent: u8,
+        /// Status message
+        message: String,
+    },
+    /// Deployment completed
+    Completed {
+        /// Deployed contract addresses
+        addresses: HashMap<String, String>,
+    },
+    /// Deployment failed
+    Failed {
+        /// Error message
+        error: String,
+    },
+}
+
+/// Wrapper for Graph contracts deployment task
+#[derive(Debug)]
+pub struct GraphContractsTask {
+    /// Ethereum RPC URL
+    ethereum_url: String,
+    /// Working directory for contracts
+    working_dir: PathBuf,
+}
+
+impl GraphContractsTask {
+    /// Create a new Graph contracts deployment task
+    pub fn new(ethereum_url: String, working_dir: String) -> Self {
+        Self {
+            ethereum_url,
+            working_dir: PathBuf::from(working_dir),
+        }
+    }
+
+    /// Get the task name
+    pub fn name(&self) -> &str {
+        "graph-contracts"
+    }
+
+    /// Check if the task is already completed
+    pub async fn is_completed(&self) -> Result<bool, Error> {
+        // Check if deployment marker exists
+        let deployment_marker = self.working_dir.join(".graph-network-deployed");
+        Ok(deployment_marker.exists())
+    }
+
+    /// Run the deployment using the state machine
+    pub async fn deploy(&self) -> Result<(), Error> {
+        deploy_graph_contracts(self.ethereum_url.clone(), self.working_dir.clone()).await
+    }
+}
+
+impl TaskFromConfig for GraphContractsTask {
+    fn from_config(config: &TaskConfig) -> Result<Self, Error> {
+        // Extract ethereum_url from environment
+        let ethereum_url = config
+            .target
+            .env()
+            .get("ETHEREUM_URL")
+            .cloned()
+            .unwrap_or_else(|| "http://localhost:8545".to_string());
+
+        // Extract working directory from the Process variant or use default
+        let working_dir = if let ServiceTarget::Process { working_dir, .. } = &config.target {
+            working_dir
+                .clone()
+                .unwrap_or_else(|| "./contracts/graph-contracts".to_string())
+        } else {
+            "./contracts/graph-contracts".to_string()
+        };
+
+        Ok(GraphContractsTask::new(ethereum_url, working_dir))
+    }
+}
+
+/// Implementation of DeploymentTask that wraps the state machine
+#[async_trait]
+impl DeploymentTask for GraphContractsTask {
+    type Action = GraphContractsAction;
+    type Event = GraphContractsTaskEvent;
+
+    fn task_type() -> &'static str
+    where
+        Self: Sized,
+    {
+        "graph-contracts-deployment"
+    }
+
+    fn name(&self) -> &str {
+        "graph-contracts"
+    }
+
+    fn description(&self) -> &str {
+        "Deploy Graph Protocol smart contracts"
+    }
+
+    async fn is_completed(&self) -> Result<bool, Error> {
+        // Check if deployment marker exists
+        let deployment_marker = self.working_dir.join(".graph-network-deployed");
+        Ok(deployment_marker.exists())
+    }
+
+    async fn execute(
+        &self,
+        action: Self::Action,
+    ) -> Result<async_channel::Receiver<Self::Event>, Error> {
+        let (tx, rx) = async_channel::unbounded();
+
+        match action {
+            GraphContractsAction::DeployAll => {
+                // Send initial event
+                let _ = tx.send(GraphContractsTaskEvent::Started).await;
+
+                // Create the state machine context and run deployment
+                let context =
+                    GraphContractsContext::new(self.ethereum_url.clone(), self.working_dir.clone());
+
+                // Spawn the state machine execution
+                let tx_clone = tx.clone();
+                let working_dir = self.working_dir.clone();
+                let ethereum_url = self.ethereum_url.clone();
+
+                smol::spawn(async move {
+                    // Run the state machine
+                    match deploy_graph_contracts(ethereum_url, working_dir).await {
+                        Ok(()) => {
+                            // TODO: Get actual addresses from the deployment
+                            let _ = tx_clone
+                                .send(GraphContractsTaskEvent::Completed {
+                                    addresses: HashMap::new(),
+                                })
+                                .await;
+                        }
+                        Err(e) => {
+                            let _ = tx_clone
+                                .send(GraphContractsTaskEvent::Failed {
+                                    error: e.to_string(),
+                                })
+                                .await;
+                        }
+                    }
+                })
+                .detach();
+            }
+            GraphContractsAction::CheckStatus => {
+                // Just check if completed
+                let is_completed = self.is_completed().await?;
+                if is_completed {
+                    let _ = tx
+                        .send(GraphContractsTaskEvent::Completed {
+                            addresses: HashMap::new(),
+                        })
+                        .await;
+                } else {
+                    let _ = tx
+                        .send(GraphContractsTaskEvent::Progress {
+                            percent: 0,
+                            message: "Not started".to_string(),
+                        })
+                        .await;
+                }
+            }
+        }
+
+        Ok(rx)
+    }
+}
 
 /// States for the Graph contracts deployment state machine
 #[derive(Debug, Clone, PartialEq)]

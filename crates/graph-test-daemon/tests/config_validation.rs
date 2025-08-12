@@ -37,7 +37,7 @@ fn test_all_configs_load_successfully() {
         println!("Testing config file: {}", file_name);
 
         let content = fs::read_to_string(&yaml_path)
-            .expect(&format!("Failed to read config file: {}", file_name));
+            .unwrap_or_else(|_| panic!("Failed to read config file: {}", file_name));
 
         // Try to parse as StackConfig
         let result: Result<StackConfig, _> = serde_yaml::from_str(&content);

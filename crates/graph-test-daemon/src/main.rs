@@ -8,7 +8,6 @@ use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::Daemon;
 use std::net::SocketAddr;
 use tracing::{error, info};
-use tracing_subscriber;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     smol::block_on(async_main())

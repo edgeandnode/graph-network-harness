@@ -69,26 +69,36 @@ impl SubgraphDeployTask {
 #[async_trait]
 impl DeploymentTask for SubgraphDeployTask {
     type State = SubgraphDeployTaskState;
-    
+
     const TASK_TYPE: &'static str = "subgraph-deployment";
-    
+
     async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Clone what we need for the async task
         let graph_node_url = self.graph_node_url.clone();
         let ipfs_url = self.ipfs_url.clone();
         let ethereum_url = self.ethereum_url.clone();
         let working_dir = self.working_dir.clone();
         let subgraph_name = self.subgraph_name.clone();
-        
+
         // Spawn the state machine execution
         smol::spawn(async move {
             // Send initial state
-            let _ = tx.send(SubgraphDeployTaskState::CheckingPrerequisites).await;
-            
+            let _ = tx
+                .send(SubgraphDeployTaskState::CheckingPrerequisites)
+                .await;
+
             // Run the deployment using the state machine
-            match deploy_subgraph(graph_node_url, ipfs_url, ethereum_url, working_dir, subgraph_name).await {
+            match deploy_subgraph(
+                graph_node_url,
+                ipfs_url,
+                ethereum_url,
+                working_dir,
+                subgraph_name,
+            )
+            .await
+            {
                 Ok(()) => {
                     let _ = tx.send(SubgraphDeployTaskState::Completed).await;
                 }
@@ -97,8 +107,9 @@ impl DeploymentTask for SubgraphDeployTask {
                     let _ = tx.send(SubgraphDeployTaskState::Failed).await;
                 }
             }
-        }).detach();
-        
+        })
+        .detach();
+
         Ok(rx)
     }
 }

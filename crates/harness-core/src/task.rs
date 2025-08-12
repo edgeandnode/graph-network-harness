@@ -25,17 +25,16 @@ use std::result::Result;
 pub trait DeploymentTask: Send + Sync + 'static {
     /// The state machine state type that represents task progress
     type State: Send + Serialize + Clone + PartialEq;
-    
+
     /// The task type identifier that links this implementation to YAML task definitions
     const TASK_TYPE: &'static str;
-    
+
     /// Execute the task, returning a stream of state changes
     ///
     /// The task runs its internal state machine and emits state transitions
     /// as they occur. The final state indicates completion or failure.
     async fn execute(&self) -> Result<Receiver<Self::State>, Error>;
 }
-
 
 /// Adapter that adds JSON serialization to any DeploymentTask
 ///
@@ -67,10 +66,12 @@ where
     }
 
     /// Execute the task, returning a receiver for JSON state updates and a converter future
-    pub async fn execute_json(&self) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
+    pub async fn execute_json(
+        &self,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         let state_rx = self.inner.execute().await?;
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Create a future to convert states to JSON
         let converter = async move {
             while let Ok(state) = state_rx.recv().await {
@@ -79,17 +80,18 @@ where
                 }
             }
         };
-        
+
         Ok((rx, Box::pin(converter)))
     }
-    
 }
 
 /// Trait for tasks that work with JSON (used for dynamic dispatch)
 #[async_trait]
 pub trait JsonTask: Send + Sync {
     /// Execute the task, returning a stream of JSON state updates and a converter future
-    async fn execute_json(&self) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error>;
+    async fn execute_json(
+        &self,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error>;
 
     /// Get the state schema
     fn state_schema(&self) -> &Value;
@@ -102,7 +104,9 @@ where
     T: DeploymentTask + 'static,
     T::State: JsonSchema,
 {
-    async fn execute_json(&self) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
+    async fn execute_json(
+        &self,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         self.execute_json().await
     }
 
@@ -184,7 +188,6 @@ impl JsonTaskRegistry {
         spawner.spawn(converter);
         Ok(rx)
     }
-
 }
 
 impl Default for JsonTaskRegistry {
@@ -237,9 +240,9 @@ mod tests {
                 if let Ok(mut s) = state.lock() {
                     *s = TestTaskState::Running;
                 }
-                
+
                 smol::Timer::after(std::time::Duration::from_millis(10)).await;
-                
+
                 let _ = tx.send(TestTaskState::Completed).await;
                 if let Ok(mut s) = state.lock() {
                     *s = TestTaskState::Completed;
@@ -271,7 +274,7 @@ mod tests {
     #[smol_potat::test]
     async fn test_task_execution() {
         use async_runtime_compat::smol::SmolSpawner;
-        
+
         let mut stack = JsonTaskRegistry::new();
         stack
             .register("test-1".to_string(), TestTask::new())
@@ -300,7 +303,7 @@ mod tests {
     #[smol_potat::test]
     async fn test_task_state() {
         use async_runtime_compat::smol::SmolSpawner;
-        
+
         let mut stack = JsonTaskRegistry::new();
         let task = TestTask::new();
         stack.register("test-1".to_string(), task).unwrap();
@@ -313,7 +316,7 @@ mod tests {
         let state = rx.recv().await.unwrap();
         let state: TestTaskState = serde_json::from_value(state).unwrap();
         assert_eq!(state, TestTaskState::Running);
-        
+
         // Next state should be Completed
         let state = rx.recv().await.unwrap();
         let state: TestTaskState = serde_json::from_value(state).unwrap();
@@ -341,7 +344,7 @@ mod tests {
     #[smol_potat::test]
     async fn test_task_error_handling() {
         use async_runtime_compat::smol::SmolSpawner;
-        
+
         let stack = JsonTaskRegistry::new();
         let spawner = SmolSpawner;
 
@@ -353,5 +356,4 @@ mod tests {
         // Try to execute non-existent task (should error)
         // The execute method already checked and returned error above
     }
-
 }

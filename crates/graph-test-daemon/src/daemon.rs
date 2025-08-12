@@ -45,92 +45,21 @@ impl GraphTestDaemon {
         endpoint: SocketAddr,
         config: GraphStackConfig,
     ) -> Result<Self, Error> {
-        // Convert config to Value for validation
-        let config_value = serde_json::to_value(&config)
-            .map_err(|e| Error::daemon(format!("Failed to convert config: {e}")))?;
-
         // Build the base daemon with Graph-specific services
-        let mut builder = BaseDaemon::builder()
-            .with_endpoint(endpoint)
-            .with_config(config_value)
-            .with_stack_config(config.clone());
+        let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
-        // Register services from configuration using generic registration
-        for (instance_name, mut service_config) in config.services {
-            // Set the service name from the map key if not already set
-            service_config.orchestration.name = instance_name.clone();
+        // Wire up services by type - each call validates that services of that type exist
+        builder
+            .wire_service::<GraphNodeService>("graph-node")?
+            .wire_service::<AnvilService>("anvil")?
+            .wire_service::<PostgresService>("postgres")?
+            .wire_service::<IpfsService>("ipfs")?;
 
-            info!(
-                "Loading service '{}' with type '{}' using target '{:?}'",
-                instance_name, service_config.service_type, service_config.orchestration.target
-            );
-
-            // Use generic registration based on service type
-            match service_config.service_type.as_str() {
-                "graph-node" => {
-                    builder.register_service_from_config::<GraphNodeService>(
-                        instance_name,
-                        &service_config.orchestration,
-                    )?;
-                }
-                "anvil" => {
-                    builder.register_service_from_config::<AnvilService>(
-                        instance_name,
-                        &service_config.orchestration,
-                    )?;
-                }
-                "postgres" => {
-                    builder.register_service_from_config::<PostgresService>(
-                        instance_name,
-                        &service_config.orchestration,
-                    )?;
-                }
-                "ipfs" => {
-                    builder.register_service_from_config::<IpfsService>(
-                        instance_name,
-                        &service_config.orchestration,
-                    )?;
-                }
-                unknown => {
-                    return Err(Error::service_type(format!(
-                        "Unknown service type '{}'",
-                        unknown
-                    )));
-                }
-            }
-        }
-
-        // Register tasks using generic registration
-        for (task_name, task_config) in config.tasks {
-            info!("Registering task '{}' of type '{}'", task_name, task_config.task_type);
-            
-            match task_config.task_type.as_str() {
-                "graph-contracts-deployment" => {
-                    builder.register_task_from_config::<GraphContractsTask>(
-                        task_name,
-                        &task_config,
-                    )?;
-                }
-                "tap-contracts-deployment" => {
-                    builder.register_task_from_config::<TapContractsTask>(
-                        task_name,
-                        &task_config,
-                    )?;
-                }
-                "subgraph-deployment" => {
-                    builder.register_task_from_config::<SubgraphDeployTask>(
-                        task_name,
-                        &task_config,
-                    )?;
-                }
-                unknown => {
-                    return Err(Error::validation(format!(
-                        "Unknown task type '{}'",
-                        unknown
-                    )));
-                }
-            }
-        }
+        // Wire up tasks by type - each call validates that tasks of that type exist
+        builder
+            .wire_task::<GraphContractsTask>("graph-contracts-deployment")?
+            .wire_task::<TapContractsTask>("tap-contracts-deployment")?
+            .wire_task::<SubgraphDeployTask>("subgraph-deployment")?;
 
         // Register Graph-specific actions on the base daemon
         builder = builder

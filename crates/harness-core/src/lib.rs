@@ -23,7 +23,7 @@ pub mod prelude {
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::Error;
     pub use crate::service::{
-        ActionDescriptor, JsonService, Service, ServiceSetup, JsonServiceRegistry, ServiceState,
+        ActionDescriptor, JsonService, JsonServiceRegistry, Service, ServiceSetup, ServiceState,
         StatefulService,
     };
     pub use crate::task::{DeploymentTask, JsonTask, JsonTaskRegistry};

@@ -2,7 +2,7 @@
 
 use graph_test_daemon::services::*;
 use graph_test_daemon::*;
-use harness_core::service::{Service, JsonServiceRegistry};
+use harness_core::service::{JsonServiceRegistry, Service};
 
 #[smol_potat::test]
 #[ignore = "Service actions not yet implemented (uses todo!())"]

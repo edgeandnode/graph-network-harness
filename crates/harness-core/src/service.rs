@@ -624,7 +624,7 @@ mod tests {
         event_tx: async_channel::Sender<TestEvent>,
         event_rx: async_channel::Receiver<TestEvent>,
     }
-    
+
     impl Default for TestService {
         fn default() -> Self {
             let (tx, rx) = async_channel::unbounded();
@@ -651,20 +651,18 @@ mod tests {
         fn description(&self) -> &str {
             "A test service"
         }
-        
+
         fn event_stream(&self) -> Receiver<Self::Event> {
             self.event_rx.clone()
         }
 
-        async fn dispatch_action(
-            &self,
-            action: Self::Action,
-        ) -> Result<(), Error> {
-            self.event_tx.send(TestEvent {
-                response: format!("Echo: {}", action.message),
-            })
-            .await
-            .unwrap();
+        async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
+            self.event_tx
+                .send(TestEvent {
+                    response: format!("Echo: {}", action.message),
+                })
+                .await
+                .unwrap();
             Ok(())
         }
     }
@@ -689,7 +687,9 @@ mod tests {
     #[smol_potat::test]
     async fn test_action_dispatch() {
         let mut stack = JsonServiceRegistry::new();
-        stack.register("test-1".to_string(), TestService::default()).unwrap();
+        stack
+            .register("test-1".to_string(), TestService::default())
+            .unwrap();
 
         let input = serde_json::json!({
             "message": "Hello"

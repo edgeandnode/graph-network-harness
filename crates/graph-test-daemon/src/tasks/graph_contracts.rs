@@ -66,21 +66,23 @@ impl TaskFromConfig for GraphContractsTask {
 #[async_trait]
 impl DeploymentTask for GraphContractsTask {
     type State = GraphContractsDeployTaskState;
-    
+
     const TASK_TYPE: &'static str = "graph-contracts-deployment";
-    
+
     async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Clone what we need for the async task
         let ethereum_url = self.ethereum_url.clone();
         let working_dir = self.working_dir.clone();
-        
+
         // Spawn the state machine execution
         smol::spawn(async move {
             // Send initial state
-            let _ = tx.send(GraphContractsDeployTaskState::CheckingPrerequisites).await;
-            
+            let _ = tx
+                .send(GraphContractsDeployTaskState::CheckingPrerequisites)
+                .await;
+
             // Run the deployment using the state machine
             match deploy_graph_contracts(ethereum_url, working_dir).await {
                 Ok(()) => {
@@ -91,8 +93,9 @@ impl DeploymentTask for GraphContractsTask {
                     let _ = tx.send(GraphContractsDeployTaskState::Failed).await;
                 }
             }
-        }).detach();
-        
+        })
+        .detach();
+
         Ok(rx)
     }
 }
@@ -531,9 +534,7 @@ mod tests {
         );
 
         // Just test the check function
-        assert!(
-            GraphContractsDeployTaskStateMachine::check_deployment_exists(&context).await
-        );
+        assert!(GraphContractsDeployTaskStateMachine::check_deployment_exists(&context).await);
     }
 
     #[test]

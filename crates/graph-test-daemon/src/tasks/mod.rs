@@ -10,9 +10,8 @@ pub mod tap_contracts;
 
 // Re-export the task types and their state machines
 pub use graph_contracts::{
-    GraphContractsContext, GraphContractsDeployTaskState,
-    GraphContractsDeployTaskStateMachine, GraphContractsEvent, GraphContractsTask,
-    deploy_graph_contracts,
+    GraphContractsContext, GraphContractsDeployTaskState, GraphContractsDeployTaskStateMachine,
+    GraphContractsEvent, GraphContractsTask, deploy_graph_contracts,
 };
 
 pub use subgraph_deploy::{

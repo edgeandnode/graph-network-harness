@@ -46,7 +46,7 @@ mod state;
 mod task_config;
 
 pub use config::{
-    CommandSpec, Dependency, HealthCheck, ProcessCommand, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+    CommandSpec, Dependency, HealthCheck, ParamValue, ProcessCommand, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
 };
 pub use context::OrchestrationContext;
 pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};

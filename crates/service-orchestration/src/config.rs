@@ -5,6 +5,96 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
+
+/// Parameter value that can be a string, number, or boolean
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ParamValue {
+    /// String value
+    String(String),
+    /// Unsigned 32-bit integer
+    U32(u32),
+    /// Boolean value
+    Bool(bool),
+}
+
+impl ParamValue {
+    /// Convert to string for substitution in templates
+    pub fn as_string(&self) -> String {
+        match self {
+            ParamValue::String(s) => s.clone(),
+            ParamValue::U32(n) => n.to_string(),
+            ParamValue::Bool(b) => b.to_string(),
+        }
+    }
+    
+    /// Try to parse as u32
+    pub fn as_u32(&self) -> Option<u32> {
+        match self {
+            ParamValue::U32(n) => Some(*n),
+            ParamValue::String(s) => s.parse().ok(),
+            ParamValue::Bool(_) => None,
+        }
+    }
+    
+    /// Try to parse as u16
+    pub fn as_u16(&self) -> Option<u16> {
+        self.as_u32().and_then(|n| u16::try_from(n).ok())
+    }
+    
+    /// Try to parse as u64
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            ParamValue::U32(n) => Some(*n as u64),
+            ParamValue::String(s) => s.parse().ok(),
+            ParamValue::Bool(_) => None,
+        }
+    }
+    
+    /// Try to get as bool
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            ParamValue::Bool(b) => Some(*b),
+            ParamValue::String(s) => match s.as_str() {
+                "true" | "yes" | "1" => Some(true),
+                "false" | "no" | "0" => Some(false),
+                _ => None,
+            },
+            ParamValue::U32(n) => Some(*n != 0),
+        }
+    }
+}
+
+impl fmt::Display for ParamValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
+
+impl From<String> for ParamValue {
+    fn from(s: String) -> Self {
+        ParamValue::String(s)
+    }
+}
+
+impl From<&str> for ParamValue {
+    fn from(s: &str) -> Self {
+        ParamValue::String(s.to_string())
+    }
+}
+
+impl From<u32> for ParamValue {
+    fn from(n: u32) -> Self {
+        ParamValue::U32(n)
+    }
+}
+
+impl From<bool> for ParamValue {
+    fn from(b: bool) -> Self {
+        ParamValue::Bool(b)
+    }
+}
 
 /// Dependency specification for services and tasks
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -43,9 +133,9 @@ pub struct ServiceConfig {
 pub enum ProcessCommand {
     /// Modern template-based command with parameters
     Template {
-        /// Service parameters for substitution (all values become strings)
+        /// Service parameters for substitution
         #[serde(default)]
-        params: HashMap<String, String>,
+        params: HashMap<String, ParamValue>,
         /// Command template with {param} substitution
         /// e.g., "anvil --port {port} --chain-id {chain_id}"
         command_template: String,
@@ -79,7 +169,7 @@ pub enum ServiceTarget {
     Docker {
         /// Service parameters for substitution
         #[serde(default)]
-        params: HashMap<String, String>,
+        params: HashMap<String, ParamValue>,
         /// Container image
         image: String,
         /// Command template override (optional - uses image default if not specified)
@@ -132,7 +222,7 @@ pub enum ServiceTarget {
     Layered {
         /// Service parameters for substitution
         #[serde(default)]
-        params: HashMap<String, String>,
+        params: HashMap<String, ParamValue>,
         /// Execution layers to apply (in order)
         layers: Vec<crate::executors::layered::LayerConfig>,
         /// Command template with {param} substitution
@@ -171,7 +261,7 @@ pub enum RemoteMode {
 
 impl ProcessCommand {
     /// Get parameters if this is a template command
-    pub fn params(&self) -> Option<&HashMap<String, String>> {
+    pub fn params(&self) -> Option<&HashMap<String, ParamValue>> {
         match self {
             ProcessCommand::Template { params, .. } => Some(params),
             ProcessCommand::Legacy { .. } => None,
@@ -186,7 +276,7 @@ impl ProcessCommand {
                 // Substitute params
                 for (key, value) in params {
                     let placeholder = format!("{{{}}}", key);
-                    result = result.replace(&placeholder, value);
+                    result = result.replace(&placeholder, &value.as_string());
                 }
                 result
             }
@@ -211,8 +301,8 @@ impl ProcessCommand {
 }
 
 impl ServiceTarget {
-    /// Get a parameter value by key as a string
-    pub fn get_param(&self, key: &str) -> Option<&str> {
+    /// Get a parameter value by key
+    pub fn get_param(&self, key: &str) -> Option<&ParamValue> {
         let params = match self {
             ServiceTarget::Process { command: ProcessCommand::Template { params, .. }, .. } => params,
             ServiceTarget::Docker { params, .. } => params,
@@ -220,22 +310,39 @@ impl ServiceTarget {
             _ => return None,
         };
         
-        params.get(key).map(|s| s.as_str())
+        params.get(key)
     }
     
-    /// Get a parameter value by key and parse it
-    pub fn get_param_parsed<T: std::str::FromStr>(&self, key: &str) -> Option<T> {
-        self.get_param(key).and_then(|s| s.parse().ok())
+    /// Get a parameter value by key as a string
+    pub fn get_param_str(&self, key: &str) -> Option<String> {
+        self.get_param(key).map(|v| v.as_string())
     }
     
-    /// Get a parameter value with a default
-    pub fn get_param_or<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
-        self.get_param(key).unwrap_or(default)
+    /// Get a parameter value by key and parse as u16
+    pub fn get_param_u16(&self, key: &str) -> Option<u16> {
+        self.get_param(key).and_then(|v| v.as_u16())
+    }
+    
+    /// Get a parameter value by key and parse as u32
+    pub fn get_param_u32(&self, key: &str) -> Option<u32> {
+        self.get_param(key).and_then(|v| v.as_u32())
+    }
+    
+    /// Get a parameter value by key and parse as u64
+    pub fn get_param_u64(&self, key: &str) -> Option<u64> {
+        self.get_param(key).and_then(|v| v.as_u64())
+    }
+    
+    /// Get a parameter value by key and parse as bool
+    pub fn get_param_bool(&self, key: &str) -> Option<bool> {
+        self.get_param(key).and_then(|v| v.as_bool())
     }
     
     /// Get a parameter value and parse it with a default
     pub fn get_param_parsed_or<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
-        self.get_param_parsed(key).unwrap_or(default)
+        self.get_param_str(key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default)
     }
     
     /// Substitute {param} placeholders in a template string
@@ -247,7 +354,7 @@ impl ServiceTarget {
                 let mut result = template.to_string();
                 for (key, value) in params {
                     let placeholder = format!("{{{}}}", key);
-                    result = result.replace(&placeholder, value);
+                    result = result.replace(&placeholder, &value.as_string());
                 }
                 result
             }

@@ -1,7 +1,7 @@
 //! Integration test for launch_stack with real services
 
-use std::fs;
 use async_runtime_compat::smol::SmolSpawner;
+use std::fs;
 
 #[smol_potat::test]
 async fn test_launch_stack_starts_services() -> anyhow::Result<()> {

@@ -11,7 +11,7 @@ use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
 use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
-use futures::stream::{self, StreamExt};
+use futures::stream::StreamExt;
 use tracing::{info, warn};
 
 /// Executor for Docker container services

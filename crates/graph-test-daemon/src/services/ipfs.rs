@@ -4,8 +4,8 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::{Error, prelude::*, service::Service};
 use harness_core::config_traits::ServiceFromConfig;
+use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -104,9 +104,10 @@ impl Service for IpfsService {
         let gateway_port = self.gateway_port;
 
         // Spawn a task to handle the action
-        let handle = smol::spawn(async move {
-            handle_ipfs_action(action, tx, api_port, gateway_port).await
-        });
+        let handle =
+            smol::spawn(
+                async move { handle_ipfs_action(action, tx, api_port, gateway_port).await },
+            );
 
         // Detach the task so it runs in the background
         handle.detach();
@@ -150,7 +151,7 @@ impl ServiceSetup for IpfsService {
         // 1. IPFS API is responding
         // 2. IPFS gateway is accessible
         // 3. CORS is properly configured for graph-node
-        
+
         Ok(false)
     }
 
@@ -183,7 +184,9 @@ impl ServiceSetup for IpfsService {
 impl ServiceFromConfig for IpfsService {
     fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
         // Extract API and gateway ports from params
-        let api_port = config.target.get_param_u16("api_port")
+        let api_port = config
+            .target
+            .get_param_u16("api_port")
             .or_else(|| {
                 if let ServiceTarget::Docker { ports, .. } = &config.target {
                     ports.get(0).cloned()
@@ -192,8 +195,10 @@ impl ServiceFromConfig for IpfsService {
                 }
             })
             .unwrap_or(5001);
-        
-        let gateway_port = config.target.get_param_u16("gateway_port")
+
+        let gateway_port = config
+            .target
+            .get_param_u16("gateway_port")
             .or_else(|| {
                 if let ServiceTarget::Docker { ports, .. } = &config.target {
                     ports.get(1).cloned()
@@ -202,7 +207,7 @@ impl ServiceFromConfig for IpfsService {
                 }
             })
             .unwrap_or(8080);
-        
+
         Ok(IpfsService::new(api_port, gateway_port))
     }
 }

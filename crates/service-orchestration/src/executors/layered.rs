@@ -265,7 +265,7 @@ impl ServiceExecutor for LayeredServiceExecutor {
         let executor = Self::build_executor(layers, &env);
 
         // Build command from template or legacy command
-        let mut cmd = if let Some(template) = command_template {
+        let cmd = if let Some(template) = command_template {
             let cmd_parts = config.target.build_command().unwrap_or_default();
             if cmd_parts.is_empty() {
                 return Err(Error::Config("No command built from template".to_string()));
@@ -282,7 +282,9 @@ impl ServiceExecutor for LayeredServiceExecutor {
             }
             c
         } else {
-            return Err(Error::Config("No command specified for layered target".to_string()));
+            return Err(Error::Config(
+                "No command specified for layered target".to_string(),
+            ));
         };
 
         debug!("Executing layered command: {:?}", cmd);

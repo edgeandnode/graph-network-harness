@@ -6,7 +6,7 @@
 use crate::config::Dependency;
 use crate::task_config::StackConfig;
 use std::collections::{HashMap, HashSet};
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Node in the dependency graph
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -59,13 +59,13 @@ impl DependencyGraph {
                 // dep_node -> node (dependency must come before this node)
                 edges
                     .entry(dep_node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node.clone());
 
                 // Track reverse edges for finding dependents
                 reverse_edges
                     .entry(node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(dep_node.clone());
 
                 // Ensure dependency node is in the graph
@@ -88,13 +88,13 @@ impl DependencyGraph {
                 // dep_node -> node (dependency must come before this node)
                 edges
                     .entry(dep_node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(node.clone());
 
                 // Track reverse edges
                 reverse_edges
                     .entry(node.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(dep_node.clone());
 
                 // Ensure dependency node is in the graph
@@ -119,8 +119,12 @@ impl DependencyGraph {
             }
 
             // Check if all dependencies are completed
-            let dependencies = self.reverse_edges.get(node).map(|v| v.as_slice()).unwrap_or(&[]);
-            
+            let dependencies = self
+                .reverse_edges
+                .get(node)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
+
             if dependencies.iter().all(|dep| completed.contains(dep)) {
                 ready.push(node.clone());
             }
@@ -144,7 +148,7 @@ impl DependencyGraph {
 
         // Reverse to get correct order
         stack.reverse();
-        
+
         debug!("Topological sort order: {:?}", stack);
         Ok(stack)
     }
@@ -313,11 +317,31 @@ mod tests {
         let graph = DependencyGraph::from_stack_config(&config);
 
         // Check all nodes are present
-        assert!(graph.nodes.contains(&DependencyNode::Service("service-a".to_string())));
-        assert!(graph.nodes.contains(&DependencyNode::Service("service-b".to_string())));
-        assert!(graph.nodes.contains(&DependencyNode::Service("service-c".to_string())));
-        assert!(graph.nodes.contains(&DependencyNode::Task("task-1".to_string())));
-        assert!(graph.nodes.contains(&DependencyNode::Task("task-2".to_string())));
+        assert!(
+            graph
+                .nodes
+                .contains(&DependencyNode::Service("service-a".to_string()))
+        );
+        assert!(
+            graph
+                .nodes
+                .contains(&DependencyNode::Service("service-b".to_string()))
+        );
+        assert!(
+            graph
+                .nodes
+                .contains(&DependencyNode::Service("service-c".to_string()))
+        );
+        assert!(
+            graph
+                .nodes
+                .contains(&DependencyNode::Task("task-1".to_string()))
+        );
+        assert!(
+            graph
+                .nodes
+                .contains(&DependencyNode::Task("task-2".to_string()))
+        );
     }
 
     #[test]

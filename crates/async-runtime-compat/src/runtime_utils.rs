@@ -4,7 +4,6 @@
 //! to avoid repetitive cfg-flag patterns throughout the codebase.
 
 use std::future::Future;
-use std::pin::Pin;
 use std::time::Duration;
 
 /// Sleep for the specified duration using the current runtime

@@ -4,8 +4,8 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::{Error, prelude::*, service::Service};
 use harness_core::config_traits::ServiceFromConfig;
+use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -129,9 +129,8 @@ impl Service for GraphNodeService {
         let endpoint = self.endpoint.clone();
 
         // Spawn a task to handle the action
-        let handle = smol::spawn(async move {
-            handle_graph_node_action(action, tx, endpoint).await
-        });
+        let handle =
+            smol::spawn(async move { handle_graph_node_action(action, tx, endpoint).await });
 
         // Detach the task so it runs in the background
         handle.detach();
@@ -218,10 +217,12 @@ impl ServiceSetup for GraphNodeService {
 impl ServiceFromConfig for GraphNodeService {
     fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
         // Extract endpoint from params or environment
-        let endpoint = config.target.get_param_str("endpoint")
+        let endpoint = config
+            .target
+            .get_param_str("endpoint")
             .or_else(|| config.target.env().get("GRAPH_ENDPOINT").cloned())
             .unwrap_or_else(|| "localhost".to_string());
-        
+
         Ok(GraphNodeService::new(endpoint))
     }
 }

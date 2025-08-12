@@ -1,9 +1,9 @@
 //! Integration tests for the LayeredServiceExecutor
 
+use async_runtime_compat::smol::SmolSpawner;
 use service_orchestration::{
     CommandSpec, LayerConfig, LayeredServiceExecutor, ServiceConfig, ServiceExecutor, ServiceTarget,
 };
-use async_runtime_compat::smol::SmolSpawner;
 use std::collections::HashMap;
 
 #[smol_potat::test]
@@ -197,7 +197,10 @@ dependencies: []
     let config: ServiceConfig = serde_yaml::from_str(yaml).unwrap();
     assert_eq!(config.name, "complex-service");
 
-    if let ServiceTarget::Layered { layers, command, .. } = &config.target {
+    if let ServiceTarget::Layered {
+        layers, command, ..
+    } = &config.target
+    {
         assert_eq!(layers.len(), 2);
 
         // Check first layer (SSH)

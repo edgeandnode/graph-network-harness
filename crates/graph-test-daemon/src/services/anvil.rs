@@ -4,8 +4,8 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::{Error, prelude::*, service::Service};
 use harness_core::config_traits::ServiceFromConfig;
+use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -142,9 +142,8 @@ impl Service for AnvilService {
         let port = self.port;
 
         // Spawn a task to handle the action
-        let handle = smol::spawn(async move {
-            handle_anvil_action(action, tx, chain_id, port).await
-        });
+        let handle =
+            smol::spawn(async move { handle_anvil_action(action, tx, chain_id, port).await });
 
         // Detach the task so it runs in the background
         handle.detach();
@@ -243,12 +242,21 @@ impl ServiceSetup for AnvilService {
 impl ServiceFromConfig for AnvilService {
     fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
         // Extract chain_id and port from params
-        let chain_id = config.target.get_param_u64("chain_id")
-            .or_else(|| config.target.env().get("CHAIN_ID")
-                .and_then(|s| s.parse::<u64>().ok()))
+        let chain_id = config
+            .target
+            .get_param_u64("chain_id")
+            .or_else(|| {
+                config
+                    .target
+                    .env()
+                    .get("CHAIN_ID")
+                    .and_then(|s| s.parse::<u64>().ok())
+            })
             .unwrap_or(31337);
-        
-        let port = config.target.get_param_u16("port")
+
+        let port = config
+            .target
+            .get_param_u16("port")
             .or_else(|| {
                 // For Docker, check ports array
                 if let ServiceTarget::Docker { ports, .. } = &config.target {
@@ -258,7 +266,7 @@ impl ServiceFromConfig for AnvilService {
                 }
             })
             .unwrap_or(8545);
-        
+
         Ok(AnvilService::new(chain_id, port))
     }
 }

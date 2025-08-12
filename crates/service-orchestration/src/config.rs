@@ -28,7 +28,7 @@ impl ParamValue {
             ParamValue::Bool(b) => b.to_string(),
         }
     }
-    
+
     /// Try to parse as u32
     pub fn as_u32(&self) -> Option<u32> {
         match self {
@@ -37,12 +37,12 @@ impl ParamValue {
             ParamValue::Bool(_) => None,
         }
     }
-    
+
     /// Try to parse as u16
     pub fn as_u16(&self) -> Option<u16> {
         self.as_u32().and_then(|n| u16::try_from(n).ok())
     }
-    
+
     /// Try to parse as u64
     pub fn as_u64(&self) -> Option<u64> {
         match self {
@@ -51,7 +51,7 @@ impl ParamValue {
             ParamValue::Bool(_) => None,
         }
     }
-    
+
     /// Try to get as bool
     pub fn as_bool(&self) -> Option<bool> {
         match self {
@@ -267,7 +267,7 @@ impl ProcessCommand {
             ProcessCommand::Legacy { .. } => None,
         }
     }
-    
+
     /// Substitute parameters in a template string
     pub fn substitute_params(&self, template: &str) -> String {
         match self {
@@ -283,11 +283,13 @@ impl ProcessCommand {
             ProcessCommand::Legacy { .. } => template.to_string(),
         }
     }
-    
+
     /// Build the command as a vector of strings
     pub fn build_command(&self) -> Vec<String> {
         match self {
-            ProcessCommand::Template { command_template, .. } => {
+            ProcessCommand::Template {
+                command_template, ..
+            } => {
                 let command = self.substitute_params(command_template);
                 // Simple split on whitespace - could be improved with shell_words
                 command.split_whitespace().map(String::from).collect()
@@ -304,53 +306,55 @@ impl ServiceTarget {
     /// Get a parameter value by key
     pub fn get_param(&self, key: &str) -> Option<&ParamValue> {
         let params = match self {
-            ServiceTarget::Process { command: ProcessCommand::Template { params, .. }, .. } => params,
+            ServiceTarget::Process {
+                command: ProcessCommand::Template { params, .. },
+                ..
+            } => params,
             ServiceTarget::Docker { params, .. } => params,
             ServiceTarget::Layered { params, .. } => params,
             _ => return None,
         };
-        
+
         params.get(key)
     }
-    
+
     /// Get a parameter value by key as a string
     pub fn get_param_str(&self, key: &str) -> Option<String> {
         self.get_param(key).map(|v| v.as_string())
     }
-    
+
     /// Get a parameter value by key and parse as u16
     pub fn get_param_u16(&self, key: &str) -> Option<u16> {
         self.get_param(key).and_then(|v| v.as_u16())
     }
-    
+
     /// Get a parameter value by key and parse as u32
     pub fn get_param_u32(&self, key: &str) -> Option<u32> {
         self.get_param(key).and_then(|v| v.as_u32())
     }
-    
+
     /// Get a parameter value by key and parse as u64
     pub fn get_param_u64(&self, key: &str) -> Option<u64> {
         self.get_param(key).and_then(|v| v.as_u64())
     }
-    
+
     /// Get a parameter value by key and parse as bool
     pub fn get_param_bool(&self, key: &str) -> Option<bool> {
         self.get_param(key).and_then(|v| v.as_bool())
     }
-    
+
     /// Get a parameter value and parse it with a default
     pub fn get_param_parsed_or<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
         self.get_param_str(key)
             .and_then(|s| s.parse().ok())
             .unwrap_or(default)
     }
-    
+
     /// Substitute {param} placeholders in a template string
     pub fn substitute_params(&self, template: &str) -> String {
         match self {
             ServiceTarget::Process { command, .. } => command.substitute_params(template),
-            ServiceTarget::Docker { params, .. } | 
-            ServiceTarget::Layered { params, .. } => {
+            ServiceTarget::Docker { params, .. } | ServiceTarget::Layered { params, .. } => {
                 let mut result = template.to_string();
                 for (key, value) in params {
                     let placeholder = format!("{{{}}}", key);
@@ -361,13 +365,19 @@ impl ServiceTarget {
             _ => template.to_string(),
         }
     }
-    
+
     /// Build the command from the command specification
     pub fn build_command(&self) -> Option<Vec<String>> {
         match self {
             ServiceTarget::Process { command, .. } => Some(command.build_command()),
-            ServiceTarget::Docker { command_template: Some(template), .. } |
-            ServiceTarget::Layered { command_template: Some(template), .. } => {
+            ServiceTarget::Docker {
+                command_template: Some(template),
+                ..
+            }
+            | ServiceTarget::Layered {
+                command_template: Some(template),
+                ..
+            } => {
                 let command = self.substitute_params(template);
                 // Simple split on whitespace - could be improved with shell_words
                 Some(command.split_whitespace().map(String::from).collect())
@@ -375,7 +385,7 @@ impl ServiceTarget {
             _ => None,
         }
     }
-    
+
     /// Build environment variables with parameter substitution
     pub fn build_env(&self) -> HashMap<String, String> {
         let env = self.env();
@@ -383,7 +393,7 @@ impl ServiceTarget {
             .map(|(k, v)| (k, self.substitute_params(&v)))
             .collect()
     }
-    
+
     /// Get environment variables from the target (legacy - doesn't do substitution)
     pub fn env(&self) -> HashMap<String, String> {
         match self {

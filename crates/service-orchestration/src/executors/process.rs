@@ -74,7 +74,7 @@ impl ServiceExecutor for ProcessExecutor {
         };
 
         info!("Starting process service: {}", config.name);
-        
+
         // Build command from ProcessCommand
         let command_parts = command.build_command();
         let final_env = config.target.build_env();

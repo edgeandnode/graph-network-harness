@@ -413,7 +413,11 @@ impl DaemonBuilder {
     }
 
     /// Register a service with both the service stack and JSON adapter
-    pub fn register_service<S>(&mut self, instance_name: String, service: S) -> Result<&mut Self, Error>
+    pub fn register_service<S>(
+        &mut self,
+        instance_name: String,
+        service: S,
+    ) -> Result<&mut Self, Error>
     where
         S: Service + Default + 'static,
         S::Action: schemars::JsonSchema,
@@ -421,10 +425,10 @@ impl DaemonBuilder {
     {
         // Register with the service stack
         self.service_stack.register(instance_name, service)?;
-        
+
         // Also register the type with the JSON adapter for dynamic creation
         self.json_service_adapter.register::<S>();
-        
+
         Ok(self)
     }
 

@@ -4,8 +4,8 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
-use harness_core::{Error, prelude::*, service::Service};
 use harness_core::config_traits::ServiceFromConfig;
+use harness_core::{Error, prelude::*, service::Service};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -106,9 +106,8 @@ impl Service for PostgresService {
         let port = self.port;
 
         // Spawn a task to handle the action
-        let handle = smol::spawn(async move {
-            handle_postgres_action(action, tx, db_name, port).await
-        });
+        let handle =
+            smol::spawn(async move { handle_postgres_action(action, tx, db_name, port).await });
 
         // Detach the task so it runs in the background
         handle.detach();
@@ -152,7 +151,7 @@ impl ServiceSetup for PostgresService {
         // 1. PostgreSQL is responding on the port
         // 2. The database exists
         // 3. Required users and permissions are set up
-        
+
         Ok(false)
     }
 
@@ -189,11 +188,15 @@ impl ServiceSetup for PostgresService {
 impl ServiceFromConfig for PostgresService {
     fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
         // Extract database name from params
-        let db_name = config.target.get_param_str("database")
+        let db_name = config
+            .target
+            .get_param_str("database")
             .or_else(|| config.target.env().get("POSTGRES_DB").cloned())
             .unwrap_or_else(|| "graph-node".to_string());
-        
-        let port = config.target.get_param_u16("port")
+
+        let port = config
+            .target
+            .get_param_u16("port")
             .or_else(|| {
                 if let ServiceTarget::Docker { ports, .. } = &config.target {
                     ports.first().cloned()
@@ -202,7 +205,7 @@ impl ServiceFromConfig for PostgresService {
                 }
             })
             .unwrap_or(5432);
-        
+
         Ok(PostgresService::new(db_name, port))
     }
 }

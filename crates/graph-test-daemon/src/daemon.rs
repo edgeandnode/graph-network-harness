@@ -12,9 +12,9 @@ use std::path::Path;
 use std::result::Result;
 use tracing::info;
 
-use harness_core::json_service_adapter::JsonServiceAdapter;
-use harness_core::config_traits::ServiceFromConfig;
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
+use harness_core::config_traits::ServiceFromConfig;
+use harness_core::json_service_adapter::JsonServiceAdapter;
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -58,7 +58,6 @@ impl GraphTestDaemon {
 
         // Register services from configuration
         {
-
             // Register services from configuration
             for (instance_name, mut service_config) in config.services {
                 // Set the service name from the map key if not already set

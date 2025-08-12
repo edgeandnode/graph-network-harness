@@ -8,8 +8,10 @@
 
 pub mod action;
 pub mod client;
+pub mod config_traits;
 pub mod daemon;
 pub mod error;
+pub mod json_service_adapter;
 pub mod service;
 pub mod task;
 pub mod task_state_machine;

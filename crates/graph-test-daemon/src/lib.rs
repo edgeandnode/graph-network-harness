@@ -8,7 +8,6 @@
 
 pub mod daemon;
 pub mod service_factory;
-pub mod service_registry;
 pub mod services;
 pub mod services_test;
 pub mod task_factory;

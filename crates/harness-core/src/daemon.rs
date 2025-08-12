@@ -16,8 +16,9 @@ use std::time::Duration;
 use tracing::{info, warn};
 
 use crate::action::{Action, ActionRegistry};
-use crate::service::ServiceStack;
-use crate::task::TaskStack;
+use crate::json_service_adapter::JsonServiceAdapter;
+use crate::service::{Service, ServiceStack};
+use crate::task::{DeploymentTask, TaskStack};
 use crate::{Error, Registry, ServiceManager};
 use std::result::Result;
 
@@ -65,6 +66,9 @@ pub struct BaseDaemon {
 
     /// Stack configuration if provided
     stack_config: Option<StackConfig>,
+
+    /// JSON service adapter for dynamic service creation
+    json_service_adapter: JsonServiceAdapter,
 }
 
 impl BaseDaemon {
@@ -345,6 +349,7 @@ pub struct DaemonBuilder {
     task_stack: TaskStack,
     config: Option<Value>,
     stack_config: Option<StackConfig>,
+    json_service_adapter: JsonServiceAdapter,
     #[cfg(test)]
     test_mode: bool,
 }
@@ -360,6 +365,7 @@ impl DaemonBuilder {
             task_stack: TaskStack::new(),
             config: None,
             stack_config: None,
+            json_service_adapter: JsonServiceAdapter::new(),
             #[cfg(test)]
             test_mode: false,
         }
@@ -404,6 +410,31 @@ impl DaemonBuilder {
     pub fn with_stack_config(mut self, config: StackConfig) -> Self {
         self.stack_config = Some(config);
         self
+    }
+
+    /// Register a service with both the service stack and JSON adapter
+    pub fn register_service<S>(&mut self, instance_name: String, service: S) -> Result<&mut Self, Error>
+    where
+        S: Service + Default + 'static,
+        S::Action: schemars::JsonSchema,
+        S::Event: schemars::JsonSchema,
+    {
+        // Register with the service stack
+        self.service_stack.register(instance_name, service)?;
+        
+        // Also register the type with the JSON adapter for dynamic creation
+        self.json_service_adapter.register::<S>();
+        
+        Ok(self)
+    }
+
+    /// Register a task with the task stack
+    pub fn register_task<T>(&mut self, task_name: String, task: T) -> Result<&mut Self, Error>
+    where
+        T: DeploymentTask + 'static,
+    {
+        self.task_stack.register(task_name, task)?;
+        Ok(self)
     }
 
     /// Register an action
@@ -470,6 +501,7 @@ impl DaemonBuilder {
             endpoint: self.endpoint,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             stack_config: self.stack_config,
+            json_service_adapter: self.json_service_adapter,
         })
     }
 

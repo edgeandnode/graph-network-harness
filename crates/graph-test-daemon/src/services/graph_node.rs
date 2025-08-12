@@ -128,47 +128,9 @@ impl Service for GraphNodeService {
         let tx = self.event_tx.clone();
         let endpoint = self.endpoint.clone();
 
-        // Spawn a task to handle the action
-        let handle =
-            smol::spawn(async move { handle_graph_node_action(action, tx, endpoint).await });
-
-        // Detach the task so it runs in the background
-        handle.detach();
+        todo!("impl graph-node dispatch_action");
 
         Ok(())
-    }
-}
-
-async fn handle_graph_node_action(
-    action: GraphNodeAction,
-    _tx: async_channel::Sender<GraphNodeEvent>,
-    _endpoint: String,
-) -> Result<(), Error> {
-    match action {
-        GraphNodeAction::DeploySubgraph {
-            name,
-            ipfs_hash,
-            version_label,
-        } => {
-            info!(
-                "Deploying subgraph '{}' from IPFS hash: {}",
-                name, ipfs_hash
-            );
-            todo!("Implement actual subgraph deployment via Graph Node Admin API")
-        }
-
-        GraphNodeAction::QuerySubgraph {
-            subgraph_name,
-            query,
-        } => {
-            info!("Querying subgraph '{}': {}", subgraph_name, query);
-            todo!("Implement actual GraphQL query execution")
-        }
-
-        GraphNodeAction::RemoveSubgraph { deployment_id } => {
-            info!("Removing subgraph deployment: {}", deployment_id);
-            todo!("Implement actual subgraph removal via Admin API")
-        }
     }
 }
 

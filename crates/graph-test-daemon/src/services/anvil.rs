@@ -141,60 +141,9 @@ impl Service for AnvilService {
         let chain_id = self.chain_id;
         let port = self.port;
 
-        // Spawn a task to handle the action
-        let handle =
-            smol::spawn(async move { handle_anvil_action(action, tx, chain_id, port).await });
-
-        // Detach the task so it runs in the background
-        handle.detach();
+        todo!("handle dispatch_action in anvil service");
 
         Ok(())
-    }
-}
-
-async fn handle_anvil_action(
-    action: AnvilAction,
-    _tx: async_channel::Sender<AnvilEvent>,
-    chain_id: u64,
-    port: u16,
-) -> Result<(), Error> {
-    match action {
-        AnvilAction::MineBlocks {
-            count,
-            interval_secs,
-        } => {
-            info!("Mining {} blocks on chain {}", count, chain_id);
-            todo!("Implement actual block mining via Anvil RPC")
-        }
-
-        AnvilAction::SetBalance { address, balance } => {
-            info!(
-                "Setting balance for {} to {} on chain {}",
-                address, balance, chain_id
-            );
-            todo!("Implement actual balance setting via Anvil RPC")
-        }
-
-        AnvilAction::Snapshot => {
-            info!("Creating snapshot on chain {}", chain_id);
-            todo!("Implement actual snapshot creation via Anvil RPC")
-        }
-
-        AnvilAction::RevertToSnapshot { snapshot_id } => {
-            info!(
-                "Reverting to snapshot {} on chain {}",
-                snapshot_id, chain_id
-            );
-            todo!("Implement actual snapshot revert via Anvil RPC")
-        }
-
-        AnvilAction::DeployContract {
-            bytecode,
-            constructor_args,
-        } => {
-            info!("Deploying contract on chain {} at port {}", chain_id, port);
-            todo!("Implement actual contract deployment via Anvil RPC")
-        }
     }
 }
 

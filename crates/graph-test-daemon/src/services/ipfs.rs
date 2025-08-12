@@ -103,35 +103,9 @@ impl Service for IpfsService {
         let api_port = self.api_port;
         let gateway_port = self.gateway_port;
 
-        // Spawn a task to handle the action
-        let handle =
-            smol::spawn(
-                async move { handle_ipfs_action(action, tx, api_port, gateway_port).await },
-            );
-
-        // Detach the task so it runs in the background
-        handle.detach();
+        todo!("implement ipfs dispatch_action");
 
         Ok(())
-    }
-}
-
-async fn handle_ipfs_action(
-    action: IpfsAction,
-    _tx: async_channel::Sender<IpfsEvent>,
-    _api_port: u16,
-    _gateway_port: u16,
-) -> Result<(), Error> {
-    match action {
-        IpfsAction::CheckStatus => {
-            info!("Checking IPFS status");
-            todo!("Implement actual status check via IPFS API")
-        }
-
-        IpfsAction::Pin { hash } => {
-            info!("Pinning hash: {}", hash);
-            todo!("Implement actual pinning via IPFS API")
-        }
     }
 }
 

@@ -105,33 +105,9 @@ impl Service for PostgresService {
         let db_name = self.db_name.clone();
         let port = self.port;
 
-        // Spawn a task to handle the action
-        let handle =
-            smol::spawn(async move { handle_postgres_action(action, tx, db_name, port).await });
-
-        // Detach the task so it runs in the background
-        handle.detach();
+        todo!("implement dispatch_action for postgres");
 
         Ok(())
-    }
-}
-
-async fn handle_postgres_action(
-    action: PostgresAction,
-    _tx: async_channel::Sender<PostgresEvent>,
-    _db_name: String,
-    _port: u16,
-) -> Result<(), Error> {
-    match action {
-        PostgresAction::CheckStatus => {
-            info!("Checking PostgreSQL status");
-            todo!("Implement actual status check")
-        }
-
-        PostgresAction::Backup { backup_path } => {
-            info!("Creating backup at {}", backup_path);
-            todo!("Implement actual backup")
-        }
     }
 }
 

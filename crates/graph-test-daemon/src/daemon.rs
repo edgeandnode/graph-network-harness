@@ -12,9 +12,8 @@ use std::path::Path;
 use std::result::Result;
 use tracing::info;
 
-use crate::service_factory::ServiceFactory;
-use crate::tasks::GraphContractsTask;
-use harness_core::config_traits::TaskFromConfig;
+use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
+use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -56,38 +55,79 @@ impl GraphTestDaemon {
             .with_config(config_value)
             .with_stack_config(config.clone());
 
-        // Register services from configuration using the service factory
+        // Register services from configuration using generic registration
         for (instance_name, mut service_config) in config.services {
             // Set the service name from the map key if not already set
             service_config.orchestration.name = instance_name.clone();
 
-            // Use the service factory to register the service
-            ServiceFactory::register_service(
-                &mut builder,
-                instance_name,
-                &service_config.service_type,
-                &service_config.orchestration,
-            )?;
+            info!(
+                "Loading service '{}' with type '{}' using target '{:?}'",
+                instance_name, service_config.service_type, service_config.orchestration.target
+            );
+
+            // Use generic registration based on service type
+            match service_config.service_type.as_str() {
+                "graph-node" => {
+                    builder.register_service_from_config::<GraphNodeService>(
+                        instance_name,
+                        &service_config.orchestration,
+                    )?;
+                }
+                "anvil" => {
+                    builder.register_service_from_config::<AnvilService>(
+                        instance_name,
+                        &service_config.orchestration,
+                    )?;
+                }
+                "postgres" => {
+                    builder.register_service_from_config::<PostgresService>(
+                        instance_name,
+                        &service_config.orchestration,
+                    )?;
+                }
+                "ipfs" => {
+                    builder.register_service_from_config::<IpfsService>(
+                        instance_name,
+                        &service_config.orchestration,
+                    )?;
+                }
+                unknown => {
+                    return Err(Error::service_type(format!(
+                        "Unknown service type '{}'",
+                        unknown
+                    )));
+                }
+            }
         }
 
-        // Register tasks that have DeploymentTask implementation
-        // Currently only GraphContractsTask has the full implementation
-        if !config.tasks.is_empty() {
-            info!("Found {} configured tasks", config.tasks.len());
-            for (task_name, task_config) in config.tasks {
-                match task_config.task_type.as_str() {
-                    "graph-contracts-deployment" => {
-                        info!("Registering task '{}' with DeploymentTask trait", task_name);
-                        let task = GraphContractsTask::from_config(&task_config)?;
-                        builder.register_task(task_name, task)?;
-                    }
-                    other => {
-                        info!(
-                            "Task '{}' of type '{}' uses state machine (not registered with daemon)",
-                            task_name, other
-                        );
-                        // These tasks can be executed via TaskFactory when needed
-                    }
+        // Register tasks using generic registration
+        for (task_name, task_config) in config.tasks {
+            info!("Registering task '{}' of type '{}'", task_name, task_config.task_type);
+            
+            match task_config.task_type.as_str() {
+                "graph-contracts-deployment" => {
+                    builder.register_task_from_config::<GraphContractsTask>(
+                        task_name,
+                        &task_config,
+                    )?;
+                }
+                "tap-contracts-deployment" => {
+                    builder.register_task_from_config::<TapContractsTask>(
+                        task_name,
+                        &task_config,
+                    )?;
+                }
+                "subgraph-deployment" => {
+                    builder.register_task_from_config::<SubgraphDeployTask>(
+                        task_name,
+                        &task_config,
+                    )?;
+                }
+                unknown => {
+                    return Err(Error::validation(format!(
+                        "Unknown task type '{}'",
+                        unknown
+                    )));
                 }
             }
         }
@@ -142,7 +182,7 @@ impl Daemon for GraphTestDaemon {
         self.base.start().await?;
 
         // Log available services
-        let services = self.base.service_stack().list();
+        let services = self.base.json_service_registry().list();
         info!("Available services:");
         for (name, service) in services {
             info!(

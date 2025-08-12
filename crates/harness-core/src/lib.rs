@@ -11,7 +11,6 @@ pub mod client;
 pub mod config_traits;
 pub mod daemon;
 pub mod error;
-pub mod json_service_adapter;
 pub mod service;
 pub mod task;
 
@@ -24,10 +23,10 @@ pub mod prelude {
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::Error;
     pub use crate::service::{
-        ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState,
+        ActionDescriptor, JsonService, Service, ServiceSetup, JsonServiceRegistry, ServiceState,
         StatefulService,
     };
-    pub use crate::task::{DeploymentTask, JsonTask, TaskStack};
+    pub use crate::task::{DeploymentTask, JsonTask, JsonTaskRegistry};
 
     // Re-export commonly used types from dependencies
     pub use async_channel::Receiver;

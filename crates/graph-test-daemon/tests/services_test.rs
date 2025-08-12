@@ -2,7 +2,7 @@
 
 use graph_test_daemon::services::*;
 use graph_test_daemon::*;
-use harness_core::service::Service;
+use harness_core::service::{Service, JsonServiceRegistry};
 
 #[smol_potat::test]
 #[ignore = "Service actions not yet implemented (uses todo!())"]
@@ -51,8 +51,8 @@ fn test_service_metadata() {
 }
 
 #[test]
-fn test_service_stack_registration() {
-    let mut stack = ServiceStack::new();
+fn test_json_service_registry_registration() {
+    let mut stack = JsonServiceRegistry::new();
 
     // Register Graph Node
     let graph_node = GraphNodeService::new("localhost".to_string());
@@ -91,7 +91,7 @@ fn test_json_schema_generation() {
 
 #[test]
 fn test_complete_graph_stack_registration() {
-    let mut stack = ServiceStack::new();
+    let mut stack = JsonServiceRegistry::new();
 
     // Register all Graph Protocol services
     stack

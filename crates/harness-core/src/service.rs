@@ -482,16 +482,17 @@ where
     }
 }
 
-/// Stack of services available in a daemon
+/// Registry of JSON-wrapped services available in a daemon
 ///
-/// The ServiceStack manages a collection of services that can perform actions.
-/// Services are stored as trait objects to allow different service types.
-pub struct ServiceStack {
+/// The JsonServiceRegistry manages a collection of services that have been
+/// wrapped to provide a JSON interface. Services are stored as trait objects
+/// to allow different service types with unified JSON-based interaction.
+pub struct JsonServiceRegistry {
     services: HashMap<String, Box<dyn JsonService>>,
     service_types: HashSet<String>,
 }
 
-impl ServiceStack {
+impl JsonServiceRegistry {
     /// Create a new empty service stack
     pub fn new() -> Self {
         Self {
@@ -596,7 +597,7 @@ impl ServiceStack {
     }
 }
 
-impl Default for ServiceStack {
+impl Default for JsonServiceRegistry {
     fn default() -> Self {
         Self::new()
     }
@@ -619,7 +620,20 @@ mod tests {
         response: String,
     }
 
-    struct TestService;
+    struct TestService {
+        event_tx: async_channel::Sender<TestEvent>,
+        event_rx: async_channel::Receiver<TestEvent>,
+    }
+    
+    impl Default for TestService {
+        fn default() -> Self {
+            let (tx, rx) = async_channel::unbounded();
+            Self {
+                event_tx: tx,
+                event_rx: rx,
+            }
+        }
+    }
 
     #[async_trait]
     impl Service for TestService {
@@ -637,25 +651,28 @@ mod tests {
         fn description(&self) -> &str {
             "A test service"
         }
+        
+        fn event_stream(&self) -> Receiver<Self::Event> {
+            self.event_rx.clone()
+        }
 
         async fn dispatch_action(
             &self,
             action: Self::Action,
-        ) -> Result<Receiver<Self::Event>, Error> {
-            let (tx, rx) = async_channel::bounded(1);
-            tx.send(TestEvent {
+        ) -> Result<(), Error> {
+            self.event_tx.send(TestEvent {
                 response: format!("Echo: {}", action.message),
             })
             .await
             .unwrap();
-            Ok(rx)
+            Ok(())
         }
     }
 
     #[test]
     fn test_service_stack_registration() {
-        let mut stack = ServiceStack::new();
-        let service = TestService;
+        let mut stack = JsonServiceRegistry::new();
+        let service = TestService::default();
 
         // Register service
         stack.register("test-1".to_string(), service).unwrap();
@@ -665,14 +682,14 @@ mod tests {
         assert_eq!(stack.list().len(), 1);
 
         // Try to register with same name (should fail)
-        let result = stack.register("test-1".to_string(), TestService);
+        let result = stack.register("test-1".to_string(), TestService::default());
         assert!(result.is_err());
     }
 
     #[smol_potat::test]
     async fn test_action_dispatch() {
-        let mut stack = ServiceStack::new();
-        stack.register("test-1".to_string(), TestService).unwrap();
+        let mut stack = JsonServiceRegistry::new();
+        stack.register("test-1".to_string(), TestService::default()).unwrap();
 
         let input = serde_json::json!({
             "message": "Hello"

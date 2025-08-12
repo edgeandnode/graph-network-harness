@@ -111,16 +111,17 @@ where
     }
 }
 
-/// Stack of deployment tasks
+/// Registry of JSON-wrapped deployment tasks
 ///
-/// The TaskStack manages a collection of tasks that can perform one-time
-/// setup operations. Tasks are stored as trait objects to allow different task types.
-pub struct TaskStack {
+/// The JsonTaskRegistry manages a collection of tasks that have been wrapped
+/// to provide a JSON interface. Tasks are stored as trait objects to allow
+/// different task types with unified JSON-based interaction.
+pub struct JsonTaskRegistry {
     tasks: HashMap<String, Box<dyn JsonTask>>,
     task_types: HashSet<String>,
 }
 
-impl TaskStack {
+impl JsonTaskRegistry {
     /// Create a new empty task stack
     pub fn new() -> Self {
         Self {
@@ -186,7 +187,7 @@ impl TaskStack {
 
 }
 
-impl Default for TaskStack {
+impl Default for JsonTaskRegistry {
     fn default() -> Self {
         Self::new()
     }
@@ -248,15 +249,11 @@ mod tests {
 
             Ok(rx)
         }
-        
-        fn get_state(&self) -> Self::State {
-            self.state.lock().map(|s| s.clone()).unwrap_or(TestTaskState::Idle)
-        }
     }
 
     #[test]
     fn test_task_stack_registration() {
-        let mut stack = TaskStack::new();
+        let mut stack = JsonTaskRegistry::new();
         let task = TestTask::new();
 
         // Register task
@@ -275,7 +272,7 @@ mod tests {
     async fn test_task_execution() {
         use async_runtime_compat::smol::SmolSpawner;
         
-        let mut stack = TaskStack::new();
+        let mut stack = JsonTaskRegistry::new();
         stack
             .register("test-1".to_string(), TestTask::new())
             .unwrap();
@@ -304,34 +301,28 @@ mod tests {
     async fn test_task_state() {
         use async_runtime_compat::smol::SmolSpawner;
         
-        let mut stack = TaskStack::new();
+        let mut stack = JsonTaskRegistry::new();
         let task = TestTask::new();
         stack.register("test-1".to_string(), task).unwrap();
 
-        // Check initial state
-        let initial_state = stack.get_state("test-1").unwrap();
-        let state: TestTaskState = serde_json::from_value(initial_state).unwrap();
-        assert_eq!(state, TestTaskState::Idle);
-
         // Execute the task
         let spawner = SmolSpawner;
-        let rx = stack.execute("test-1", &spawner).await.unwrap();
+        let mut rx = stack.execute("test-1", &spawner).await.unwrap();
 
-        // Drain all state updates
-        while rx.recv().await.is_ok() {}
-
-        // Small delay to ensure state is updated
-        smol::Timer::after(std::time::Duration::from_millis(50)).await;
-
-        // Should now be completed
-        let final_state = stack.get_state("test-1").unwrap();
-        let state: TestTaskState = serde_json::from_value(final_state).unwrap();
+        // First state should be Running
+        let state = rx.recv().await.unwrap();
+        let state: TestTaskState = serde_json::from_value(state).unwrap();
+        assert_eq!(state, TestTaskState::Running);
+        
+        // Next state should be Completed
+        let state = rx.recv().await.unwrap();
+        let state: TestTaskState = serde_json::from_value(state).unwrap();
         assert_eq!(state, TestTaskState::Completed);
     }
 
     #[test]
     fn test_task_type_tracking() {
-        let mut stack = TaskStack::new();
+        let mut stack = JsonTaskRegistry::new();
 
         // Register multiple instances of the same task type
         stack
@@ -351,7 +342,7 @@ mod tests {
     async fn test_task_error_handling() {
         use async_runtime_compat::smol::SmolSpawner;
         
-        let stack = TaskStack::new();
+        let stack = JsonTaskRegistry::new();
         let spawner = SmolSpawner;
 
         // Try to execute non-existent task
@@ -359,9 +350,8 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
-        // Try to get state of non-existent task
-        let result = stack.get_state("non-existent");
-        assert!(result.is_err());
+        // Try to execute non-existent task (should error)
+        // The execute method already checked and returned error above
     }
 
 }

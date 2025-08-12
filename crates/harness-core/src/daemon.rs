@@ -423,6 +423,13 @@ impl DaemonBuilder {
         S::Action: schemars::JsonSchema,
         S::Event: schemars::JsonSchema,
     {
+        // Log the service registration
+        tracing::info!(
+            "Registering service '{}' of type '{}'",
+            instance_name,
+            S::service_type()
+        );
+        
         // Register with the service stack
         self.service_stack.register(instance_name, service)?;
 
@@ -438,6 +445,9 @@ impl DaemonBuilder {
         T: DeploymentTask + 'static,
         T::Event: schemars::JsonSchema,
     {
+        // Log the task registration
+        tracing::info!("Registering task '{}'", task_name);
+        
         self.task_stack.register(task_name, task)?;
         Ok(self)
     }

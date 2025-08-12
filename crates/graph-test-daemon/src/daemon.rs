@@ -73,22 +73,18 @@ impl GraphTestDaemon {
                     "graph-node" => {
                         let service = GraphNodeService::from_config(&service_config.orchestration)?;
                         builder.register_service(instance_name, service)?;
-                        info!("Registered Graph Node service");
                     }
                     "anvil" => {
                         let service = AnvilService::from_config(&service_config.orchestration)?;
                         builder.register_service(instance_name, service)?;
-                        info!("Registered Anvil service");
                     }
                     "postgres" => {
                         let service = PostgresService::from_config(&service_config.orchestration)?;
                         builder.register_service(instance_name, service)?;
-                        info!("Registered PostgreSQL service");
                     }
                     "ipfs" => {
                         let service = IpfsService::from_config(&service_config.orchestration)?;
                         builder.register_service(instance_name, service)?;
-                        info!("Registered IPFS service");
                     }
                     unknown => {
                         return Err(Error::service_type(format!(

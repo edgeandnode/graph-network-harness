@@ -3,6 +3,7 @@
 use service_orchestration::{
     CommandSpec, LayerConfig, LayeredServiceExecutor, ServiceConfig, ServiceExecutor, ServiceTarget,
 };
+use async_runtime_compat::smol::SmolSpawner;
 use std::collections::HashMap;
 
 #[smol_potat::test]
@@ -20,6 +21,7 @@ async fn test_layered_executor_local_only() {
                 binary: "echo".to_string(),
                 args: vec!["hello layered".to_string()],
             },
+            health_check: None,
         },
         dependencies: vec![],
         health_check: None,
@@ -27,7 +29,8 @@ async fn test_layered_executor_local_only() {
 
     assert!(executor.can_handle(&config));
 
-    let running = executor.start(config).await.unwrap();
+    let spawner = SmolSpawner;
+    let running = executor.start(config, &spawner).await.unwrap();
     assert_eq!(running.name, "test-local-layered");
     assert_eq!(
         running.metadata.get("executor_type"),
@@ -36,7 +39,7 @@ async fn test_layered_executor_local_only() {
     assert_eq!(running.metadata.get("layer_count"), Some(&"1".to_string()));
 
     // Clean up
-    executor.stop(&running).await.unwrap();
+    executor.stop(&running, &spawner).await.unwrap();
 }
 
 #[cfg(feature = "docker-tests")]
@@ -69,16 +72,18 @@ async fn test_layered_executor_docker_layer() {
                 binary: "sh".to_string(),
                 args: vec!["-c".to_string(), "echo 'hello from docker'".to_string()],
             },
+            health_check: None,
         },
         dependencies: vec![],
         health_check: None,
     };
 
-    let running = executor.start(config).await.unwrap();
+    let spawner = SmolSpawner;
+    let running = executor.start(config, &spawner).await.unwrap();
     assert_eq!(running.name, "test-docker-layered");
 
     // Clean up
-    executor.stop(&running).await.unwrap();
+    executor.stop(&running, &spawner).await.unwrap();
 }
 
 #[smol_potat::test]
@@ -99,7 +104,8 @@ async fn test_layered_executor_rejects_non_layered() {
 
     assert!(!executor.can_handle(&config));
 
-    let result = executor.start(config).await;
+    let spawner = SmolSpawner;
+    let result = executor.start(config, &spawner).await;
     assert!(result.is_err());
 
     if let Err(e) = result {
@@ -191,7 +197,7 @@ dependencies: []
     let config: ServiceConfig = serde_yaml::from_str(yaml).unwrap();
     assert_eq!(config.name, "complex-service");
 
-    if let ServiceTarget::Layered { layers, command } = &config.target {
+    if let ServiceTarget::Layered { layers, command, .. } = &config.target {
         assert_eq!(layers.len(), 2);
 
         // Check first layer (SSH)

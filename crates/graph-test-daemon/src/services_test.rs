@@ -22,7 +22,8 @@ mod tests {
             version_label: Some("v1.0.0".to_string()),
         };
 
-        let events = service.dispatch_action(action).await.unwrap();
+        let events = service.event_stream();
+        service.dispatch_action(action).await.unwrap();
 
         // Collect events
         let mut event_count = 0;
@@ -59,7 +60,8 @@ mod tests {
             interval_secs: None,
         };
 
-        let events = service.dispatch_action(action).await.unwrap();
+        let events = service.event_stream();
+        service.dispatch_action(action).await.unwrap();
 
         // Should receive 3 block mined events
         let mut block_count = 0;

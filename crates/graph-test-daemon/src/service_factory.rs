@@ -162,6 +162,7 @@ impl ServiceFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use harness_core::service::ServiceSetup;
 
     #[smol_potat::test]
     async fn test_factory_creates_services() {

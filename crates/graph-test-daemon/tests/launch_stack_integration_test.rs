@@ -1,7 +1,7 @@
 //! Integration test for launch_stack with real services
 
 use std::fs;
-use std::path::Path;
+use async_runtime_compat::smol::SmolSpawner;
 
 #[smol_potat::test]
 async fn test_launch_stack_starts_services() -> anyhow::Result<()> {
@@ -112,6 +112,7 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     use std::collections::HashMap;
 
     // Create a service manager
+    let spawner = SmolSpawner;
     let manager = ServiceManager::new().await?;
 
     // Create a simple echo service config
@@ -131,8 +132,8 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
         health_check: None,
     };
 
-    // Start the service
-    let running_service = manager.start_service("test-echo", config).await?;
+    // Start the service using launch_service
+    let (_events, running_service) = manager.launch_service(config, &spawner).await?;
 
     // Verify service was started
     assert!(running_service.pid.is_some());
@@ -147,7 +148,7 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     assert!(services.contains(&"test-echo".to_string()));
 
     // Stop the service
-    manager.stop_service("test-echo").await?;
+    manager.stop_service("test-echo", &spawner).await?;
 
     // Verify service is gone
     let services_after = manager.list_services().await?;

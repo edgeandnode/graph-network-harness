@@ -3,7 +3,8 @@
 //! These traits encapsulate the logic for building services and tasks
 //! from configuration, including extracting parameters and applying defaults.
 
-use crate::{Error, Service};
+use crate::Error;
+use crate::service::Service;
 use crate::task::DeploymentTask;
 use service_orchestration::{ServiceConfig, TaskConfig};
 use std::result::Result;

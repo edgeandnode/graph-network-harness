@@ -5,7 +5,7 @@ use crate::{
     resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
-use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
+use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ProcessCommand, ServiceConfig, ServiceTarget};
 use std::collections::HashMap;
 use std::path::Path;
 use std::result::Result;
@@ -181,6 +181,8 @@ pub fn convert_to_orchestrator_with_context(
                 .collect();
 
             ServiceTarget::Docker {
+                params: HashMap::new(),  // No params for legacy configs
+                command_template: None,  // Use Docker default CMD
                 image: image.clone(),
                 env,
                 ports: simple_ports,
@@ -194,8 +196,10 @@ pub fn convert_to_orchestrator_with_context(
             working_dir,
             ..
         } => ServiceTarget::Process {
-            binary: binary.clone(),
-            args: args.clone(),
+            command: ProcessCommand::Legacy {
+                // Combine binary and args into a single command string
+                command: format!("{} {}", binary, args.join(" ")),
+            },
             env,
             working_dir: working_dir.clone(),
         },

@@ -8,14 +8,13 @@ tasks:
     task_type: graph-contracts-deployment
     target:
       type: process
-      binary: npx
-      args:
-        - hardhat
-        - deploy
-        - --network
-        - localhost
+      params:
+        binary: npx
+        network: localhost
+        ethereum_url: http://localhost:8545
+      command_template: "{binary} hardhat deploy --network {network}"
       env:
-        ETHEREUM_URL: http://localhost:8545
+        ETHEREUM_URL: "{ethereum_url}"
       working_dir: ./contracts/graph-contracts
     dependencies:
       - service: anvil  # Need blockchain running first
@@ -27,14 +26,13 @@ tasks:
     task_type: tap-contracts-deployment
     target:
       type: process
-      binary: npx
-      args:
-        - hardhat
-        - deploy
-        - --network
-        - localhost
+      params:
+        binary: npx
+        network: localhost
+        ethereum_url: http://localhost:8545
+      command_template: "{binary} hardhat deploy --network {network}"
       env:
-        ETHEREUM_URL: http://localhost:8545
+        ETHEREUM_URL: "{ethereum_url}"
       working_dir: ./contracts/tap-contracts
     dependencies:
       - service: anvil
@@ -51,11 +49,16 @@ services:
     name: postgres
     target:
       type: docker
+      params:
+        port: 5432
+        database: graph-node
+        user: graph-node
+        password: graph-password
       image: postgres:14
       env:
-        POSTGRES_USER: graph-node
-        POSTGRES_PASSWORD: graph-password
-        POSTGRES_DB: graph-node
+        POSTGRES_USER: "{user}"
+        POSTGRES_PASSWORD: "{password}"
+        POSTGRES_DB: "{database}"
       ports: [5432]
     health_check:
       command: pg_isready
@@ -70,6 +73,9 @@ services:
     name: ipfs
     target:
       type: docker
+      params:
+        api_port: 5001
+        gateway_port: 8080
       image: ipfs/go-ipfs:latest
       env: {}
       ports: [5001, 8080]
@@ -86,23 +92,18 @@ services:
     name: anvil
     target:
       type: process
-      binary: anvil
-      args:
-        - --host
-        - "0.0.0.0"
-        - --port
-        - "8545"
-        - --chain-id
-        - "31337"
-        - --block-time
-        - "1"
-        - --accounts
-        - "10"
-        - --balance
-        - "10000"
+      params:
+        binary: anvil
+        host: "0.0.0.0"
+        port: 8545
+        chain_id: 31337
+        block_time: 1
+        accounts: 10
+        balance: 10000
+      command_template: "{binary} --host {host} --port {port} --chain-id {chain_id} --block-time {block_time} --accounts {accounts} --balance {balance}"
       env:
         RUST_LOG: info
-        CHAIN_ID: "31337"
+        CHAIN_ID: "{chain_id}"
     health_check:
       command: curl
       args:
@@ -123,16 +124,25 @@ services:
     name: graph-node
     target:
       type: docker
-      image: graphprotocol/graph-node:latest
-      env:
+      params:
+        endpoint: localhost
         postgres_host: postgres
         postgres_user: graph-node
         postgres_pass: graph-password
         postgres_db: graph-node
-        ipfs: ipfs:5001
-        ethereum: mainnet:http://anvil:8545
-        GRAPH_LOG: info
-        GRAPH_ENDPOINT: localhost
+        ipfs_host: ipfs
+        ipfs_port: 5001
+        ethereum_rpc: "http://anvil:8545"
+      image: graphprotocol/graph-node:latest
+      env:
+        postgres_host: "{postgres_host}"
+        postgres_user: "{postgres_user}"
+        postgres_pass: "{postgres_pass}"
+        postgres_db: "{postgres_db}"
+        ipfs: "{ipfs_host}:{ipfs_port}"
+        ethereum: "mainnet:{ethereum_rpc}"
+        GRAPH_LOG: info  # This one doesn't need params, just a static value
+        GRAPH_ENDPOINT: "{endpoint}"
       ports: [8000, 8001, 8020, 8030, 8040]
     dependencies:
       - service: postgres

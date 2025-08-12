@@ -37,6 +37,26 @@ pub struct ServiceConfig {
     pub health_check: Option<HealthCheck>,
 }
 
+/// Command execution specification
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ProcessCommand {
+    /// Modern template-based command with parameters
+    Template {
+        /// Service parameters for substitution (all values become strings)
+        #[serde(default)]
+        params: HashMap<String, String>,
+        /// Command template with {param} substitution
+        /// e.g., "anvil --port {port} --chain-id {chain_id}"
+        command_template: String,
+    },
+    /// Legacy raw command as a single string
+    Legacy {
+        /// Full command to execute (binary + args)
+        command: String,
+    },
+}
+
 /// Service execution target specification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -44,23 +64,32 @@ pub enum ServiceTarget {
     /// Local process execution (managed)
     #[serde(rename = "process")]
     Process {
-        /// Binary to execute
-        binary: String,
-        /// Command line arguments
-        args: Vec<String>,
-        /// Environment variables
+        /// Command specification (either template or legacy)
+        #[serde(flatten)]
+        command: ProcessCommand,
+        /// Environment variables (supports {param} substitution with template)
+        #[serde(default)]
         env: HashMap<String, String>,
         /// Working directory (optional)
+        #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
     },
     /// Docker container execution (managed)
     #[serde(rename = "docker")]
     Docker {
+        /// Service parameters for substitution
+        #[serde(default)]
+        params: HashMap<String, String>,
         /// Container image
         image: String,
-        /// Environment variables
+        /// Command template override (optional - uses image default if not specified)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        command_template: Option<String>,
+        /// Environment variables (supports {param} substitution)
+        #[serde(default)]
         env: HashMap<String, String>,
         /// Port mappings (host ports)
+        #[serde(default)]
         ports: Vec<u16>,
         /// Volume mounts
         #[serde(default)]
@@ -101,10 +130,17 @@ pub enum ServiceTarget {
     /// Layered execution with composed execution contexts
     #[serde(rename = "layered")]
     Layered {
+        /// Service parameters for substitution
+        #[serde(default)]
+        params: HashMap<String, String>,
         /// Execution layers to apply (in order)
         layers: Vec<crate::executors::layered::LayerConfig>,
-        /// Command to execute through the layers
-        command: CommandSpec,
+        /// Command template with {param} substitution
+        #[serde(skip_serializing_if = "Option::is_none")]
+        command_template: Option<String>,
+        /// Command to execute through the layers (deprecated - use command_template)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        command: Option<CommandSpec>,
         /// Optional health check to run through the same layers
         #[serde(skip_serializing_if = "Option::is_none")]
         health_check: Option<HealthCheck>,
@@ -133,8 +169,115 @@ pub enum RemoteMode {
     },
 }
 
+impl ProcessCommand {
+    /// Get parameters if this is a template command
+    pub fn params(&self) -> Option<&HashMap<String, String>> {
+        match self {
+            ProcessCommand::Template { params, .. } => Some(params),
+            ProcessCommand::Legacy { .. } => None,
+        }
+    }
+    
+    /// Substitute parameters in a template string
+    pub fn substitute_params(&self, template: &str) -> String {
+        match self {
+            ProcessCommand::Template { params, .. } => {
+                let mut result = template.to_string();
+                // Substitute params
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    result = result.replace(&placeholder, value);
+                }
+                result
+            }
+            ProcessCommand::Legacy { .. } => template.to_string(),
+        }
+    }
+    
+    /// Build the command as a vector of strings
+    pub fn build_command(&self) -> Vec<String> {
+        match self {
+            ProcessCommand::Template { command_template, .. } => {
+                let command = self.substitute_params(command_template);
+                // Simple split on whitespace - could be improved with shell_words
+                command.split_whitespace().map(String::from).collect()
+            }
+            ProcessCommand::Legacy { command } => {
+                // Simple split on whitespace - could be improved with shell_words
+                command.split_whitespace().map(String::from).collect()
+            }
+        }
+    }
+}
+
 impl ServiceTarget {
-    /// Get environment variables from the target
+    /// Get a parameter value by key as a string
+    pub fn get_param(&self, key: &str) -> Option<&str> {
+        let params = match self {
+            ServiceTarget::Process { command: ProcessCommand::Template { params, .. }, .. } => params,
+            ServiceTarget::Docker { params, .. } => params,
+            ServiceTarget::Layered { params, .. } => params,
+            _ => return None,
+        };
+        
+        params.get(key).map(|s| s.as_str())
+    }
+    
+    /// Get a parameter value by key and parse it
+    pub fn get_param_parsed<T: std::str::FromStr>(&self, key: &str) -> Option<T> {
+        self.get_param(key).and_then(|s| s.parse().ok())
+    }
+    
+    /// Get a parameter value with a default
+    pub fn get_param_or<'a>(&'a self, key: &str, default: &'a str) -> &'a str {
+        self.get_param(key).unwrap_or(default)
+    }
+    
+    /// Get a parameter value and parse it with a default
+    pub fn get_param_parsed_or<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
+        self.get_param_parsed(key).unwrap_or(default)
+    }
+    
+    /// Substitute {param} placeholders in a template string
+    pub fn substitute_params(&self, template: &str) -> String {
+        match self {
+            ServiceTarget::Process { command, .. } => command.substitute_params(template),
+            ServiceTarget::Docker { params, .. } | 
+            ServiceTarget::Layered { params, .. } => {
+                let mut result = template.to_string();
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    result = result.replace(&placeholder, value);
+                }
+                result
+            }
+            _ => template.to_string(),
+        }
+    }
+    
+    /// Build the command from the command specification
+    pub fn build_command(&self) -> Option<Vec<String>> {
+        match self {
+            ServiceTarget::Process { command, .. } => Some(command.build_command()),
+            ServiceTarget::Docker { command_template: Some(template), .. } |
+            ServiceTarget::Layered { command_template: Some(template), .. } => {
+                let command = self.substitute_params(template);
+                // Simple split on whitespace - could be improved with shell_words
+                Some(command.split_whitespace().map(String::from).collect())
+            }
+            _ => None,
+        }
+    }
+    
+    /// Build environment variables with parameter substitution
+    pub fn build_env(&self) -> HashMap<String, String> {
+        let env = self.env();
+        env.into_iter()
+            .map(|(k, v)| (k, self.substitute_params(&v)))
+            .collect()
+    }
+    
+    /// Get environment variables from the target (legacy - doesn't do substitution)
     pub fn env(&self) -> HashMap<String, String> {
         match self {
             ServiceTarget::Process { env, .. } => env.clone(),
@@ -150,23 +293,25 @@ impl ServiceTarget {
     pub fn with_env(&self, new_env: HashMap<String, String>) -> Self {
         match self {
             ServiceTarget::Process {
-                binary,
-                args,
+                command,
                 working_dir,
                 ..
             } => ServiceTarget::Process {
-                binary: binary.clone(),
-                args: args.clone(),
+                command: command.clone(),
                 env: new_env,
                 working_dir: working_dir.clone(),
             },
             ServiceTarget::Docker {
+                params,
                 image,
+                command_template,
                 ports,
                 volumes,
                 ..
             } => ServiceTarget::Docker {
+                params: params.clone(),
                 image: image.clone(),
+                command_template: command_template.clone(),
                 env: new_env,
                 ports: ports.clone(),
                 volumes: volumes.clone(),
@@ -191,11 +336,15 @@ impl ServiceTarget {
                 env: new_env,
             },
             ServiceTarget::Layered {
+                params,
                 layers,
+                command_template,
                 command,
                 health_check,
             } => ServiceTarget::Layered {
+                params: params.clone(),
                 layers: layers.clone(),
+                command_template: command_template.clone(),
                 command: command.clone(),
                 health_check: health_check.clone(),
             },
@@ -267,8 +416,9 @@ mod tests {
         let config = ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello".to_string()],
+                command: ProcessCommand::Legacy {
+                    command: "echo hello".to_string(),
+                },
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                 working_dir: Some("/tmp".to_string()),
             },
@@ -296,8 +446,9 @@ mod tests {
         env.insert("KEY1".to_string(), "value1".to_string());
 
         let target = ServiceTarget::Process {
-            binary: "test".to_string(),
-            args: vec![],
+            command: ProcessCommand::Legacy {
+                command: "test".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         };
@@ -309,7 +460,9 @@ mod tests {
     #[test]
     fn test_docker_target_serialization() {
         let target = ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "nginx:latest".to_string(),
+            command_template: None,
             env: HashMap::from([("ENV_VAR".to_string(), "value".to_string())]),
             ports: vec![80, 443],
             volumes: vec!["/data:/app/data".to_string()],

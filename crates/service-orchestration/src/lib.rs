@@ -36,17 +36,17 @@
 
 mod config;
 mod context;
+mod dependency_graph;
 mod discovery;
 mod executors;
 mod health;
 mod health_integration;
 mod manager;
-mod orchestrator;
 mod state;
 mod task_config;
 
 pub use config::{
-    CommandSpec, Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+    CommandSpec, Dependency, HealthCheck, ProcessCommand, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
 };
 pub use context::OrchestrationContext;
 pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
@@ -58,7 +58,7 @@ pub use executors::{
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager};
 pub use manager::ServiceManager;
-pub use orchestrator::{DependencyGraph, DependencyNode, DependencyOrchestrator};
+pub use dependency_graph::{DependencyGraph, DependencyNode};
 pub use state::{
     DeploymentState, DeploymentStatus, DeploymentSummary, ServiceDeploymentState, ServiceState,
     ServiceStateFilter, StateManager, TaskExecutionState, TaskState, TaskStateFilter,

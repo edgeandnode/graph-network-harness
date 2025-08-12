@@ -146,11 +146,18 @@ impl ServiceManager {
 
         // Register with service registry
         let execution_info = match &config.target {
-            crate::config::ServiceTarget::Process { binary, args, .. } => {
+            crate::config::ServiceTarget::Process { command, .. } => {
+                // Build command from ProcessCommand
+                let full_cmd = command.build_command();
+                let (cmd, cmd_args) = if !full_cmd.is_empty() {
+                    (full_cmd[0].clone(), full_cmd[1..].to_vec())
+                } else {
+                    ("unknown".to_string(), vec![])
+                };
                 service_registry::models::ExecutionInfo::ManagedProcess {
                     pid: running_service.pid,
-                    command: binary.clone(),
-                    args: args.clone(),
+                    command: cmd,
+                    args: cmd_args,
                 }
             }
             crate::config::ServiceTarget::Docker { image, .. } => {

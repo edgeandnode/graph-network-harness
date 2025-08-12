@@ -432,6 +432,7 @@ impl DaemonBuilder {
     pub fn register_task<T>(&mut self, task_name: String, task: T) -> Result<&mut Self, Error>
     where
         T: DeploymentTask + 'static,
+        T::Event: schemars::JsonSchema,
     {
         self.task_stack.register(task_name, task)?;
         Ok(self)

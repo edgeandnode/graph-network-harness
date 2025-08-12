@@ -63,8 +63,7 @@ impl ServiceExecutor for ProcessExecutor {
         spawner: &dyn Spawner,
     ) -> Result<RunningService, Error> {
         let ServiceTarget::Process {
-            binary,
-            args,
+            command,
             env,
             working_dir,
         } = &config.target
@@ -75,14 +74,25 @@ impl ServiceExecutor for ProcessExecutor {
         };
 
         info!("Starting process service: {}", config.name);
-        debug!("Command: {} {}", binary, args.join(" "));
+        
+        // Build command from ProcessCommand
+        let command_parts = command.build_command();
+        let final_env = config.target.build_env();
+
+        if command_parts.is_empty() {
+            return Err(crate::Error::Config("No command specified".to_string()));
+        }
+
+        debug!("Command: {}", command_parts.join(" "));
 
         // Build command
-        let mut cmd = Command::new(binary);
-        cmd.args(args);
+        let mut cmd = Command::new(&command_parts[0]);
+        if command_parts.len() > 1 {
+            cmd.args(&command_parts[1..]);
+        }
 
         // Set environment variables
-        for (key, value) in env {
+        for (key, value) in &final_env {
             cmd.env(key, value);
         }
 

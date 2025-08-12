@@ -13,6 +13,7 @@ use std::result::Result;
 use tracing::info;
 
 use harness_core::json_service_adapter::JsonServiceAdapter;
+use harness_core::config_traits::ServiceFromConfig;
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 
 /// Type alias for Graph Protocol stack configuration
@@ -68,102 +69,27 @@ impl GraphTestDaemon {
                     instance_name, service_config.service_type, service_config.orchestration.target
                 );
 
-                // Create service instance based on service_type, using orchestration config for parameters
+                // Use ServiceFromConfig to create service instances dynamically
                 match service_config.service_type.as_str() {
                     "graph-node" => {
-                        // Extract endpoint from environment or use default
-                        let endpoint = service_config
-                            .orchestration
-                            .target
-                            .env()
-                            .get("GRAPH_ENDPOINT")
-                            .cloned()
-                            .unwrap_or_else(|| "localhost".to_string());
-                        let graph_node = GraphNodeService::new(endpoint.clone());
-                        builder.register_service(instance_name, graph_node)?;
-                        info!("Registered Graph Node service with endpoint: {}", endpoint);
+                        let service = GraphNodeService::from_config(&service_config.orchestration)?;
+                        builder.register_service(instance_name, service)?;
+                        info!("Registered Graph Node service");
                     }
                     "anvil" => {
-                        // Extract chain_id and port from environment or process args
-                        let env = service_config.orchestration.target.env();
-                        let chain_id = env
-                            .get("CHAIN_ID")
-                            .and_then(|s| s.parse::<u64>().ok())
-                            .unwrap_or(31337);
-
-                        // Extract port from args based on target type
-                        let port = match &service_config.orchestration.target {
-                            ServiceTarget::Process { args, .. } => args
-                                .iter()
-                                .position(|arg| arg == "--port")
-                                .and_then(|pos| args.get(pos + 1))
-                                .and_then(|port_str| port_str.parse::<u16>().ok())
-                                .unwrap_or(8545),
-                            ServiceTarget::Docker { ports, .. } => {
-                                ports.first().cloned().unwrap_or(8545)
-                            }
-                            ServiceTarget::Layered { command, .. } => {
-                                // For layered targets, extract from command args
-                                command
-                                    .args
-                                    .iter()
-                                    .position(|arg| arg == "--port")
-                                    .and_then(|pos| command.args.get(pos + 1))
-                                    .and_then(|port_str| port_str.parse::<u16>().ok())
-                                    .unwrap_or(8545)
-                            }
-                            _ => 8545,
-                        };
-
-                        let anvil = AnvilService::new(chain_id, port);
-                        builder.register_service(instance_name, anvil)?;
-                        info!(
-                            "Registered Anvil service with chain_id: {}, port: {}",
-                            chain_id, port
-                        );
+                        let service = AnvilService::from_config(&service_config.orchestration)?;
+                        builder.register_service(instance_name, service)?;
+                        info!("Registered Anvil service");
                     }
                     "postgres" => {
-                        // Extract database name from environment
-                        let env = service_config.orchestration.target.env();
-                        let db_name = env
-                            .get("POSTGRES_DB")
-                            .cloned()
-                            .unwrap_or_else(|| "graph-node".to_string());
-
-                        // Extract port from target
-                        let port = match &service_config.orchestration.target {
-                            ServiceTarget::Docker { ports, .. } => {
-                                ports.first().cloned().unwrap_or(5432)
-                            }
-                            ServiceTarget::Layered { .. } => 5432, // Default port for layered
-                            _ => 5432,
-                        };
-
-                        let postgres = PostgresService::new(db_name.clone(), port);
-                        builder.register_service(instance_name, postgres)?;
-                        info!(
-                            "Registered PostgreSQL service with db_name: {}, port: {}",
-                            db_name, port
-                        );
+                        let service = PostgresService::from_config(&service_config.orchestration)?;
+                        builder.register_service(instance_name, service)?;
+                        info!("Registered PostgreSQL service");
                     }
                     "ipfs" => {
-                        // Extract ports from target
-                        let (api_port, gateway_port) = match &service_config.orchestration.target {
-                            ServiceTarget::Docker { ports, .. } => {
-                                let api_port = ports.first().cloned().unwrap_or(5001);
-                                let gateway_port = ports.get(1).cloned().unwrap_or(8080);
-                                (api_port, gateway_port)
-                            }
-                            ServiceTarget::Layered { .. } => (5001, 8080), // Default ports for layered
-                            _ => (5001, 8080),
-                        };
-
-                        let ipfs = IpfsService::new(api_port, gateway_port);
-                        builder.register_service(instance_name, ipfs)?;
-                        info!(
-                            "Registered IPFS service with api_port: {}, gateway_port: {}",
-                            api_port, gateway_port
-                        );
+                        let service = IpfsService::from_config(&service_config.orchestration)?;
+                        builder.register_service(instance_name, service)?;
+                        info!("Registered IPFS service");
                     }
                     unknown => {
                         return Err(Error::service_type(format!(

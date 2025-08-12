@@ -928,6 +928,92 @@ pub enum GraphTestStack {
     Ipfs(IpfsService),
 }
 
+// ServiceFromConfig implementations for automatic service creation from configuration
+
+impl ServiceFromConfig for GraphNodeService {
+    fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
+        // Extract endpoint from params or environment
+        let endpoint = config.target.get_param("endpoint")
+            .map(String::from)
+            .or_else(|| config.target.env().get("GRAPH_ENDPOINT").cloned())
+            .unwrap_or_else(|| "localhost".to_string());
+        
+        Ok(GraphNodeService::new(endpoint))
+    }
+}
+
+impl ServiceFromConfig for AnvilService {
+    fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
+        // Extract chain_id and port from params
+        let chain_id = config.target.get_param_parsed::<u64>("chain_id")
+            .or_else(|| config.target.env().get("CHAIN_ID")
+                .and_then(|s| s.parse::<u64>().ok()))
+            .unwrap_or(31337);
+        
+        let port = config.target.get_param_parsed::<u16>("port")
+            .or_else(|| {
+                // For Docker, check ports array
+                if let ServiceTarget::Docker { ports, .. } = &config.target {
+                    ports.first().cloned()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(8545);
+        
+        Ok(AnvilService::new(chain_id, port))
+    }
+}
+
+impl ServiceFromConfig for PostgresService {
+    fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
+        // Extract database name from params
+        let db_name = config.target.get_param("database")
+            .map(String::from)
+            .or_else(|| config.target.env().get("POSTGRES_DB").cloned())
+            .unwrap_or_else(|| "graph-node".to_string());
+        
+        let port = config.target.get_param_parsed::<u16>("port")
+            .or_else(|| {
+                if let ServiceTarget::Docker { ports, .. } = &config.target {
+                    ports.first().cloned()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(5432);
+        
+        Ok(PostgresService::new(db_name, port))
+    }
+}
+
+impl ServiceFromConfig for IpfsService {
+    fn from_config(config: &ServiceConfig) -> Result<Self, Error> {
+        // Extract API and gateway ports from params
+        let api_port = config.target.get_param_parsed::<u16>("api_port")
+            .or_else(|| {
+                if let ServiceTarget::Docker { ports, .. } = &config.target {
+                    ports.get(0).cloned()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(5001);
+        
+        let gateway_port = config.target.get_param_parsed::<u16>("gateway_port")
+            .or_else(|| {
+                if let ServiceTarget::Docker { ports, .. } = &config.target {
+                    ports.get(1).cloned()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(8080);
+        
+        Ok(IpfsService::new(api_port, gateway_port))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Add tests for remaining services as needed

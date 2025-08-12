@@ -9,6 +9,12 @@ services:
     name: postgres
     target:
       type: layered
+      params:
+        binary: systemctl
+        service: postgresql
+        user: graph-node
+        password: graph-password
+        database: graph-node
       layers:
         - type: ssh
           host: graph-container
@@ -17,13 +23,11 @@ services:
           identity_file: ~/.ssh/graph_test_key
         - type: local
           working_dir: /opt/graph
-      command: 
-        binary: systemctl
-        args: ["start", "postgresql"]
+      command_template: "{binary} start {service}"
       env:
-        POSTGRES_USER: graph-node
-        POSTGRES_PASSWORD: graph-password
-        POSTGRES_DB: graph-node
+        POSTGRES_USER: "{user}"
+        POSTGRES_PASSWORD: "{password}"
+        POSTGRES_DB: "{database}"
     health_check:
       command: pg_isready
       args: ["-U", "graph-node"]
@@ -37,6 +41,9 @@ services:
     name: ipfs
     target:
       type: layered
+      params:
+        binary: systemctl
+        service: ipfs
       layers:
         - type: ssh
           host: graph-container
@@ -45,9 +52,7 @@ services:
           identity_file: ~/.ssh/graph_test_key
         - type: local
           working_dir: /opt/graph
-      command:
-        binary: systemctl
-        args: ["start", "ipfs"]
+      command_template: "{binary} start {service}"
       env: {}
     health_check:
       command: curl
@@ -62,6 +67,11 @@ services:
     name: anvil
     target:
       type: layered
+      params:
+        binary: anvil
+        host: 0.0.0.0
+        port: 8545
+        chain_id: 31337
       layers:
         - type: ssh
           host: graph-container
@@ -70,17 +80,10 @@ services:
           identity_file: ~/.ssh/graph_test_key
         - type: local
           working_dir: /opt/graph
-      command:
-        binary: anvil
-        args:
-          - --host
-          - "0.0.0.0"
-          - --port
-          - "8545"
-          - --chain-id
-          - "31337"
+      command_template: "{binary} --host {host} --port {port} --chain-id {chain_id}"
       env:
         RUST_LOG: info
+        CHAIN_ID: "{chain_id}"
     health_check:
       command: curl
       args:

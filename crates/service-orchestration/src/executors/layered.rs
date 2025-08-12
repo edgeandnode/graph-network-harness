@@ -237,7 +237,10 @@ impl ServiceExecutor for LayeredServiceExecutor {
         let ServiceTarget::Layered {
             layers,
             command,
+            command_template,
+            params,
             health_check: _,
+            ..
         } = &config.target
         else {
             return Err(Error::Config(
@@ -251,17 +254,36 @@ impl ServiceExecutor for LayeredServiceExecutor {
             layers.len()
         );
 
-        // Get environment variables from config
-        let env = config.target.env();
+        // Get environment variables from config (with substitutions if using params)
+        let env = if !params.is_empty() {
+            config.target.build_env()
+        } else {
+            config.target.env()
+        };
 
         // Build the layered executor with all layers
         let executor = Self::build_executor(layers, &env);
 
-        // Build command
-        let mut cmd = Command::new(&command.binary);
-        for arg in &command.args {
-            cmd.arg(arg);
-        }
+        // Build command from template or legacy command
+        let mut cmd = if let Some(template) = command_template {
+            let cmd_parts = config.target.build_command().unwrap_or_default();
+            if cmd_parts.is_empty() {
+                return Err(Error::Config("No command built from template".to_string()));
+            }
+            let mut c = Command::new(&cmd_parts[0]);
+            if cmd_parts.len() > 1 {
+                c.args(&cmd_parts[1..]);
+            }
+            c
+        } else if let Some(cmd_spec) = command {
+            let mut c = Command::new(&cmd_spec.binary);
+            for arg in &cmd_spec.args {
+                c.arg(arg);
+            }
+            c
+        } else {
+            return Err(Error::Config("No command specified for layered target".to_string()));
+        };
 
         debug!("Executing layered command: {:?}", cmd);
 

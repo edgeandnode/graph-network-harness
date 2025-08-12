@@ -177,6 +177,7 @@ impl ServiceExecutor for DockerExecutor {
             env,
             ports,
             volumes,
+            ..
         } = &config.target
         else {
             return Err(crate::Error::Config(

@@ -6,6 +6,7 @@
 use anyhow::{Context, Result};
 use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::Daemon;
+use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -99,9 +100,16 @@ async fn test_graph_stack_via_ssh_docker() -> Result<()> {
 
     info!("Loading configuration from: {:?}", config_path);
 
+    // Load configuration from YAML file
+    let config_content = std::fs::read_to_string(&config_path)
+        .context("Failed to read config file")?;
+    
+    let config: StackConfig = serde_yaml::from_str(&config_content)
+        .context("Failed to parse config YAML")?;
+
     // Create the daemon with configuration
     let endpoint: SocketAddr = "127.0.0.1:9444".parse()?;
-    let daemon = GraphTestDaemon::from_config(endpoint, &config_path)
+    let daemon = GraphTestDaemon::from_stack_config(endpoint, config)
         .await
         .context("Failed to create GraphTestDaemon")?;
 

@@ -2,6 +2,7 @@
 
 use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::*;
+use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::path::Path;
 
@@ -17,8 +18,12 @@ async fn test_daemon_creation() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Load configuration from YAML file
+    let config_content = std::fs::read_to_string(config_path)?;
+    let config: StackConfig = serde_yaml::from_str(&config_content)?;
+    
     // Create the daemon
-    let daemon = GraphTestDaemon::from_config(endpoint, config_path).await?;
+    let daemon = GraphTestDaemon::from_stack_config(endpoint, config).await?;
 
     // Start the daemon
     daemon.start().await?;
@@ -48,7 +53,11 @@ async fn test_launch_stack_method_exists() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let daemon = GraphTestDaemon::from_config(endpoint, config_path).await?;
+    // Load configuration from YAML file
+    let config_content = std::fs::read_to_string(config_path)?;
+    let config: StackConfig = serde_yaml::from_str(&config_content)?;
+    
+    let daemon = GraphTestDaemon::from_stack_config(endpoint, config).await?;
 
     // The method should exist and be callable
     // In a real test environment with Docker available, this would launch services

@@ -6,6 +6,7 @@
 use clap::{Arg, Command};
 use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::Daemon;
+use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use tracing::{error, info};
 
@@ -52,10 +53,18 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting Graph Test Daemon on {}", endpoint);
 
-    // Create and start the daemon
+    // Load configuration from YAML file
     let config_path = matches.get_one::<String>("config").unwrap();
     info!("Loading daemon configuration from: {}", config_path);
-    let daemon = GraphTestDaemon::from_config(endpoint, config_path).await?;
+    
+    let config_content = std::fs::read_to_string(config_path)
+        .map_err(|e| format!("Failed to read config file: {e}"))?;
+    
+    let config: StackConfig = serde_yaml::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse config YAML: {e}"))?;
+    
+    // Create the daemon from the configuration
+    let daemon = GraphTestDaemon::from_stack_config(endpoint, config).await?;
 
     info!("Graph Test Daemon created successfully");
 

@@ -8,7 +8,6 @@ use harness_core::prelude::*;
 use harness_core::{Error, Registry, ServiceManager};
 use service_orchestration::StackConfig;
 use std::net::SocketAddr;
-use std::path::Path;
 use std::result::Result;
 use tracing::info;
 
@@ -25,21 +24,6 @@ pub struct GraphTestDaemon {
 }
 
 impl GraphTestDaemon {
-    /// Create a new Graph Test Daemon from configuration
-    pub async fn from_config<P: AsRef<Path>>(
-        endpoint: SocketAddr,
-        config_path: P,
-    ) -> Result<Self, Error> {
-        // Load configuration from YAML file
-        let config_content = std::fs::read_to_string(config_path.as_ref())
-            .map_err(|e| Error::daemon(format!("Failed to read config file: {e}")))?;
-
-        let config: GraphStackConfig = serde_yaml::from_str(&config_content)
-            .map_err(|e| Error::daemon(format!("Failed to parse config YAML: {e}")))?;
-
-        Self::from_stack_config(endpoint, config).await
-    }
-
     /// Create a new Graph Test Daemon from a stack configuration
     pub async fn from_stack_config(
         endpoint: SocketAddr,

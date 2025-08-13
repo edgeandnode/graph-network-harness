@@ -9,7 +9,8 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -230,6 +231,102 @@ pub trait JsonService: Send + Sync {
     }
 }
 
+/// Adapter that wraps services with JSON actions into JsonService
+/// 
+/// This adapter is generic over the service type and calls dispatch_json_action
+/// directly without needing a function pointer.
+pub struct JsonServiceAdapter<S> {
+    service: Arc<S>,
+    registry: crate::action::JsonActionRegistry,
+}
+
+impl<S> JsonServiceAdapter<S>
+where
+    S: Service + crate::action::ServiceJsonActions + 'static,
+{
+    /// Create a new adapter for a service with JSON actions
+    pub fn new(service: S) -> Result<Self, Error> {
+        let service = Arc::new(service);
+        let mut registry = crate::action::JsonActionRegistry::new();
+        
+        // Register the service's actions
+        S::register_actions(&mut registry)?;
+        
+        Ok(Self { service, registry })
+    }
+}
+
+/// Trait that services must implement to have dispatch_json_action
+/// This is implemented by the #[json_actions] macro
+#[async_trait]
+pub trait HasDispatchJson: Send + Sync {
+    /// Dispatch a JSON action to this service
+    async fn dispatch_json_action(
+        &self,
+        action_name: &str,
+        input: Value,
+    ) -> Result<Value, Error>;
+}
+
+#[async_trait]
+impl<S> JsonService for JsonServiceAdapter<S>
+where
+    S: Service + crate::action::ServiceJsonActions + HasDispatchJson + Send + Sync + 'static,
+{
+    fn name(&self) -> &str {
+        self.service.name()
+    }
+    
+    fn description(&self) -> &str {
+        self.service.description()
+    }
+    
+    fn available_actions(&self) -> Vec<ActionDescriptor> {
+        self.registry.action_names().iter().map(|name| {
+            let (input_schema, response_schema) = self.registry.get_schema(name)
+                .cloned()
+                .unwrap_or((Value::Null, Value::Null));
+            
+            ActionDescriptor {
+                name: name.clone(),
+                description: self.service.description().to_string(),
+                input_schema,
+                event_schema: response_schema,
+            }
+        }).collect()
+    }
+    
+    async fn dispatch_json(
+        &self,
+        action_name: &str,
+        input: Value,
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
+        // Create a channel for the response
+        let (tx, rx) = async_channel::bounded(1);
+        
+        // Call dispatch_json_action directly on the service
+        let service = self.service.clone();
+        let action_name = action_name.to_string();
+        
+        let dispatcher = async move {
+            match service.dispatch_json_action(&action_name, input).await {
+                Ok(result) => {
+                    let _ = tx.send(result).await;
+                }
+                Err(e) => {
+                    // Send error as JSON
+                    let error_json = serde_json::json!({
+                        "error": e.to_string()
+                    });
+                    let _ = tx.send(error_json).await;
+                }
+            }
+        };
+        
+        Ok((rx, Box::pin(dispatcher)))
+    }
+}
+
 /// Registry of JSON-wrapped services available in a daemon
 ///
 /// The JsonServiceRegistry manages a collection of services that have been
@@ -237,6 +334,7 @@ pub trait JsonService: Send + Sync {
 /// to allow different service types with unified JSON-based interaction.
 pub struct JsonServiceRegistry {
     services: HashMap<String, Box<dyn JsonService>>,
+    service_types: HashSet<String>,
 }
 
 impl JsonServiceRegistry {
@@ -244,7 +342,29 @@ impl JsonServiceRegistry {
     pub fn new() -> Self {
         Self {
             services: HashMap::new(),
+            service_types: HashSet::new(),
         }
+    }
+    
+    /// Register a service with automatic JSON wrapping
+    ///
+    /// This method automatically wraps the service in a JsonServiceAdapter
+    pub fn register<S>(&mut self, instance_name: String, service: S) -> Result<(), Error>
+    where
+        S: Service + crate::action::ServiceJsonActions + HasDispatchJson + 'static,
+    {
+        if self.services.contains_key(&instance_name) {
+            return Err(Error::service_type(format!(
+                "Service instance '{instance_name}' already registered"
+            )));
+        }
+
+        // Track the service type
+        self.service_types.insert(S::service_type().to_string());
+
+        let adapter = JsonServiceAdapter::new(service)?;
+        self.services.insert(instance_name, Box::new(adapter));
+        Ok(())
     }
 
     /// Register a service in the registry
@@ -287,6 +407,11 @@ impl JsonServiceRegistry {
                     .map(move |action| (instance.clone(), action))
             })
             .collect()
+    }
+    
+    /// Get all service type identifiers
+    pub fn list_types(&self) -> Vec<&str> {
+        self.service_types.iter().map(|s| s.as_str()).collect()
     }
 
     /// Dispatch an action to a specific service instance

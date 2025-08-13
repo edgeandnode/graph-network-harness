@@ -163,6 +163,17 @@ pub fn json_actions(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
+        
+        #[async_trait::async_trait]
+        impl harness_core::service::HasDispatchJson for #self_type {
+            async fn dispatch_json_action(
+                &self,
+                action_name: &str,
+                input: serde_json::Value,
+            ) -> std::result::Result<serde_json::Value, harness_core::Error> {
+                self.dispatch_json_action(action_name, input).await
+            }
+        }
     };
     
     // Combine everything

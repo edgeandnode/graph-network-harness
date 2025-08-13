@@ -398,32 +398,26 @@ impl DaemonBuilder {
     }
 
     /// Register a service from configuration using ServiceFromConfig trait
-    /// Note: The service must be wrapped in a JsonService implementation
     pub fn register_service_from_config<S>(
         &mut self,
         instance_name: String,
         config: &ServiceConfig,
-        json_wrapper: impl FnOnce(S) -> Box<dyn JsonService>,
     ) -> Result<&mut Self, Error>
     where
-        S: Service + ServiceFromConfig + 'static,
+        S: Service + ServiceFromConfig + crate::action::ServiceJsonActions + crate::service::HasDispatchJson + 'static,
     {
         // Create the service from config
         let service = S::from_config(config)?;
 
-        // Wrap it and register
-        self.register_json_service(instance_name, json_wrapper(service))
+        // Register it using the automatic wrapping
+        self.json_service_registry.register(instance_name, service)?;
+        Ok(self)
     }
 
     /// Wire up all services of a given type from the stored configuration
-    /// Note: Requires a wrapper function to convert services to JsonService
-    pub fn wire_service<S>(
-        &mut self,
-        service_type: &str,
-        json_wrapper: impl Fn(S) -> Box<dyn JsonService> + Clone,
-    ) -> Result<&mut Self, Error>
+    pub fn wire_service<S>(&mut self, service_type: &str) -> Result<&mut Self, Error>
     where
-        S: Service + ServiceFromConfig + 'static,
+        S: Service + ServiceFromConfig + crate::action::ServiceJsonActions + crate::service::HasDispatchJson + 'static,
     {
         let config = &self.stack_config;
 
@@ -457,10 +451,11 @@ impl DaemonBuilder {
                 service_type
             );
 
-            self.register_service_from_config::<S>(instance_name.clone(), &service_config, |s| {
-                // This needs to be provided by the caller since they know how to wrap the service
-                panic!("wire_service requires json_wrapper to be provided")
-            })?;
+            // Create the service from config
+            let service = S::from_config(&service_config)?;
+            
+            // Register it using the automatic wrapping
+            self.json_service_registry.register(instance_name, service)?;
         }
 
         Ok(self)

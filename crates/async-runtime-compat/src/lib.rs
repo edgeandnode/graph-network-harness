@@ -29,6 +29,74 @@
 use cfg_if::cfg_if;
 use std::future::Future;
 use std::pin::Pin;
+use std::marker::PhantomData;
+
+/// Opaque task handle that can be used to cancel or await a spawned future
+/// 
+/// This type wraps runtime-specific task handles to provide a unified interface.
+pub struct Task<T> {
+    #[doc(hidden)]
+    pub inner: InnerTask<T>,
+    #[doc(hidden)]
+    pub _phantom: PhantomData<T>,
+}
+
+impl<T> Task<T> {
+    /// Cancel the task
+    pub fn cancel(self) {
+        match self.inner {
+            #[cfg(feature = "tokio")]
+            InnerTask::Tokio(handle) => handle.abort(),
+            #[cfg(feature = "async-std")]
+            InnerTask::AsyncStd(handle) => handle.cancel(),
+            #[cfg(feature = "smol")]
+            InnerTask::Smol(task) => drop(task), // Dropping cancels in smol
+            #[allow(unreachable_patterns)]
+            _ => {},
+        }
+    }
+}
+
+impl<T> Future for Task<T> {
+    type Output = Option<T>;
+    
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let this = unsafe { self.get_unchecked_mut() };
+        match &mut this.inner {
+            #[cfg(feature = "tokio")]
+            InnerTask::Tokio(handle) => {
+                match Pin::new(handle).poll(cx) {
+                    std::task::Poll::Ready(Ok(val)) => std::task::Poll::Ready(Some(val)),
+                    std::task::Poll::Ready(Err(_)) => std::task::Poll::Ready(None),
+                    std::task::Poll::Pending => std::task::Poll::Pending,
+                }
+            }
+            #[cfg(feature = "async-std")]
+            InnerTask::AsyncStd(handle) => {
+                Pin::new(handle).poll(cx).map(Some)
+            }
+            #[cfg(feature = "smol")]
+            InnerTask::Smol(task) => {
+                Pin::new(task).poll(cx).map(Some)
+            }
+            #[allow(unreachable_patterns)]
+            _ => std::task::Poll::Ready(None),
+        }
+    }
+}
+
+/// Internal task handle enum
+#[doc(hidden)]
+pub enum InnerTask<T> {
+    #[cfg(feature = "tokio")]
+    Tokio(tokio::task::JoinHandle<T>),
+    #[cfg(feature = "async-std")]
+    AsyncStd(async_std::task::JoinHandle<T>),
+    #[cfg(feature = "smol")]
+    Smol(::smol::Task<T>),
+    #[allow(dead_code)]
+    _Phantom(PhantomData<T>),
+}
 
 /// Trait for spawning futures on an async runtime
 pub trait Spawner: Send + Sync {
@@ -98,6 +166,41 @@ impl Spawner for AsyncSpawner {
             InnerSpawner::AsyncStd(spawner) => spawner.spawn(future),
             #[cfg(feature = "smol")]
             InnerSpawner::Smol(spawner) => spawner.spawn(future),
+        }
+    }
+}
+
+impl AsyncSpawner {
+    /// Spawn a future and return a handle to it
+    pub fn spawn_with_handle<T>(&self, future: Pin<Box<dyn Future<Output = T> + Send + 'static>>) -> Task<T>
+    where
+        T: Send + 'static,
+    {
+        match self.inner {
+            #[cfg(feature = "smol")]
+            InnerSpawner::Smol(_) => {
+                let task = ::smol::spawn(future);
+                Task {
+                    inner: InnerTask::Smol(task),
+                    _phantom: PhantomData,
+                }
+            }
+            #[cfg(feature = "tokio")]
+            InnerSpawner::Tokio(_) => {
+                let handle = tokio::spawn(future);
+                Task {
+                    inner: InnerTask::Tokio(handle),
+                    _phantom: PhantomData,
+                }
+            }
+            #[cfg(feature = "async-std")]
+            InnerSpawner::AsyncStd(_) => {
+                let handle = async_std::task::spawn(future);
+                Task {
+                    inner: InnerTask::AsyncStd(handle),
+                    _phantom: PhantomData,
+                }
+            }
         }
     }
 }

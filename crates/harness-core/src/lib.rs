@@ -6,14 +6,17 @@
 
 #![warn(missing_docs)]
 
+pub mod action;
 pub mod base_service;
 pub mod base_task;
 pub mod client;
 pub mod config_traits;
 pub mod daemon;
 pub mod error;
+pub mod json_service_wrapper;
 pub mod service;
 pub mod task;
+pub mod websocket_dispatch;
 
 pub use error::Error;
 

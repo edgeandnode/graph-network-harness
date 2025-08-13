@@ -1,0 +1,18 @@
+[package]
+name = "harness-macros-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+harness-macros = { path = "../harness-macros" }
+harness-core = { path = "../harness-core" }
+async-trait = { workspace = true }
+async-channel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+smol = { workspace = true }
+
+[dev-dependencies]
+smol-potat = { workspace = true }

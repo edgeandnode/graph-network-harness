@@ -5,10 +5,12 @@
 use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, prelude::*, service::Service};
+use harness_core::{Error, service::{Service, ServiceEvents}};
+use harness_macros::{json_actions, json_action};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
+use std::result::Result;
 use tracing::info;
 
 /// Anvil blockchain service for testing
@@ -20,6 +22,7 @@ pub struct AnvilService {
     event_rx: async_channel::Receiver<AnvilEvent>,
 }
 
+#[json_actions]
 impl AnvilService {
     /// Create a new AnvilService with specified chain ID and port
     pub fn new(chain_id: u64, port: u16) -> Self {
@@ -31,46 +34,89 @@ impl AnvilService {
             event_rx,
         }
     }
+
+    /// Mine blocks on the blockchain
+    #[json_action]
+    pub async fn mine_blocks(&self, count: u64) -> Result<Vec<String>, Error> {
+        info!("Mining {} blocks on chain {}", count, self.chain_id);
+        
+        // In a real implementation, this would call Anvil's RPC
+        // For now, generate mock block hashes
+        let mut block_hashes = Vec::new();
+        for i in 0..count {
+            block_hashes.push(format!("0x{:064x}", i));
+        }
+
+        // Emit event
+        let _ = self.event_tx.send(AnvilEvent::BlocksMined {
+            count,
+            latest_block: 100 + count, // Mock block number
+        }).await;
+
+        Ok(block_hashes)
+    }
+
+    /// Set the balance of an address
+    #[json_action]
+    pub async fn set_balance(&self, address: String, balance: String) -> Result<(), Error> {
+        info!("Setting balance for {} to {} wei", address, balance);
+        
+        // In a real implementation, this would call Anvil's RPC
+        
+        // Emit event
+        let _ = self.event_tx.send(AnvilEvent::BalanceSet {
+            address: address.clone(),
+            balance: balance.clone(),
+        }).await;
+
+        Ok(())
+    }
+
+    /// Get the current block number
+    #[json_action]
+    pub async fn get_block_number(&self) -> Result<u64, Error> {
+        info!("Getting current block number");
+        
+        // In a real implementation, this would call Anvil's RPC
+        Ok(100) // Mock block number
+    }
+
+    /// Create a snapshot of the blockchain state
+    #[json_action]
+    pub async fn create_snapshot(&self) -> Result<String, Error> {
+        info!("Creating blockchain snapshot");
+        
+        // In a real implementation, this would call Anvil's RPC
+        let snapshot_id = format!("snapshot_{}", uuid::Uuid::new_v4());
+        
+        // Emit event
+        let _ = self.event_tx.send(AnvilEvent::SnapshotCreated {
+            snapshot_id: snapshot_id.clone(),
+        }).await;
+
+        Ok(snapshot_id)
+    }
+
+    /// Revert to a previous snapshot
+    #[json_action]
+    pub async fn revert_to_snapshot(&self, snapshot_id: String) -> Result<bool, Error> {
+        info!("Reverting to snapshot: {}", snapshot_id);
+        
+        // In a real implementation, this would call Anvil's RPC
+        
+        // Emit event
+        let _ = self.event_tx.send(AnvilEvent::SnapshotReverted {
+            snapshot_id: snapshot_id.clone(),
+        }).await;
+
+        Ok(true)
+    }
 }
 
 impl Default for AnvilService {
     fn default() -> Self {
         Self::new(31337, 8545)
     }
-}
-
-/// Actions for Anvil blockchain
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum AnvilAction {
-    /// Mine a number of blocks
-    MineBlocks {
-        /// Number of blocks to mine
-        count: u64,
-        /// Optional interval between blocks in seconds
-        interval_secs: Option<u64>,
-    },
-    /// Set account balance
-    SetBalance {
-        /// Ethereum address
-        address: String,
-        /// New balance in wei (as string to handle large numbers)
-        balance: String,
-    },
-    /// Create a snapshot of the current state
-    Snapshot,
-    /// Revert to a snapshot
-    RevertToSnapshot {
-        /// Snapshot ID to revert to
-        snapshot_id: String,
-    },
-    /// Deploy a contract
-    DeployContract {
-        /// Contract bytecode
-        bytecode: String,
-        /// Constructor arguments (ABI encoded)
-        constructor_args: Option<String>,
-    },
 }
 
 /// Events from Anvil blockchain
@@ -115,11 +161,7 @@ pub enum AnvilEvent {
     },
 }
 
-#[async_trait]
 impl Service for AnvilService {
-    type Action = AnvilAction;
-    type Event = AnvilEvent;
-
     fn service_type() -> &'static str {
         "anvil"
     }
@@ -131,19 +173,14 @@ impl Service for AnvilService {
     fn description(&self) -> &str {
         "Anvil local Ethereum blockchain"
     }
+}
+
+#[async_trait]
+impl ServiceEvents for AnvilService {
+    type Event = AnvilEvent;
 
     fn event_stream(&self) -> Receiver<Self::Event> {
         self.event_rx.clone()
-    }
-
-    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
-        let tx = self.event_tx.clone();
-        let chain_id = self.chain_id;
-        let port = self.port;
-
-        todo!("handle dispatch_action in anvil service");
-
-        Ok(())
     }
 }
 
@@ -151,7 +188,7 @@ impl Service for AnvilService {
 ///
 /// Anvil requires minimal setup - just needs to start with the right chain configuration
 #[async_trait]
-impl ServiceSetup for AnvilService {
+impl harness_core::service::ServiceSetup for AnvilService {
     async fn is_setup_complete(&self) -> Result<bool, Error> {
         info!(
             "Checking if Anvil setup is complete on port {} for chain {}",

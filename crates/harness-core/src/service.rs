@@ -1,17 +1,15 @@
-//! Service stack system for defining services with actions
+//! Service stack system for defining services
 //!
-//! This module provides traits and utilities for defining services that can
-//! perform actions. Services are strongly typed with their action and event
-//! types, while a wrapper layer handles JSON serialization for wire protocol.
+//! This module provides traits and utilities for defining services.
+//! Services provide functionality that can be orchestrated by the harness.
+//! JSON actions for services are generated using the #[json_actions] macro.
 
 use async_channel::Receiver;
-use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -19,18 +17,11 @@ use std::time::Duration;
 use crate::Error;
 use std::result::Result;
 
-/// Trait for services that can perform actions
+/// Base trait for services
 ///
-/// Services are strongly typed with their Action and Event types.
-/// This trait focuses on domain logic without JSON concerns.
-#[async_trait]
+/// Services provide functionality that actions can orchestrate.
+/// This trait provides core service identity.
 pub trait Service: Send + Sync + 'static {
-    /// The input type for actions this service can perform
-    type Action: DeserializeOwned + Send + JsonSchema;
-
-    /// The event type emitted during action execution
-    type Event: Serialize + Send + JsonSchema;
-
     /// The service type identifier that links this implementation to YAML service definitions.
     /// YAML services with matching `service_type` will use this implementation for actions.
     fn service_type() -> &'static str
@@ -42,14 +33,13 @@ pub trait Service: Send + Sync + 'static {
 
     /// Get the service description
     fn description(&self) -> &str;
+}
 
-    /// Get the JSON schema for this service's actions
-    fn action_schema() -> serde_json::Value
-    where
-        Self: Sized,
-    {
-        serde_json::to_value(schemars::schema_for!(Self::Action)).unwrap_or(Value::Null)
-    }
+/// Trait for services that emit events
+#[async_trait]
+pub trait ServiceEvents: Service {
+    /// The event type emitted by this service
+    type Event: Serialize + Send + JsonSchema;
 
     /// Get the JSON schema for this service's events
     fn event_schema() -> serde_json::Value
@@ -61,9 +51,6 @@ pub trait Service: Send + Sync + 'static {
 
     /// Get the event stream for this service
     fn event_stream(&self) -> Receiver<Self::Event>;
-
-    /// Execute an action (events are sent through the service's event channel)
-    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error>;
 }
 
 /// Service state tracking the lifecycle and setup status
@@ -184,78 +171,10 @@ pub struct ActionDescriptor {
     pub event_schema: Value,
 }
 
-/// Wrapper that adds JSON serialization to any Service
-///
-/// This wrapper handles conversion between JSON and typed values,
-/// allowing services to work with their native types while supporting
-/// wire protocol communication.
-pub struct ServiceWrapper<S>
-where
-    S: Service,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    inner: S,
-    action_schema: Value,
-    event_schema: Value,
-}
-
-impl<S> ServiceWrapper<S>
-where
-    S: Service,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    /// Create a new service wrapper
-    pub fn new(service: S) -> Self {
-        let action_schema = schemars::schema_for!(S::Action);
-        let event_schema = schemars::schema_for!(S::Event);
-
-        Self {
-            inner: service,
-            action_schema: serde_json::to_value(action_schema).unwrap(),
-            event_schema: serde_json::to_value(event_schema).unwrap(),
-        }
-    }
-
-    /// Get available actions with their schemas
-    pub fn available_actions(&self) -> Vec<ActionDescriptor> {
-        // In a real implementation, we'd have a way to enumerate actions
-        // For now, return a single action descriptor
-        vec![ActionDescriptor {
-            name: "default".to_string(),
-            description: self.inner.description().to_string(),
-            input_schema: self.action_schema.clone(),
-            event_schema: self.event_schema.clone(),
-        }]
-    }
-
-    /// Dispatch an action using JSON input, returning typed events
-    pub async fn dispatch_json(
-        &self,
-        _action_name: &str,
-        input: Value,
-    ) -> Result<Receiver<S::Event>, Error> {
-        // Deserialize JSON to typed action
-        let action: S::Action = serde_json::from_value(input)
-            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
-
-        // Execute the typed action
-        self.inner.dispatch_action(action).await?;
-
-        // Return the event stream
-        Ok(self.inner.event_stream())
-    }
-
-    /// Get event schema for JSON conversion
-    pub fn event_schema(&self) -> &Value {
-        &self.event_schema
-    }
-}
-
 /// Trait for services that work with JSON (used for dynamic dispatch)
 ///
-/// Note: This trait is object-safe and does not use generic parameters.
+/// This trait is object-safe and does not use generic parameters.
+/// It's typically implemented automatically when using the #[json_actions] macro.
 #[async_trait]
 pub trait JsonService: Send + Sync {
     /// Get the service name
@@ -311,177 +230,6 @@ pub trait JsonService: Send + Sync {
     }
 }
 
-/// Blanket implementation for wrapped services
-#[async_trait]
-impl<S> JsonService for ServiceWrapper<S>
-where
-    S: Service + 'static,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    fn name(&self) -> &str {
-        self.inner.name()
-    }
-
-    fn description(&self) -> &str {
-        self.inner.description()
-    }
-
-    fn available_actions(&self) -> Vec<ActionDescriptor> {
-        self.available_actions()
-    }
-
-    async fn dispatch_json(
-        &self,
-        action_name: &str,
-        input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
-        // Get typed event receiver
-        let event_rx = self.dispatch_json(action_name, input).await?;
-
-        // Create channel for JSON events
-        let (tx, rx) = async_channel::unbounded();
-
-        // Create the conversion future
-        let converter = async move {
-            while let Ok(event) = event_rx.recv().await {
-                if let Ok(json) = serde_json::to_value(&event) {
-                    let _ = tx.send(json).await;
-                }
-            }
-        };
-
-        Ok((rx, Box::pin(converter)))
-    }
-
-    async fn get_state(&self) -> Result<ServiceState, Error> {
-        // Default to Running state - services that need different behavior
-        // should implement StatefulService
-        Ok(ServiceState::Running)
-    }
-
-    async fn wait_for_state(&self, target: ServiceState, _timeout: Duration) -> Result<(), Error> {
-        // For now, just check if we're already in the target state
-        let current = self.get_state().await?;
-        if current == target {
-            Ok(())
-        } else {
-            Err(Error::service_type(format!(
-                "Service {} is in state {:?}, not {:?}",
-                self.inner.name(),
-                current,
-                target
-            )))
-        }
-    }
-}
-
-/// Wrapper for services that implement StatefulService and ServiceSetup
-pub struct StatefulWrapper<S>
-where
-    S: Service + StatefulService + ServiceSetup,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    inner: S,
-    action_schema: Value,
-    event_schema: Value,
-}
-
-impl<S> StatefulWrapper<S>
-where
-    S: Service + StatefulService + ServiceSetup,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    /// Create a new schema-aware service wrapper
-    pub fn new(service: S) -> Self {
-        let action_schema = schemars::schema_for!(S::Action);
-        let event_schema = schemars::schema_for!(S::Event);
-
-        Self {
-            inner: service,
-            action_schema: serde_json::to_value(action_schema).unwrap(),
-            event_schema: serde_json::to_value(event_schema).unwrap(),
-        }
-    }
-}
-
-#[async_trait]
-impl<S> JsonService for StatefulWrapper<S>
-where
-    S: Service + StatefulService + ServiceSetup + 'static,
-    S::Action: JsonSchema,
-    S::Event: JsonSchema,
-{
-    fn name(&self) -> &str {
-        self.inner.name()
-    }
-
-    fn description(&self) -> &str {
-        self.inner.description()
-    }
-
-    fn available_actions(&self) -> Vec<ActionDescriptor> {
-        vec![ActionDescriptor {
-            name: "default".to_string(),
-            description: self.inner.description().to_string(),
-            input_schema: self.action_schema.clone(),
-            event_schema: self.event_schema.clone(),
-        }]
-    }
-
-    async fn dispatch_json(
-        &self,
-        _action_name: &str,
-        input: Value,
-    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
-        // Deserialize JSON to typed action
-        let action: S::Action = serde_json::from_value(input)
-            .map_err(|e| Error::service_type(format!("Failed to deserialize action: {e}")))?;
-
-        // Execute the typed action
-        self.inner.dispatch_action(action).await?;
-
-        // Get the event stream from the service
-        let event_rx = self.inner.event_stream();
-
-        // Create channel for JSON events
-        let (tx, rx) = async_channel::unbounded();
-
-        // Create the conversion future
-        let converter = async move {
-            while let Ok(event) = event_rx.recv().await {
-                if let Ok(json) = serde_json::to_value(&event) {
-                    let _ = tx.send(json).await;
-                }
-            }
-        };
-
-        Ok((rx, Box::pin(converter)))
-    }
-
-    async fn get_state(&self) -> Result<ServiceState, Error> {
-        self.inner.get_state().await
-    }
-
-    async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
-        self.inner.wait_for_state(target, timeout).await
-    }
-
-    fn has_setup(&self) -> bool {
-        true
-    }
-
-    async fn perform_setup(&self) -> Result<(), Error> {
-        self.inner.perform_setup().await
-    }
-
-    async fn is_setup_complete(&self) -> Result<bool, Error> {
-        self.inner.is_setup_complete().await
-    }
-}
-
 /// Registry of JSON-wrapped services available in a daemon
 ///
 /// The JsonServiceRegistry manages a collection of services that have been
@@ -489,59 +237,29 @@ where
 /// to allow different service types with unified JSON-based interaction.
 pub struct JsonServiceRegistry {
     services: HashMap<String, Box<dyn JsonService>>,
-    service_types: HashSet<String>,
 }
 
 impl JsonServiceRegistry {
-    /// Create a new empty service stack
+    /// Create a new empty service registry
     pub fn new() -> Self {
         Self {
             services: HashMap::new(),
-            service_types: HashSet::new(),
         }
     }
 
-    /// Register a service in the stack
-    ///
-    /// The service must implement JsonSchema for its Action and Event types.
-    pub fn register<S>(&mut self, instance_name: String, service: S) -> Result<(), Error>
-    where
-        S: Service + 'static,
-        S::Action: JsonSchema,
-        S::Event: JsonSchema,
-    {
+    /// Register a service in the registry
+    pub fn register_json_service(
+        &mut self,
+        instance_name: String,
+        service: Box<dyn JsonService>,
+    ) -> Result<(), Error> {
         if self.services.contains_key(&instance_name) {
             return Err(Error::service_type(format!(
                 "Service instance '{instance_name}' already registered"
             )));
         }
 
-        // Track the service type
-        self.service_types.insert(S::service_type().to_string());
-
-        let wrapper = ServiceWrapper::new(service);
-        self.services.insert(instance_name, Box::new(wrapper));
-        Ok(())
-    }
-
-    /// Register a stateful service with setup support
-    pub fn register_stateful<S>(&mut self, instance_name: String, service: S) -> Result<(), Error>
-    where
-        S: Service + StatefulService + ServiceSetup + 'static,
-        S::Action: JsonSchema,
-        S::Event: JsonSchema,
-    {
-        if self.services.contains_key(&instance_name) {
-            return Err(Error::service_type(format!(
-                "Service instance '{instance_name}' already registered"
-            )));
-        }
-
-        // Track the service type
-        self.service_types.insert(S::service_type().to_string());
-
-        let wrapper = StatefulWrapper::new(service);
-        self.services.insert(instance_name, Box::new(wrapper));
+        self.services.insert(instance_name, service);
         Ok(())
     }
 
@@ -571,29 +289,18 @@ impl JsonServiceRegistry {
             .collect()
     }
 
-    /// Get all service type identifiers
-    pub fn list_types(&self) -> Vec<&str> {
-        self.service_types.iter().map(|s| s.as_str()).collect()
-    }
-
     /// Dispatch an action to a specific service instance
-    pub async fn dispatch<Sp: Spawner>(
+    pub async fn dispatch(
         &self,
         instance_name: &str,
         action_name: &str,
         input: Value,
-        spawner: &Sp,
-    ) -> Result<Receiver<Value>, Error> {
+    ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         let service = self.get(instance_name).ok_or_else(|| {
             Error::service_type(format!("Service instance '{instance_name}' not found"))
         })?;
 
-        let (rx, converter) = service.dispatch_json(action_name, input).await?;
-
-        // Spawn the converter
-        spawner.spawn(converter);
-
-        Ok(rx)
+        service.dispatch_json(action_name, input).await
     }
 }
 
@@ -606,102 +313,112 @@ impl Default for JsonServiceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use async_runtime_compat::smol::SmolSpawner;
+    use crate::action::{JsonAction, JsonActionRegistry, ServiceJsonActions};
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-    struct TestAction {
-        message: String,
-    }
-
-    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-    struct TestEvent {
-        response: String,
-    }
-
+    // Test service
     struct TestService {
+        value: std::sync::Arc<std::sync::Mutex<i32>>,
         event_tx: async_channel::Sender<TestEvent>,
         event_rx: async_channel::Receiver<TestEvent>,
     }
 
-    impl Default for TestService {
-        fn default() -> Self {
+    impl TestService {
+        fn new() -> Self {
             let (tx, rx) = async_channel::unbounded();
             Self {
+                value: std::sync::Arc::new(std::sync::Mutex::new(0)),
                 event_tx: tx,
                 event_rx: rx,
             }
         }
+
+        async fn add_value(&self, amount: i32) -> Result<i32, Error> {
+            let mut val = self.value.lock().unwrap();
+            *val += amount;
+            let new_val = *val;
+            
+            self.event_tx.send(TestEvent {
+                value: new_val,
+            }).await.unwrap();
+            
+            Ok(new_val)
+        }
     }
 
-    #[async_trait]
-    impl Service for TestService {
-        type Action = TestAction;
-        type Event = TestEvent;
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct TestEvent {
+        value: i32,
+    }
 
+    impl Service for TestService {
         fn service_type() -> &'static str {
             "test-service"
         }
 
         fn name(&self) -> &str {
-            "test-service"
+            "test"
         }
 
         fn description(&self) -> &str {
-            "A test service"
+            "Test service"
         }
+    }
+
+    #[async_trait]
+    impl ServiceEvents for TestService {
+        type Event = TestEvent;
 
         fn event_stream(&self) -> Receiver<Self::Event> {
             self.event_rx.clone()
         }
+    }
 
-        async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
-            self.event_tx
-                .send(TestEvent {
-                    response: format!("Echo: {}", action.message),
-                })
-                .await
-                .unwrap();
+    // Manually define an action for testing (normally generated by macro)
+    #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+    struct AddValueAction {
+        amount: i32,
+    }
+
+    #[async_trait]
+    impl JsonAction<TestService> for AddValueAction {
+        type Response = i32;
+
+        fn action_name() -> &'static str {
+            "add_value"
+        }
+
+        async fn execute(self, service: &TestService) -> Result<Self::Response, Error> {
+            service.add_value(self.amount).await
+        }
+    }
+
+    impl ServiceJsonActions for TestService {
+        fn register_actions(registry: &mut JsonActionRegistry) -> Result<(), Error> {
+            registry.register::<AddValueAction, TestService>()?;
             Ok(())
         }
     }
 
     #[test]
-    fn test_service_stack_registration() {
-        let mut stack = JsonServiceRegistry::new();
-        let service = TestService::default();
-
-        // Register service
-        stack.register("test-1".to_string(), service).unwrap();
-
-        // Check it's registered
-        assert!(stack.get("test-1").is_some());
-        assert_eq!(stack.list().len(), 1);
-
-        // Try to register with same name (should fail)
-        let result = stack.register("test-1".to_string(), TestService::default());
-        assert!(result.is_err());
+    fn test_service_state() {
+        assert!(ServiceState::Running.is_healthy());
+        assert!(ServiceState::SetupComplete.is_healthy());
+        assert!(!ServiceState::Failed("error".to_string()).is_healthy());
+        assert!(ServiceState::SetupRequired.needs_setup());
+        assert!(ServiceState::SettingUp.is_setting_up());
     }
 
     #[smol_potat::test]
-    async fn test_action_dispatch() {
-        let mut stack = JsonServiceRegistry::new();
-        stack
-            .register("test-1".to_string(), TestService::default())
-            .unwrap();
+    async fn test_json_action_execution() {
+        let service = TestService::new();
+        let action = AddValueAction { amount: 5 };
+        let result = action.execute(&service).await.unwrap();
+        assert_eq!(result, 5);
 
-        let input = serde_json::json!({
-            "message": "Hello"
-        });
-
-        let spawner = SmolSpawner;
-        let rx = stack
-            .dispatch("test-1", "default", input, &spawner)
-            .await
-            .unwrap();
-        let event = rx.recv().await.unwrap();
-
-        assert_eq!(event["response"], "Echo: Hello");
+        // Check event was emitted
+        let event = service.event_stream().recv().await.unwrap();
+        assert_eq!(event.value, 5);
     }
 }

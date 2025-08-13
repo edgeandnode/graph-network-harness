@@ -13,9 +13,7 @@ pub mod tasks;
 // Export the main types
 pub use daemon::GraphTestDaemon;
 pub use services::{
-    AnvilAction, AnvilEvent, AnvilService, GraphNodeAction, GraphNodeEvent, GraphNodeService,
-    GraphTestStack, IpfsAction, IpfsEvent, IpfsService, PostgresAction, PostgresEvent,
-    PostgresService,
+    AnvilEvent, AnvilService, GraphNodeService, GraphTestStack, IpfsService, PostgresService,
 };
 pub use tasks::{
     // State machine exports (internal use)

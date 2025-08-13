@@ -3,8 +3,7 @@
 //! This module provides the `Daemon` trait and `BaseDaemon` implementation
 //! that serves as the foundation for domain-specific daemons.
 
-use async_runtime_compat::prelude::*;
-use async_runtime_compat::smol::SmolSpawner;
+use async_runtime_compat::{prelude::*, Task, AsyncSpawner};
 use async_trait::async_trait;
 use serde_json::Value;
 use service_orchestration::{
@@ -16,8 +15,9 @@ use std::time::Duration;
 use tracing::{info, warn};
 
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
-use crate::service::{JsonServiceRegistry, Service};
+use crate::service::{JsonService, JsonServiceRegistry, Service};
 use crate::task::{DeploymentTask, JsonTaskRegistry};
+use crate::websocket_dispatch::{WebSocketServer};
 use crate::{Error, Registry, ServiceManager};
 use service_orchestration::TaskConfig;
 use std::result::Result;
@@ -50,7 +50,7 @@ pub struct BaseDaemon {
     service_registry: Registry,
 
     /// Registry of JSON-wrapped services
-    json_service_registry: JsonServiceRegistry,
+    json_service_registry: Arc<JsonServiceRegistry>,
 
     /// Registry of JSON-wrapped tasks
     json_task_registry: JsonTaskRegistry,
@@ -63,6 +63,10 @@ pub struct BaseDaemon {
 
     /// Stack configuration if provided
     stack_config: Option<StackConfig>,
+
+    /// WebSocket server task handle and shutdown channel
+    ws_server_handle: Arc<futures::lock::Mutex<Option<Task<()>>>>,
+    ws_shutdown_tx: Arc<futures::lock::Mutex<Option<async_channel::Sender<()>>>>,
 }
 
 impl BaseDaemon {
@@ -88,7 +92,7 @@ impl BaseDaemon {
 
     /// Get the JSON service registry
     pub fn json_service_registry(&self) -> &JsonServiceRegistry {
-        &self.json_service_registry
+        &*self.json_service_registry
     }
 
     /// Get the JSON task registry
@@ -137,7 +141,7 @@ impl BaseDaemon {
                     // Start the service via ServiceManager
                     let (_event_receiver, _running_service) = self
                         .service_manager
-                        .launch_service(&name, service_config, &SmolSpawner)
+                        .launch_service(&name, service_config, &AsyncSpawner::new())
                         .await
                         .map_err(|e| {
                             Error::daemon(format!("Failed to start service {name}: {e}"))
@@ -170,7 +174,7 @@ impl BaseDaemon {
 
     /// Execute a task
     async fn execute_task(&self, task_name: &str) -> Result<(), Error> {
-        use async_runtime_compat::smol::SmolSpawner;
+        // Use the runtime-agnostic spawner
 
         info!("Executing task: {}", task_name);
 
@@ -195,7 +199,7 @@ impl BaseDaemon {
             info!("Executing registered task: {}", task_name);
 
             // Execute using JsonTaskRegistry's execute method which handles spawning
-            let spawner = SmolSpawner;
+            let spawner = AsyncSpawner::new();
             let state_rx = self.json_task_registry.execute(task_name, &spawner).await?;
 
             // Wait for task to complete by consuming all state updates
@@ -275,11 +279,21 @@ impl Daemon for BaseDaemon {
         self.running
             .store(true, std::sync::atomic::Ordering::SeqCst);
 
-        // TODO: Start WebSocket server
-        // This would start the WebSocket server that handles:
-        // - Service management requests
-        // - Action discovery and invocation
-        // - Event streaming
+        // Start WebSocket server
+        let ws_server = WebSocketServer::new(self.json_service_registry.clone(), self.endpoint);
+        let shutdown_tx = ws_server.shutdown_handle();
+        
+        // Spawn the WebSocket server
+        let spawner = AsyncSpawner::new();
+        let handle = spawner.spawn_with_handle(Box::pin(async move {
+            if let Err(e) = ws_server.run().await {
+                tracing::error!("WebSocket server error: {}", e);
+            }
+        }));
+        
+        // Store the handle and shutdown channel
+        *self.ws_server_handle.lock().await = Some(handle);
+        *self.ws_shutdown_tx.lock().await = Some(shutdown_tx);
 
         info!("Base daemon started successfully");
         Ok(())
@@ -292,7 +306,15 @@ impl Daemon for BaseDaemon {
         self.running
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
-        // TODO: Stop WebSocket server and cleanup
+        // Shutdown WebSocket server
+        if let Some(shutdown_tx) = self.ws_shutdown_tx.lock().await.take() {
+            let _ = shutdown_tx.send(()).await;
+        }
+        
+        // Wait for the server to stop
+        if let Some(handle) = self.ws_server_handle.lock().await.take() {
+            handle.await;
+        }
 
         info!("Base daemon stopped");
         Ok(())
@@ -356,54 +378,52 @@ impl DaemonBuilder {
     }
 
     /// Register a service with the JSON service registry
-    pub fn register_service<S>(
+    /// Note: Services should implement JsonService trait (typically via #[json_actions] macro)
+    pub fn register_json_service(
         &mut self,
         instance_name: String,
-        service: S,
-    ) -> Result<&mut Self, Error>
-    where
-        S: Service + 'static,
-        S::Action: schemars::JsonSchema,
-        S::Event: schemars::JsonSchema,
-    {
+        service: Box<dyn JsonService>,
+    ) -> Result<&mut Self, Error> {
         // Log the service registration
         tracing::info!(
-            "Registering service '{}' of type '{}'",
-            instance_name,
-            S::service_type()
+            "Registering service '{}'",
+            instance_name
         );
 
         // Register with the JSON service registry
         self.json_service_registry
-            .register(instance_name, service)?;
+            .register_json_service(instance_name, service)?;
 
         Ok(self)
     }
 
     /// Register a service from configuration using ServiceFromConfig trait
+    /// Note: The service must be wrapped in a JsonService implementation
     pub fn register_service_from_config<S>(
         &mut self,
         instance_name: String,
         config: &ServiceConfig,
+        json_wrapper: impl FnOnce(S) -> Box<dyn JsonService>,
     ) -> Result<&mut Self, Error>
     where
         S: Service + ServiceFromConfig + 'static,
-        S::Action: schemars::JsonSchema,
-        S::Event: schemars::JsonSchema,
     {
         // Create the service from config
         let service = S::from_config(config)?;
 
-        // Use the existing register_service method
-        self.register_service(instance_name, service)
+        // Wrap it and register
+        self.register_json_service(instance_name, json_wrapper(service))
     }
 
     /// Wire up all services of a given type from the stored configuration
-    pub fn wire_service<S>(&mut self, service_type: &str) -> Result<&mut Self, Error>
+    /// Note: Requires a wrapper function to convert services to JsonService
+    pub fn wire_service<S>(
+        &mut self,
+        service_type: &str,
+        json_wrapper: impl Fn(S) -> Box<dyn JsonService> + Clone,
+    ) -> Result<&mut Self, Error>
     where
         S: Service + ServiceFromConfig + 'static,
-        S::Action: schemars::JsonSchema,
-        S::Event: schemars::JsonSchema,
     {
         let config = &self.stack_config;
 
@@ -437,7 +457,10 @@ impl DaemonBuilder {
                 service_type
             );
 
-            self.register_service_from_config::<S>(instance_name, &service_config)?;
+            self.register_service_from_config::<S>(instance_name.clone(), &service_config, |s| {
+                // This needs to be provided by the caller since they know how to wrap the service
+                panic!("wire_service requires json_wrapper to be provided")
+            })?;
         }
 
         Ok(self)
@@ -547,11 +570,13 @@ impl DaemonBuilder {
         Ok(BaseDaemon {
             service_manager,
             service_registry,
-            json_service_registry: self.json_service_registry,
+            json_service_registry: Arc::new(self.json_service_registry),
             json_task_registry: self.json_task_registry,
             endpoint: self.endpoint,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             stack_config: Some(self.stack_config),
+            ws_server_handle: Arc::new(futures::lock::Mutex::new(None)),
+            ws_shutdown_tx: Arc::new(futures::lock::Mutex::new(None)),
         })
     }
 
@@ -565,18 +590,6 @@ impl DaemonBuilder {
             config.services.len()
         );
         for (name, service_config) in &config.services {
-            // Validate that the service type is registered
-            if !self
-                .json_service_registry
-                .list_types()
-                .contains(&service_config.service_type.as_str())
-            {
-                return Err(Error::validation(format!(
-                    "Service '{name}' references unknown service_type '{}'. Available types: {:?}",
-                    service_config.service_type,
-                    self.json_service_registry.list_types()
-                )));
-            }
 
             // Validate dependencies using the strongly-typed Dependency enum
             for dep in &service_config.orchestration.dependencies {
@@ -602,18 +615,6 @@ impl DaemonBuilder {
         // Validate task dependencies
         info!("Validating {} task configurations", config.tasks.len());
         for (name, task_config) in &config.tasks {
-            // Validate that the task type is registered
-            if !self
-                .json_task_registry
-                .list_types()
-                .contains(&task_config.task_type.as_str())
-            {
-                return Err(Error::validation(format!(
-                    "Task '{name}' references unknown task_type '{}'. Available types: {:?}",
-                    task_config.task_type,
-                    self.json_task_registry.list_types()
-                )));
-            }
 
             // Validate dependencies using the strongly-typed Dependency enum
             for dep in &task_config.dependencies {

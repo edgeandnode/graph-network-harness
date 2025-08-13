@@ -5,6 +5,8 @@ members = [
     "crates/service-orchestration",
     "crates/harness-config",
     "crates/harness-core",
+    "crates/harness-macros",
+    "crates/harness-macros-test",
     "crates/harness",
     "crates/graph-test-daemon",
     "crates/async-runtime-compat",

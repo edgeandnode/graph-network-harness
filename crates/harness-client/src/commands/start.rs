@@ -1,6 +1,6 @@
 use crate::commands::{client, dependencies};
 use anyhow::{Context, Result};
-use harness::protocol::{Request, Response};
+use harness_client::protocol::{Request, Response};
 use harness_config::{parser, resolver::ResolutionContext};
 use std::io::{self, Write};
 use std::path::Path;

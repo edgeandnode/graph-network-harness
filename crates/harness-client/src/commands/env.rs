@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 
-use harness::protocol::{Request, Response};
+use harness_client::protocol::{Request, Response};
 
 use super::client;
 

@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use harness::client::DaemonClient;
+use harness_client::client::DaemonClient;
 
 /// Default daemon port
 pub const DEFAULT_DAEMON_PORT: u16 = 9443;

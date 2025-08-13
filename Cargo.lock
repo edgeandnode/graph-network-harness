@@ -1117,7 +1117,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "harness"
+name = "harness-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,7 +1,7 @@
 use crate::commands::client;
 use anyhow::{Context, Result};
 use comfy_table::{Cell, Color, Table};
-use harness::protocol::{DetailedServiceInfo, Request, Response};
+use harness_client::protocol::{DetailedServiceInfo, Request, Response};
 use harness_config::parser;
 use service_orchestration::ServiceStatus;
 use std::path::Path;

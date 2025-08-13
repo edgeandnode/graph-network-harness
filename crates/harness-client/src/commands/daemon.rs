@@ -26,11 +26,8 @@ async fn daemon_status() -> Result<()> {
             println!("✗ Daemon is not reachable");
             println!("  Error: {e}");
             println!();
-            println!("To start the daemon:");
-            println!("  harness-executor-daemon");
-            println!();
-            println!("For more information:");
-            println!("  https://github.com/graphprotocol/graph-network-harness#daemon");
+            println!("Note: The daemon should be started by your specific implementation");
+            println!("  (e.g., graph-test-daemon, or your custom daemon)");
 
             // Return error so exit code is non-zero
             Err(e)

@@ -1,19 +1,15 @@
 [package]
-name = "harness"
+name = "harness-client"
 version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
-description = "CLI for graph-network-harness"
+description = "CLI and client library for graph-network-harness"
 
 [[bin]]
 name = "harness"
 path = "src/main.rs"
-
-[[bin]]
-name = "harness-daemon"
-path = "src/bin/harness-daemon.rs"
 
 [dependencies]
 # Workspace dependencies

@@ -73,6 +73,17 @@ pub enum WebSocketMessage {
     ListActions { service: String },
     /// Response to ListActions
     Actions { service: String, actions: Vec<ActionInfo> },
+    /// Validate if setup is complete for a service
+    ValidateSetup { service: String },
+    /// Perform setup for a service
+    PerformSetup { service: String },
+    /// Response to setup operations
+    SetupStatus { 
+        service: String, 
+        valid: bool, 
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String> 
+    },
 }
 
 /// Information about a service
@@ -84,6 +95,13 @@ pub struct ServiceInfo {
     pub description: String,
     /// Number of available actions
     pub action_count: usize,
+    /// Whether the service implements ServiceSetup
+    pub has_setup: bool,
+    /// Whether the service implements ServiceEvents
+    pub has_events: bool,
+    /// Schema of events if the service emits them
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event_schema: Option<Value>,
 }
 
 /// Information about an action
@@ -121,6 +139,12 @@ impl WebSocketDispatcher {
             }
             WebSocketMessage::ListActions { service } => {
                 Ok(vec![self.handle_list_actions(&service)?])
+            }
+            WebSocketMessage::ValidateSetup { service } => {
+                Ok(vec![self.handle_validate_setup(&service).await?])
+            }
+            WebSocketMessage::PerformSetup { service } => {
+                Ok(vec![self.handle_perform_setup(&service).await?])
             }
             _ => {
                 // Other message types are outbound only
@@ -174,6 +198,9 @@ impl WebSocketDispatcher {
                 name: name.to_string(),
                 description: service.description().to_string(),
                 action_count: service.available_actions().len(),
+                has_setup: service.has_setup(),
+                has_events: service.has_events(),
+                event_schema: service.event_schema(),
             })
             .collect();
         
@@ -199,6 +226,81 @@ impl WebSocketDispatcher {
             service: service_name.to_string(),
             actions,
         })
+    }
+    
+    /// Handle validate setup request
+    async fn handle_validate_setup(&self, service_name: &str) -> Result<WebSocketMessage, Error> {
+        let service = self.registry.get(service_name)
+            .ok_or_else(|| Error::service_type(format!("Service '{}' not found", service_name)))?;
+        
+        if !service.has_setup() {
+            return Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: false,
+                error: Some("Service does not implement ServiceSetup".to_string()),
+            });
+        }
+        
+        match service.validate_setup().await {
+            Ok(()) => Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: true,
+                error: None,
+            }),
+            Err(e) => Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: false,
+                error: Some(e.to_string()),
+            }),
+        }
+    }
+    
+    /// Handle perform setup request
+    async fn handle_perform_setup(&self, service_name: &str) -> Result<WebSocketMessage, Error> {
+        let service = self.registry.get(service_name)
+            .ok_or_else(|| Error::service_type(format!("Service '{}' not found", service_name)))?;
+        
+        if !service.has_setup() {
+            return Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: false,
+                error: Some("Service does not implement ServiceSetup".to_string()),
+            });
+        }
+        
+        // First validate to check if setup is needed (idempotency)
+        if service.validate_setup().await.is_ok() {
+            // Setup already complete
+            return Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: true,
+                error: None,
+            });
+        }
+        
+        // Perform the setup
+        match service.perform_setup().await {
+            Ok(()) => {
+                // Validate again to confirm success
+                match service.validate_setup().await {
+                    Ok(()) => Ok(WebSocketMessage::SetupStatus {
+                        service: service_name.to_string(),
+                        valid: true,
+                        error: None,
+                    }),
+                    Err(e) => Ok(WebSocketMessage::SetupStatus {
+                        service: service_name.to_string(),
+                        valid: false,
+                        error: Some(format!("Setup completed but validation failed: {}", e)),
+                    }),
+                }
+            }
+            Err(e) => Ok(WebSocketMessage::SetupStatus {
+                service: service_name.to_string(),
+                valid: false,
+                error: Some(format!("Setup failed: {}", e)),
+            }),
+        }
     }
 }
 

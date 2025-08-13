@@ -5,10 +5,12 @@
 use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, prelude::*, service::Service};
+use harness_core::{Error, prelude::*, service::{Service, ServiceSetup, ServiceEvents}};
+use harness_macros::{json_actions, json_action};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
+use std::result::Result;
 use tracing::info;
 
 /// PostgreSQL database service
@@ -20,6 +22,7 @@ pub struct PostgresService {
     event_rx: async_channel::Receiver<PostgresEvent>,
 }
 
+#[json_actions]
 impl PostgresService {
     /// Create a new PostgresService with specified database name and port
     pub fn new(db_name: String, port: u16) -> Self {
@@ -31,6 +34,48 @@ impl PostgresService {
             event_rx,
         }
     }
+    
+    /// Check database status
+    #[json_action]
+    pub async fn check_status(&self) -> Result<PostgresStatusResult, Error> {
+        info!("Checking PostgreSQL status for database '{}'", self.db_name);
+        
+        // In a real implementation, this would query PostgreSQL
+        let result = PostgresStatusResult {
+            healthy: true,
+            version: "15.0".to_string(),
+            connections: 5,
+        };
+        
+        // Emit event
+        let _ = self.event_tx.send(PostgresEvent::StatusChecked {
+            healthy: result.healthy,
+            version: result.version.clone(),
+            connections: result.connections,
+        }).await;
+        
+        Ok(result)
+    }
+    
+    /// Backup the database
+    #[json_action]
+    pub async fn backup(&self, backup_path: String) -> Result<BackupResult, Error> {
+        info!("Backing up database '{}' to {}", self.db_name, backup_path);
+        
+        // In a real implementation, this would perform a pg_dump
+        let result = BackupResult {
+            path: backup_path.clone(),
+            size_bytes: 1024000, // Mock size
+        };
+        
+        // Emit event
+        let _ = self.event_tx.send(PostgresEvent::BackupCompleted {
+            path: result.path.clone(),
+            size_bytes: result.size_bytes,
+        }).await;
+        
+        Ok(result)
+    }
 }
 
 impl Default for PostgresService {
@@ -39,17 +84,24 @@ impl Default for PostgresService {
     }
 }
 
-/// Actions for PostgreSQL
+/// Result of checking PostgreSQL status
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum PostgresAction {
-    /// Check database status
-    CheckStatus,
-    /// Backup the database
-    Backup {
-        /// Path where backup should be saved
-        backup_path: String,
-    },
+pub struct PostgresStatusResult {
+    /// Whether the database is healthy
+    pub healthy: bool,
+    /// Database version
+    pub version: String,
+    /// Number of active connections
+    pub connections: u32,
+}
+
+/// Result of backup operation
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BackupResult {
+    /// Path where backup was saved
+    pub path: String,
+    /// Size of the backup file in bytes
+    pub size_bytes: u64,
 }
 
 /// Events from PostgreSQL
@@ -79,11 +131,7 @@ pub enum PostgresEvent {
     },
 }
 
-#[async_trait]
 impl Service for PostgresService {
-    type Action = PostgresAction;
-    type Event = PostgresEvent;
-
     fn service_type() -> &'static str {
         "postgres"
     }
@@ -95,19 +143,14 @@ impl Service for PostgresService {
     fn description(&self) -> &str {
         "PostgreSQL database service"
     }
+}
+
+#[async_trait]
+impl harness_core::service::ServiceEvents for PostgresService {
+    type Event = PostgresEvent;
 
     fn event_stream(&self) -> Receiver<Self::Event> {
         self.event_rx.clone()
-    }
-
-    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
-        let tx = self.event_tx.clone();
-        let db_name = self.db_name.clone();
-        let port = self.port;
-
-        todo!("implement dispatch_action for postgres");
-
-        Ok(())
     }
 }
 
@@ -116,19 +159,22 @@ impl Service for PostgresService {
 /// PostgreSQL setup involves ensuring the database exists and has proper permissions
 #[async_trait]
 impl ServiceSetup for PostgresService {
-    async fn is_setup_complete(&self) -> Result<bool, Error> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!(
-            "Checking if PostgreSQL setup is complete for database '{}' on port {}",
+            "Validating PostgreSQL setup for database '{}' on port {}",
             self.db_name, self.port
         );
 
-        // TODO: Implement actual setup check
+        // TODO: Implement actual validation
         // This should check if:
         // 1. PostgreSQL is responding on the port
         // 2. The database exists
         // 3. Required users and permissions are set up
-
-        Ok(false)
+        // 4. All required tables exist
+        // 5. Required extensions are installed
+        
+        // For now, return error to indicate setup is needed
+        Err(Error::service_type("PostgreSQL setup not yet complete"))
     }
 
     async fn perform_setup(&self) -> Result<(), Error> {
@@ -143,19 +189,6 @@ impl ServiceSetup for PostgresService {
         // 2. Create required users
         // 3. Grant necessary permissions
         // 4. Run initial schema migrations if needed
-
-        Ok(())
-    }
-
-    async fn validate_setup(&self) -> Result<(), Error> {
-        info!("Validating PostgreSQL setup");
-
-        // TODO: Implement actual validation
-        // This should verify:
-        // 1. Database is accessible
-        // 2. All required tables exist
-        // 3. Permissions are correct
-        // 4. Required extensions are installed
 
         Ok(())
     }

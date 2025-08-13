@@ -1087,7 +1087,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "service-orchestration",
- "service-registry",
  "smol",
  "smol-potat",
  "statig",
@@ -1139,14 +1138,13 @@ dependencies = [
  "harness-core",
  "pem",
  "rand 0.8.5",
- "rcgen",
+ "rcgen 0.12.1",
  "rustls",
  "rustls-pemfile",
  "schemars",
  "serde",
  "serde_json",
  "service-orchestration",
- "service-registry",
  "smol",
  "smol-potat",
  "tempfile",
@@ -1169,7 +1167,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "service-orchestration",
- "service-registry",
  "tempfile",
  "thiserror 2.0.12",
 ]
@@ -1180,6 +1177,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
+ "async-fs",
  "async-net",
  "async-runtime-compat",
  "async-trait",
@@ -1187,19 +1185,23 @@ dependencies = [
  "chrono",
  "command-executor",
  "futures",
+ "futures-rustls",
  "harness-config",
  "indexmap",
+ "rcgen 0.13.2",
+ "rustls",
+ "rustls-pemfile",
  "schemars",
  "serde",
  "serde_json",
  "service-orchestration",
- "service-registry",
  "smol",
  "smol-potat",
  "tempfile",
  "thiserror 2.0.12",
  "tracing",
  "uuid",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -1552,9 +1554,6 @@ name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "iri-string"
@@ -2126,6 +2125,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcgen"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
+dependencies = [
+ "pem",
+ "ring",
+ "rustls-pki-types",
+ "time",
+ "yasna",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2526,7 +2538,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "service-orchestration",
- "service-registry",
  "signal-hook",
  "smol",
  "smol-potat",
@@ -2535,39 +2546,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "service-registry"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-fs",
- "async-net",
- "async-trait",
- "async-tungstenite",
- "chrono",
- "command-executor",
- "futures",
- "futures-rustls",
- "futures-util",
- "ipnet",
- "libc",
- "rcgen",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "serde_yaml",
- "signal-hook",
- "smol",
- "smol-potat",
- "tempfile",
- "thiserror 2.0.12",
- "tracing",
- "tungstenite",
- "uuid",
- "webpki-roots",
 ]
 
 [[package]]

@@ -9,10 +9,6 @@ pub enum Error {
     #[error("Service orchestration error: {0}")]
     ServiceOrchestration(#[from] service_orchestration::Error),
 
-    /// Service registry error
-    #[error("Service registry error: {0}")]
-    ServiceRegistry(#[from] service_registry::Error),
-
     /// Configuration error
     #[error("Configuration error: {0}")]
     Config(#[from] harness_config::ConfigError),

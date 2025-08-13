@@ -11,7 +11,6 @@ use futures_rustls::TlsAcceptor;
 use rustls::ServerConfig;
 use rustls::pki_types::PrivateKeyDer;
 use service_orchestration::ServiceManager;
-use service_registry::Registry;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -19,13 +18,10 @@ use tracing::{debug, error, info};
 
 /// Daemon state shared between connections
 ///
-/// Both ServiceManager and Registry implement their own internal synchronization:
-/// - ServiceManager uses RwLock for active_services and health_monitors
-/// - Registry uses Arc<Mutex<>> internally for its store and subscribers
-/// Therefore, no external mutex is needed here.
+/// ServiceManager implements its own internal synchronization using RwLock
+/// for active_services and health_monitors, so no external mutex is needed.
 pub struct DaemonState {
     pub service_manager: Arc<ServiceManager>,
-    pub registry: Arc<Registry>,
 }
 
 /// Start the WebSocket server
@@ -35,13 +31,9 @@ pub async fn start_server(data_dir: &Path, port: u16) -> Result<()> {
         .await
         .context("Failed to create service manager")?;
 
-    // Create in-memory registry
-    let registry = Registry::new().await;
-
     // Create daemon state
     let state = Arc::new(DaemonState {
         service_manager: Arc::new(service_manager),
-        registry: Arc::new(registry),
     });
 
     // Load TLS configuration

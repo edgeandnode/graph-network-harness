@@ -84,11 +84,11 @@ mod tests {
         let spawner = SmolSpawner;
         let (tx, rx) = async_channel::bounded(1);
 
-        let handle = spawner.spawn_with_handle(Box::pin(async move {
+        let _handle = spawner.spawn_with_handle(Box::pin(async move {
             tx.send(123).await.unwrap();
         }));
 
         assert_eq!(rx.recv().await.unwrap(), 123);
-        handle.detach();
+        // Task runs to completion, no need to explicitly detach
     }
 }

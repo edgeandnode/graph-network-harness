@@ -4,6 +4,7 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
+use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
 use harness_core::{Error, service::{Service, ServiceEvents}};
 use harness_macros::{json_actions, json_action};
@@ -189,14 +190,18 @@ impl ServiceEvents for AnvilService {
 /// Anvil requires minimal setup - just needs to start with the right chain configuration
 #[async_trait]
 impl harness_core::service::ServiceSetup for AnvilService {
-    async fn is_setup_complete(&self) -> Result<bool, Error> {
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!(
-            "Checking if Anvil setup is complete on port {} for chain {}",
+            "Validating Anvil setup on port {} for chain {}",
             self.port, self.chain_id
         );
 
-        // In a real implementation, this would check if Anvil is responding to RPC calls
-        Ok(true)
+        // In a real implementation, this would:
+        // 1. Check RPC endpoint is responding
+        // 2. Verify chain ID matches expected
+        // 3. Check that expected accounts exist
+
+        Ok(())
     }
 
     async fn perform_setup(&self) -> Result<(), Error> {
@@ -209,17 +214,6 @@ impl harness_core::service::ServiceSetup for AnvilService {
         // 1. Deploying initial contracts
         // 2. Setting up test accounts with balances
         // 3. Mining initial blocks
-
-        Ok(())
-    }
-
-    async fn validate_setup(&self) -> Result<(), Error> {
-        info!("Validating Anvil setup");
-
-        // In a real implementation, this would:
-        // 1. Check RPC endpoint is responding
-        // 2. Verify chain ID matches expected
-        // 3. Check that expected accounts exist
 
         Ok(())
     }

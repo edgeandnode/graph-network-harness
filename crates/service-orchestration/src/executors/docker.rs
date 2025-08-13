@@ -438,7 +438,9 @@ mod tests {
         let docker_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
+                params: HashMap::new(),
                 image: "nginx".to_string(),
+                command_template: None,
                 env: HashMap::new(),
                 ports: vec![8080],
                 volumes: vec![],
@@ -452,8 +454,9 @@ mod tests {
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec![],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },

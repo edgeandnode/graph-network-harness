@@ -86,8 +86,9 @@ mod tests {
         let task = TaskConfig {
             task_type: "graph-contracts-deployment".to_string(),
             target: ServiceTarget::Process {
-                binary: "npx".to_string(),
-                args: vec!["hardhat".to_string(), "deploy".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "npx hardhat deploy".to_string(),
+                },
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
                 working_dir: Some("./contracts".to_string()),
             },
@@ -116,8 +117,9 @@ mod tests {
                 TaskConfig::new(
                     "graph-contracts".to_string(),
                     ServiceTarget::Process {
-                        binary: "hardhat".to_string(),
-                        args: vec!["deploy".to_string()],
+                        command: crate::config::ProcessCommand::Legacy {
+                            command: "hardhat deploy".to_string(),
+                        },
                         env: HashMap::new(),
                         working_dir: None,
                     },

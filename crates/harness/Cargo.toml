@@ -35,7 +35,6 @@ async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 harness-config = { path = "../harness-config" }
 harness-core = { path = "../harness-core" }
 service-orchestration = { path = "../service-orchestration", features = ["smol"] }
-service-registry = { path = "../service-registry" }
 
 # For table output
 comfy-table = "7.1"

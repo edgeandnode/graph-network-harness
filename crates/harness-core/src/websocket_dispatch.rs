@@ -9,12 +9,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use async_channel::Receiver;
-use async_net::TcpListener;
-use async_tungstenite::{accept_async, tungstenite::Message};
+use async_net::{TcpListener, TcpStream};
+use async_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
 use futures::{SinkExt, StreamExt, FutureExt};
 use tracing::{error, info, warn};
 
 use crate::service::JsonServiceRegistry;
+use crate::tls::{TlsServerConfig, TlsAcceptor};
 use crate::Error;
 use std::result::Result;
 
@@ -321,17 +322,35 @@ pub trait WebSocketTransport: Send + Sync {
 pub struct WebSocketServer {
     dispatcher: Arc<WebSocketDispatcher>,
     address: std::net::SocketAddr,
+    tls_config: Option<TlsServerConfig>,
     shutdown_rx: async_channel::Receiver<()>,
     shutdown_tx: async_channel::Sender<()>,
 }
 
 impl WebSocketServer {
-    /// Create a new WebSocket server
+    /// Create a new WebSocket server (plain HTTP)
     pub fn new(registry: Arc<JsonServiceRegistry>, address: std::net::SocketAddr) -> Self {
         let (shutdown_tx, shutdown_rx) = async_channel::bounded(1);
         Self {
             dispatcher: Arc::new(WebSocketDispatcher::new(registry)),
             address,
+            tls_config: None,
+            shutdown_rx,
+            shutdown_tx,
+        }
+    }
+    
+    /// Create a new WebSocket server with TLS
+    pub fn new_tls(
+        registry: Arc<JsonServiceRegistry>,
+        address: std::net::SocketAddr,
+        tls_config: TlsServerConfig,
+    ) -> Self {
+        let (shutdown_tx, shutdown_rx) = async_channel::bounded(1);
+        Self {
+            dispatcher: Arc::new(WebSocketDispatcher::new(registry)),
+            address,
+            tls_config: Some(tls_config),
             shutdown_rx,
             shutdown_tx,
         }
@@ -356,10 +375,11 @@ impl WebSocketServer {
                         Ok((stream, addr)) => {
                             info!("New WebSocket connection from {}", addr);
                             let dispatcher = self.dispatcher.clone();
+                            let tls_config = self.tls_config.clone();
                             
                             // Spawn a task to handle this connection
                             let _ = smol::spawn(async move {
-                                if let Err(e) = handle_connection(stream, dispatcher).await {
+                                if let Err(e) = handle_connection(stream, dispatcher, tls_config).await {
                                     error!("Error handling WebSocket connection from {}: {}", addr, e);
                                 }
                             }).detach();
@@ -384,11 +404,44 @@ impl WebSocketServer {
 async fn handle_connection(
     stream: async_net::TcpStream,
     dispatcher: Arc<WebSocketDispatcher>,
+    tls_config: Option<TlsServerConfig>,
 ) -> Result<(), Error> {
-    let ws_stream = accept_async(stream).await
-        .map_err(|e| Error::service_type(format!("WebSocket handshake failed: {}", e)))?;
+    // Handle TLS if configured
+    use futures::{SinkExt, stream::SplitSink, stream::SplitStream};
     
-    let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    enum WsStream {
+        Plain(WebSocketStream<TcpStream>),
+        Tls(WebSocketStream<futures_rustls::server::TlsStream<TcpStream>>),
+    }
+    
+    let ws_stream = match tls_config {
+        Some(config) => {
+            let acceptor = TlsAcceptor::from(config.config);
+            let tls_stream = acceptor.accept(stream).await
+                .map_err(|e| Error::service_type(format!("TLS handshake failed: {}", e)))?;
+            let ws = accept_async(tls_stream).await
+                .map_err(|e| Error::service_type(format!("WebSocket handshake failed: {}", e)))?;
+            WsStream::Tls(ws)
+        }
+        None => {
+            let ws = accept_async(stream).await
+                .map_err(|e| Error::service_type(format!("WebSocket handshake failed: {}", e)))?;
+            WsStream::Plain(ws)
+        }
+    };
+    
+    let (mut ws_sender, mut ws_receiver) = match ws_stream {
+        WsStream::Plain(ws) => {
+            let (s, r) = ws.split();
+            (Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>, 
+             Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>)
+        }
+        WsStream::Tls(ws) => {
+            let (s, r) = ws.split();
+            (Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>,
+             Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>)
+        }
+    };
     let (tx, rx) = async_channel::unbounded();
     
     // Spawn a task to send messages

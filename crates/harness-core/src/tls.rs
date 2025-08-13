@@ -1,11 +1,15 @@
-//! TLS configuration and utilities
+//! TLS configuration and utilities for WebSocket connections
+//!
+//! This module provides TLS support for secure WebSocket connections,
+//! adapted from the service-registry implementation.
 
-use crate::error::Error;
+use crate::Error;
 use std::path::Path;
 use std::result::Result;
 use std::sync::Arc;
 
 use rustls::{ClientConfig, ServerConfig};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
 /// TLS configuration for server
 #[derive(Clone)]
@@ -33,46 +37,44 @@ impl TlsServerConfig {
         // Read certificate file
         let mut cert_file = File::open(cert_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open certificate file: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to open certificate file: {e}")))?;
         let mut cert_bytes = Vec::new();
         cert_file
             .read_to_end(&mut cert_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read certificate: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to read certificate: {e}")))?;
 
         // Read key file
         let mut key_file = File::open(key_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open key file: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to open key file: {e}")))?;
         let mut key_bytes = Vec::new();
         key_file
             .read_to_end(&mut key_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read key: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to read key: {e}")))?;
 
         // Parse certificates
         let certs = rustls_pemfile::certs(&mut cert_bytes.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| Error::Operation(format!("Failed to parse certificates: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to parse certificates: {e}")))?;
 
         if certs.is_empty() {
-            return Err(Error::Operation(
+            return Err(Error::service_type(
                 "No certificates found in file".to_string(),
             ));
         }
 
         // Parse private key
         let key_der = rustls_pemfile::private_key(&mut key_bytes.as_slice())
-            .map_err(|e| Error::Operation(format!("Failed to parse private key: {e}")))?
-            .ok_or_else(|| Error::Operation("No private key found in file".to_string()))?;
-
-        let key = key_der;
+            .map_err(|e| Error::service_type(format!("Failed to parse private key: {e}")))?
+            .ok_or_else(|| Error::service_type("No private key found in file".to_string()))?;
 
         // Build server config
         let config = ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .map_err(|e| Error::Operation(format!("Failed to create TLS config: {e}")))?;
+            .with_single_cert(certs, key_der)
+            .map_err(|e| Error::service_type(format!("Failed to create TLS config: {e}")))?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -86,21 +88,18 @@ impl TlsServerConfig {
 
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
         let cert = generate_simple_self_signed(subject_alt_names)
-            .map_err(|e| Error::Operation(format!("Failed to generate self-signed cert: {}", e)))?;
+            .map_err(|e| Error::service_type(format!("Failed to generate self-signed cert: {}", e)))?;
 
-        let cert_der = cert
-            .serialize_der()
-            .map_err(|e| Error::Operation(format!("Failed to serialize cert: {}", e)))?;
-        let key_der = cert.serialize_private_key_der();
+        let cert_der = cert.cert.der().to_vec();
+        let key_der = cert.key_pair.serialize_der();
 
         let certs = vec![CertificateDer::from(cert_der)];
-        let key = PrivateKeyDer::try_from(key_der)
-            .map_err(|e| Error::Operation(format!("Failed to convert private key: {:?}", e)))?;
+        let key = PrivateKeyDer::Pkcs8(key_der.into());
 
         let config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(certs, key)
-            .map_err(|e| Error::Operation(format!("Failed to create TLS config: {}", e)))?;
+            .map_err(|e| Error::service_type(format!("Failed to create TLS config: {}", e)))?;
 
         Ok(Self {
             config: Arc::new(config),
@@ -126,11 +125,11 @@ impl TlsClientConfig {
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
     #[cfg(test)]
     pub fn dangerous_accept_any_cert() -> Result<Self, Error> {
-        use rustls::DigitallySignedStruct;
         use rustls::client::danger::{
             HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
         };
-        use rustls::pki_types::UnixTime;
+        use rustls::pki_types::{ServerName, UnixTime};
+        use rustls::DigitallySignedStruct;
 
         #[derive(Debug)]
         struct DangerousAcceptAnyVerifier;
@@ -140,7 +139,7 @@ impl TlsClientConfig {
                 &self,
                 _end_entity: &CertificateDer<'_>,
                 _intermediates: &[CertificateDer<'_>],
-                _server_name: &rustls::pki_types::ServerName<'_>,
+                _server_name: &ServerName<'_>,
                 _ocsp_response: &[u8],
                 _now: UnixTime,
             ) -> std::result::Result<ServerCertVerified, rustls::Error> {
@@ -198,23 +197,23 @@ impl TlsClientConfig {
         // Read CA certificate
         let mut ca_file = File::open(ca_cert_path.as_ref())
             .await
-            .map_err(|e| Error::Operation(format!("Failed to open CA certificate file: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to open CA certificate file: {e}")))?;
         let mut ca_bytes = Vec::new();
         ca_file
             .read_to_end(&mut ca_bytes)
             .await
-            .map_err(|e| Error::Operation(format!("Failed to read CA certificate: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to read CA certificate: {e}")))?;
 
         // Parse CA certificates
         let ca_certs = rustls_pemfile::certs(&mut ca_bytes.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| Error::Operation(format!("Failed to parse CA certificates: {e}")))?;
+            .map_err(|e| Error::service_type(format!("Failed to parse CA certificates: {e}")))?;
 
         let mut root_store = rustls::RootCertStore::empty();
         for cert in ca_certs {
             root_store
                 .add(cert)
-                .map_err(|e| Error::Operation(format!("Failed to add CA certificate: {e}")))?;
+                .map_err(|e| Error::service_type(format!("Failed to add CA certificate: {e}")))?;
         }
 
         let config = ClientConfig::builder()

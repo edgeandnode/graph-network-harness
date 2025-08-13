@@ -9,10 +9,10 @@ pub mod ipfs;
 pub mod postgres;
 
 // Re-export all service types
-pub use anvil::{AnvilAction, AnvilEvent, AnvilService};
-pub use graph_node::{GraphNodeAction, GraphNodeEvent, GraphNodeService};
-pub use ipfs::{IpfsAction, IpfsEvent, IpfsService};
-pub use postgres::{PostgresAction, PostgresEvent, PostgresService};
+pub use anvil::{AnvilEvent, AnvilService};
+pub use graph_node::{GraphNodeEvent, GraphNodeService};
+pub use ipfs::{IpfsEvent, IpfsService};
+pub use postgres::{PostgresEvent, PostgresService};
 
 /// Stack enum containing all available services
 pub enum GraphTestStack {

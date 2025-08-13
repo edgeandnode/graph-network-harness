@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/command-executor",
-    "crates/service-registry",
     "crates/service-orchestration",
     "crates/harness-config",
     "crates/harness-core",
@@ -75,7 +74,6 @@ alloy-rpc-types-anvil = "1.0"
 
 # Internal crates
 command-executor = { path = "crates/command-executor" }
-service-registry = { path = "crates/service-registry" }
 service-orchestration = { path = "crates/service-orchestration" }
 
 [workspace.lints.rust]

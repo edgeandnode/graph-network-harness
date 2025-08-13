@@ -28,6 +28,13 @@ tracing = { workspace = true }
 async-tungstenite = { workspace = true }
 async-net = { workspace = true }
 
+# TLS support
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+webpki-roots = { workspace = true }
+futures-rustls = { workspace = true }
+async-fs = { workspace = true }
+
 # UUID for service IDs
 uuid = { workspace = true, features = ["v4", "serde"] }
 
@@ -42,7 +49,6 @@ schemars = { workspace = true }
 
 # Re-export core functionality from existing crates
 service-orchestration = { path = "../service-orchestration", features = ["test-utils", "smol"] }
-service-registry = { path = "../service-registry" }
 harness-config = { path = "../harness-config" }
 command-executor = { path = "../command-executor" }
 
@@ -54,6 +60,7 @@ smol-potat = { workspace = true }
 tempfile = { workspace = true }
 smol = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+rcgen = "0.13"
 
 [features]
 default = []

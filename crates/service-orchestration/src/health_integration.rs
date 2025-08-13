@@ -315,8 +315,9 @@ mod tests {
         ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["test".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo test".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },

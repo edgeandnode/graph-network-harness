@@ -16,10 +16,6 @@ use crate::{
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use command_executor::event::ProcessEvent;
-use service_registry::{
-    network::{NetworkConfig, NetworkManager},
-    registry::Registry,
-};
 use std::collections::HashMap;
 use std::result::Result;
 use std::sync::{Arc, RwLock};
@@ -27,10 +23,6 @@ use tracing::{debug, info, warn};
 
 /// Central service orchestrator
 pub struct ServiceManager {
-    /// Service registry for service discovery
-    registry: Registry,
-    /// Network manager for topology management
-    network_manager: NetworkManager,
     /// Service executors by type
     executors: HashMap<String, Arc<dyn ServiceExecutor>>,
     /// Currently running services
@@ -64,12 +56,6 @@ impl ServiceManager {
 
         std::fs::create_dir_all(&state_dir).map_err(OrchestrationError::Io)?;
 
-        // Create in-memory registry
-        let registry = Registry::new().await;
-
-        let network_config = NetworkConfig::default();
-        let network_manager = NetworkManager::new(network_config)?;
-
         // Initialize executors
         let mut executors: HashMap<String, Arc<dyn ServiceExecutor>> = HashMap::new();
         executors.insert("process".to_string(), Arc::new(ProcessExecutor::new()));
@@ -80,8 +66,6 @@ impl ServiceManager {
         );
 
         Ok(Self {
-            registry,
-            network_manager,
             executors,
             active_services: Arc::new(RwLock::new(HashMap::new())),
             health_monitors: Arc::new(RwLock::new(HashMap::new())),
@@ -143,51 +127,6 @@ impl ServiceManager {
             .write()
             .unwrap()
             .insert(name.to_string(), running_service.clone());
-
-        // Register with service registry
-        let execution_info = match &config.target {
-            crate::config::ServiceTarget::Process { command, .. } => {
-                // Build command from ProcessCommand
-                let full_cmd = command.build_command();
-                let (cmd, cmd_args) = if !full_cmd.is_empty() {
-                    (full_cmd[0].clone(), full_cmd[1..].to_vec())
-                } else {
-                    ("unknown".to_string(), vec![])
-                };
-                service_registry::models::ExecutionInfo::ManagedProcess {
-                    pid: running_service.pid,
-                    command: cmd,
-                    args: cmd_args,
-                }
-            }
-            crate::config::ServiceTarget::Docker { image, .. } => {
-                service_registry::models::ExecutionInfo::DockerContainer {
-                    container_id: running_service.container_id.clone(),
-                    image: image.clone(),
-                    name: Some(format!("orchestrator-{name}")),
-                }
-            }
-            _ => {
-                // For remote services, we'll use ManagedProcess for now
-                service_registry::models::ExecutionInfo::ManagedProcess {
-                    pid: None,
-                    command: name.to_string(),
-                    args: vec![],
-                }
-            }
-        };
-
-        let service_entry = service_registry::models::ServiceEntry::new(
-            name.to_string(),
-            "1.0.0".to_string(), // Version could come from config
-            execution_info,
-            service_registry::models::Location::Local,
-        )?;
-
-        // Register the service
-        if let Err(e) = self.registry.register(service_entry).await {
-            warn!("Failed to register service with registry: {}", e);
-        }
 
         info!("Successfully launched service: {}", name);
         Ok((rx, running_service))
@@ -283,25 +222,6 @@ impl ServiceManager {
             .unwrap()
             .insert(name.to_string(), running_service.clone());
 
-        // Register with service registry
-        let execution_info = service_registry::models::ExecutionInfo::ManagedProcess {
-            pid: running_service.pid,
-            command: format!("attached-{}", name),
-            args: vec![],
-        };
-
-        let service_entry = service_registry::models::ServiceEntry::new(
-            name.to_string(),
-            "1.0.0".to_string(),
-            execution_info,
-            service_registry::models::Location::Local,
-        )?;
-
-        // Register the service
-        if let Err(e) = self.registry.register(service_entry).await {
-            warn!("Failed to register attached service with registry: {}", e);
-        }
-
         info!("Successfully attached to service: {}", name);
         Ok((rx, running_service))
     }
@@ -330,14 +250,7 @@ impl ServiceManager {
         // Remove health monitor
         self.health_monitors.write().unwrap().remove(name);
 
-        // Update service state in registry to stopped
-        if let Err(e) = self
-            .registry
-            .update_state(name, service_registry::models::ServiceState::Stopped)
-            .await
-        {
-            warn!("Failed to update service state in registry: {}", e);
-        }
+        // Service has been removed from active_services, nothing more to do
 
         info!("Successfully stopped service: {}", name);
         Ok(())
@@ -348,32 +261,7 @@ impl ServiceManager {
         &self,
         name: &str,
     ) -> Result<ServiceStatus, OrchestrationError> {
-        // First check if service exists in registry
-        if let Ok(service_info) = self.registry.get(name).await {
-            // Check if we have it in active services
-            let active = self.active_services.read().unwrap();
-            if !active.contains_key(name) {
-                // Service is in registry but not in our active list
-                // This means it was started in a previous run
-                match service_info.state {
-                    service_registry::models::ServiceState::Running => {
-                        // Service claims to be running, verify it
-                        // For now, we'll trust the registry
-                        return Ok(ServiceStatus::Running);
-                    }
-                    service_registry::models::ServiceState::Stopped => {
-                        return Ok(ServiceStatus::Stopped);
-                    }
-                    service_registry::models::ServiceState::Failed => {
-                        return Ok(ServiceStatus::Failed("Service failed".to_string()));
-                    }
-                    _ => {
-                        return Ok(ServiceStatus::Stopped);
-                    }
-                }
-            }
-        }
-
+        // Check if service is in active services
         let active = self.active_services.read().unwrap();
         let Some(service) = active.get(name) else {
             return Ok(ServiceStatus::Stopped);
@@ -392,11 +280,6 @@ impl ServiceManager {
         }
     }
 
-    /// List all active services
-    pub async fn list_services(&self) -> Result<Vec<String>, OrchestrationError> {
-        let active = self.active_services.read().unwrap();
-        Ok(active.keys().cloned().collect())
-    }
 
     /// Get detailed information about a running service
     pub async fn get_service_info(
@@ -514,14 +397,14 @@ impl ServiceManager {
         )))
     }
 
-    /// Get network manager reference
-    pub fn network_manager(&self) -> &NetworkManager {
-        &self.network_manager
-    }
-
-    /// Get service registry reference
-    pub fn service_registry(&self) -> &Registry {
-        &self.registry
+    /// List all active services
+    pub fn list_services(&self) -> Vec<String> {
+        self.active_services
+            .read()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect()
     }
 }
 
@@ -547,8 +430,9 @@ mod tests {
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec![],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -576,7 +460,7 @@ mod tests {
     async fn test_list_services_empty() {
         let manager = ServiceManager::new_for_tests().await.unwrap();
 
-        let services = manager.list_services().await.unwrap();
+        let services = manager.list_services();
         assert!(services.is_empty());
     }
 }

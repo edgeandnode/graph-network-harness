@@ -4,8 +4,11 @@
 
 use async_channel::Receiver;
 use async_trait::async_trait;
+use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, prelude::*, service::Service};
+use harness_core::{Error, service::{Service, ServiceSetup, ServiceEvents}};
+use harness_macros::{json_actions, json_action};
+use std::result::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::ServiceConfig;
@@ -19,6 +22,7 @@ pub struct GraphNodeService {
     event_rx: async_channel::Receiver<GraphNodeEvent>,
 }
 
+#[json_actions]
 impl GraphNodeService {
     /// Create a new GraphNodeService with specified endpoint
     pub fn new(endpoint: String) -> Self {
@@ -29,6 +33,76 @@ impl GraphNodeService {
             event_rx,
         }
     }
+    
+    /// Deploy a new subgraph
+    #[json_action]
+    pub async fn deploy_subgraph(
+        &self,
+        name: String,
+        ipfs_hash: String,
+        version_label: Option<String>,
+    ) -> Result<DeploymentResult, Error> {
+        info!("Deploying subgraph {} from IPFS hash {}", name, ipfs_hash);
+        
+        // In a real implementation, this would call Graph Node's admin API
+        let deployment_id = format!("Qm{}_{}", &ipfs_hash[2..10], uuid::Uuid::new_v4());
+        
+        // Emit events
+        let _ = self.event_tx.send(GraphNodeEvent::DeploymentStarted {
+            deployment_id: deployment_id.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }).await;
+        
+        // Simulate deployment progress
+        let _ = self.event_tx.send(GraphNodeEvent::DeploymentProgress {
+            deployment_id: deployment_id.clone(),
+            status: "Syncing blocks".to_string(),
+            percent: 50,
+        }).await;
+        
+        let endpoints = vec![
+            format!("http://{}:8000/subgraphs/name/{}", self.endpoint, name),
+            format!("http://{}:8030/graphql", self.endpoint),
+        ];
+        
+        let _ = self.event_tx.send(GraphNodeEvent::DeploymentCompleted {
+            deployment_id: deployment_id.clone(),
+            endpoints: endpoints.clone(),
+        }).await;
+        
+        Ok(DeploymentResult {
+            deployment_id,
+            endpoints,
+        })
+    }
+    
+    /// Query a deployed subgraph
+    #[json_action]
+    pub async fn query_subgraph(&self, subgraph_name: String, query: String) -> Result<serde_json::Value, Error> {
+        info!("Querying subgraph {} with query: {}", subgraph_name, query);
+        
+        // In a real implementation, this would send a GraphQL query to the subgraph
+        let result = serde_json::json!({
+            "data": {
+                "example": "response"
+            }
+        });
+        
+        let _ = self.event_tx.send(GraphNodeEvent::QueryResult {
+            data: result.clone(),
+        }).await;
+        
+        Ok(result)
+    }
+    
+    /// Remove a subgraph deployment
+    #[json_action]
+    pub async fn remove_subgraph(&self, deployment_id: String) -> Result<bool, Error> {
+        info!("Removing subgraph deployment: {}", deployment_id);
+        
+        // In a real implementation, this would call Graph Node's admin API
+        Ok(true)
+    }
 }
 
 impl Default for GraphNodeService {
@@ -37,31 +111,13 @@ impl Default for GraphNodeService {
     }
 }
 
-/// Actions that can be performed on a Graph Node
+/// Result of a deployment operation
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "type")]
-pub enum GraphNodeAction {
-    /// Deploy a new subgraph
-    DeploySubgraph {
-        /// Name of the subgraph
-        name: String,
-        /// IPFS hash of the subgraph manifest
-        ipfs_hash: String,
-        /// Optional version label for the deployment
-        version_label: Option<String>,
-    },
-    /// Query a deployed subgraph
-    QuerySubgraph {
-        /// Name of the subgraph to query
-        subgraph_name: String,
-        /// GraphQL query string
-        query: String,
-    },
-    /// Remove a subgraph deployment
-    RemoveSubgraph {
-        /// ID of the deployment to remove
-        deployment_id: String,
-    },
+pub struct DeploymentResult {
+    /// ID of the deployment
+    pub deployment_id: String,
+    /// GraphQL endpoints for the deployed subgraph
+    pub endpoints: Vec<String>,
 }
 
 /// Events emitted by Graph Node actions
@@ -103,11 +159,7 @@ pub enum GraphNodeEvent {
     },
 }
 
-#[async_trait]
 impl Service for GraphNodeService {
-    type Action = GraphNodeAction;
-    type Event = GraphNodeEvent;
-
     fn service_type() -> &'static str {
         "graph-node"
     }
@@ -119,18 +171,14 @@ impl Service for GraphNodeService {
     fn description(&self) -> &str {
         "Graph Protocol indexer node"
     }
+}
+
+#[async_trait]
+impl ServiceEvents for GraphNodeService {
+    type Event = GraphNodeEvent;
 
     fn event_stream(&self) -> Receiver<Self::Event> {
         self.event_rx.clone()
-    }
-
-    async fn dispatch_action(&self, action: Self::Action) -> Result<(), Error> {
-        let tx = self.event_tx.clone();
-        let endpoint = self.endpoint.clone();
-
-        todo!("impl graph-node dispatch_action");
-
-        Ok(())
     }
 }
 
@@ -140,17 +188,20 @@ impl Service for GraphNodeService {
 /// Setup completion is determined by health check success.
 #[async_trait]
 impl ServiceSetup for GraphNodeService {
-    async fn is_setup_complete(&self) -> Result<bool, Error> {
-        // For Graph Node, setup is complete when the service is healthy
-        // In a real implementation, this would check the GraphQL endpoint
+    async fn validate_setup(&self) -> Result<(), Error> {
         info!(
-            "Checking if Graph Node setup is complete at endpoint: {}",
+            "Validating Graph Node setup at endpoint: {}",
             self.endpoint
         );
 
-        // Simulate health check - in reality this would query http://graph-node:8030
-        // For now, assume setup is complete if we can construct the service
-        Ok(true)
+        // In a real implementation, this would:
+        // 1. Check GraphQL endpoint is responding
+        // 2. Verify database connection
+        // 3. Check IPFS connectivity
+        // 4. Ensure Ethereum RPC connection
+        
+        // For now, assume setup is valid if we can construct the service
+        Ok(())
     }
 
     async fn perform_setup(&self) -> Result<(), Error> {
@@ -159,18 +210,6 @@ impl ServiceSetup for GraphNodeService {
         // Graph Node setup is primarily handled by service orchestration
         // The main setup is ensuring database connections and IPFS connectivity
         // This would be where we'd verify connections and perform any initialization
-
-        Ok(())
-    }
-
-    async fn validate_setup(&self) -> Result<(), Error> {
-        info!("Validating Graph Node setup");
-
-        // In a real implementation, this would:
-        // 1. Check GraphQL endpoint is responding
-        // 2. Verify database connection
-        // 3. Check IPFS connectivity
-        // 4. Ensure Ethereum RPC connection
 
         Ok(())
     }

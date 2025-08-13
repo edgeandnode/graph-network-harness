@@ -281,8 +281,9 @@ mod tests {
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo hello".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -295,7 +296,9 @@ mod tests {
         let docker_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
+                params: HashMap::new(),
                 image: "nginx".to_string(),
+                command_template: None,
                 env: HashMap::new(),
                 ports: vec![],
                 volumes: vec![],
@@ -309,13 +312,16 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_start_simple_process() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         let executor = ProcessExecutor::new();
 
         let config = ServiceConfig {
             name: "echo-test".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello world".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo 'hello world'".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -323,21 +329,24 @@ mod tests {
             health_check: None,
         };
 
-        let service = executor.start(config).await.unwrap();
+        let service = executor.start(config, &spawner).await.unwrap();
         assert_eq!(service.name, "echo-test");
         assert!(service.pid.is_some());
     }
 
     #[smol_potat::test]
     async fn test_process_handle_storage() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         let executor = ProcessExecutor::new();
 
         // Test that processes are stored when started
         let config1 = ServiceConfig {
             name: "test-service-1".to_string(),
             target: ServiceTarget::Process {
-                binary: "sleep".to_string(),
-                args: vec!["0.1".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "sleep 0.1".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -348,8 +357,9 @@ mod tests {
         let config2 = ServiceConfig {
             name: "test-service-2".to_string(),
             target: ServiceTarget::Process {
-                binary: "sleep".to_string(),
-                args: vec!["0.1".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "sleep 0.1".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -358,8 +368,8 @@ mod tests {
         };
 
         // Start services - this should store handles
-        let service1 = executor.start(config1).await.unwrap();
-        let service2 = executor.start(config2).await.unwrap();
+        let service1 = executor.start(config1, &spawner).await.unwrap();
+        let service2 = executor.start(config2, &spawner).await.unwrap();
 
         // Verify both processes are tracked
         assert_eq!(executor.running_process_count().await, 2);
@@ -367,7 +377,7 @@ mod tests {
         assert!(executor.is_process_tracked(&service2.id.to_string()).await);
 
         // Stop one service
-        executor.stop(&service1).await.unwrap();
+        executor.stop(&service1, &spawner).await.unwrap();
 
         // Verify it's removed from tracking
         assert_eq!(executor.running_process_count().await, 1);
@@ -375,12 +385,14 @@ mod tests {
         assert!(executor.is_process_tracked(&service2.id.to_string()).await);
 
         // Stop the other service
-        executor.stop(&service2).await.unwrap();
+        executor.stop(&service2, &spawner).await.unwrap();
         assert_eq!(executor.running_process_count().await, 0);
     }
 
     #[smol_potat::test]
     async fn test_concurrent_process_tracking() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         use futures::future::join_all;
 
         let executor = Arc::new(ProcessExecutor::new());
@@ -393,8 +405,9 @@ mod tests {
                 let config = ServiceConfig {
                     name: format!("concurrent-test-{i}"),
                     target: ServiceTarget::Process {
-                        binary: "sleep".to_string(),
-                        args: vec!["0.1".to_string()],
+                        command: crate::config::ProcessCommand::Legacy {
+                            command: "sleep 0.1".to_string(),
+                        },
                         env: HashMap::new(),
                         working_dir: None,
                     },
@@ -402,7 +415,8 @@ mod tests {
                     health_check: None,
                 };
 
-                executor_clone.start(config).await
+                let spawner = AsyncSpawner::new();
+                executor_clone.start(config, &spawner).await
             });
             handles.push(handle);
         }
@@ -423,14 +437,17 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_process_cleanup_on_exit() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         let executor = ProcessExecutor::new();
 
         // Start a process that exits quickly
         let config = ServiceConfig {
             name: "quick-exit".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["done".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo done".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -438,7 +455,7 @@ mod tests {
             health_check: None,
         };
 
-        let service = executor.start(config).await.unwrap();
+        let service = executor.start(config, &spawner).await.unwrap();
 
         // Process should be tracked initially
         assert!(executor.is_process_tracked(&service.id.to_string()).await);
@@ -452,23 +469,23 @@ mod tests {
         assert!(executor.is_process_tracked(&service.id.to_string()).await);
 
         // Cleanup
-        executor.stop(&service).await.unwrap();
+        executor.stop(&service, &spawner).await.unwrap();
         assert!(!executor.is_process_tracked(&service.id.to_string()).await);
     }
 
     #[smol_potat::test]
     async fn test_log_streaming_basic() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         let executor = ProcessExecutor::new();
 
         // Start a process that produces output
         let config = ServiceConfig {
             name: "log-producer".to_string(),
             target: ServiceTarget::Process {
-                binary: "sh".to_string(),
-                args: vec![
-                    "-c".to_string(),
-                    "echo 'Starting service'; sleep 0.1; echo 'Service running'; sleep 0.1; echo 'Stopping service'".to_string()
-                ],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "sh -c \"echo 'Starting service'; sleep 0.1; echo 'Service running'; sleep 0.1; echo 'Stopping service'\"".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -476,10 +493,11 @@ mod tests {
             health_check: None,
         };
 
-        let service = executor.start(config).await.unwrap();
+        let service = executor.start(config, &spawner).await.unwrap();
 
         // Get event stream
-        let mut event_stream = executor.stream_events(&service).await.unwrap();
+        let event_stream = executor.stream_events(&service, &spawner).await.unwrap();
+        let mut event_stream = Box::pin(event_stream);
 
         // Collect some events
         let mut events = Vec::new();
@@ -505,22 +523,22 @@ mod tests {
         assert!(!events.is_empty(), "Expected to receive some log events");
 
         // Cleanup
-        executor.stop(&service).await.unwrap();
+        executor.stop(&service, &spawner).await.unwrap();
     }
 
     #[smol_potat::test]
     async fn test_log_streaming_multiple_services() {
+        use async_runtime_compat::AsyncSpawner;
+        let spawner = AsyncSpawner::new();
         let executor = ProcessExecutor::new();
 
         // Start multiple services
         let config1 = ServiceConfig {
             name: "service1".to_string(),
             target: ServiceTarget::Process {
-                binary: "sh".to_string(),
-                args: vec![
-                    "-c".to_string(),
-                    "while true; do echo 'Service 1 log'; sleep 0.2; done".to_string(),
-                ],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "sh -c \"while true; do echo 'Service 1 log'; sleep 0.2; done\"".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -531,11 +549,9 @@ mod tests {
         let config2 = ServiceConfig {
             name: "service2".to_string(),
             target: ServiceTarget::Process {
-                binary: "sh".to_string(),
-                args: vec![
-                    "-c".to_string(),
-                    "while true; do echo 'Service 2 log'; sleep 0.2; done".to_string(),
-                ],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "sh -c \"while true; do echo 'Service 2 log'; sleep 0.2; done\"".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -543,12 +559,14 @@ mod tests {
             health_check: None,
         };
 
-        let service1 = executor.start(config1).await.unwrap();
-        let service2 = executor.start(config2).await.unwrap();
+        let service1 = executor.start(config1, &spawner).await.unwrap();
+        let service2 = executor.start(config2, &spawner).await.unwrap();
 
         // Get event streams for both
-        let mut stream1 = executor.stream_events(&service1).await.unwrap();
-        let mut stream2 = executor.stream_events(&service2).await.unwrap();
+        let stream1 = executor.stream_events(&service1, &spawner).await.unwrap();
+        let mut stream1 = Box::pin(stream1);
+        let stream2 = executor.stream_events(&service2, &spawner).await.unwrap();
+        let mut stream2 = Box::pin(stream2);
 
         // Verify we can get events from both services
         let timeout = std::time::Duration::from_millis(500);
@@ -609,7 +627,7 @@ mod tests {
         assert!(event2.is_some(), "Expected log events from service 2");
 
         // Cleanup
-        executor.stop(&service1).await.unwrap();
-        executor.stop(&service2).await.unwrap();
+        executor.stop(&service1, &spawner).await.unwrap();
+        executor.stop(&service2, &spawner).await.unwrap();
     }
 }

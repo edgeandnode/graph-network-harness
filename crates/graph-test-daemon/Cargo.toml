@@ -26,7 +26,6 @@ clap = { workspace = true }
 harness-core = { path = "../harness-core" }
 harness-macros = { path = "../harness-macros" }
 service-orchestration = { path = "../service-orchestration", features = ["smol"] }
-service-registry = { path = "../service-registry" }
 command-executor = { path = "../command-executor" }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 

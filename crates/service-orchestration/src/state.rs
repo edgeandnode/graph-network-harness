@@ -6,7 +6,6 @@
 
 use crate::Error;
 use chrono::{DateTime, Utc};
-use service_registry::ServiceState as RegistryServiceState;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
@@ -81,20 +80,7 @@ pub enum ServiceState {
     Failed(String),
 }
 
-impl From<ServiceState> for RegistryServiceState {
-    fn from(state: ServiceState) -> Self {
-        match state {
-            ServiceState::WaitingForDependencies => RegistryServiceState::Registered,
-            ServiceState::Starting => RegistryServiceState::Starting,
-            ServiceState::RunningSetup => RegistryServiceState::Starting,
-            ServiceState::Running => RegistryServiceState::Running,
-            ServiceState::Unhealthy(_) => RegistryServiceState::Failed,
-            ServiceState::Stopping => RegistryServiceState::Stopping,
-            ServiceState::Stopped => RegistryServiceState::Stopped,
-            ServiceState::Failed(_) => RegistryServiceState::Failed,
-        }
-    }
-}
+// Registry state conversion removed - no longer using service-registry
 
 /// Task execution state
 #[derive(Debug, Clone)]

@@ -74,14 +74,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
 
         Request::ListServices => {
             // Get all services and their status
-            let services = match state.service_manager.list_services().await {
-                Ok(services) => services,
-                Err(e) => {
-                    return Ok(Response::Error {
-                        message: format!("Failed to list services: {e}"),
-                    });
-                }
-            };
+            let services = state.service_manager.list_services();
 
             let mut service_status = std::collections::HashMap::new();
             for service_name in services {
@@ -106,14 +99,7 @@ pub async fn handle_request(request: Request, state: Arc<DaemonState>) -> Result
 
         Request::ListServicesDetailed => {
             // Get all services and their detailed information
-            let services = match state.service_manager.list_services().await {
-                Ok(services) => services,
-                Err(e) => {
-                    return Ok(Response::Error {
-                        message: format!("Failed to list services: {e}"),
-                    });
-                }
-            };
+            let services = state.service_manager.list_services();
 
             let mut detailed_services = Vec::new();
             for service_name in services {

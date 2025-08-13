@@ -15,6 +15,7 @@ pub mod daemon;
 pub mod error;
 pub mod service;
 pub mod task;
+pub mod tls;
 pub mod websocket_dispatch;
 
 pub use error::Error;
@@ -43,4 +44,3 @@ pub mod prelude {
 // Re-export key types from existing crates for convenience
 pub use harness_config::Config;
 pub use service_orchestration::{ServiceConfig, ServiceManager, ServiceStatus};
-pub use service_registry::Registry;

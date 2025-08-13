@@ -33,7 +33,6 @@ chrono = { workspace = true }
 
 # Internal crates
 command-executor = { workspace = true, features = ["ssh"] }
-service-registry = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 # Additional dependencies for orchestration

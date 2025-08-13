@@ -292,8 +292,9 @@ mod tests {
         let service_config = ServiceConfig {
             name: "app".to_string(),
             target: crate::config::ServiceTarget::Process {
-                binary: "app".to_string(),
-                args: vec![],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "app".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },

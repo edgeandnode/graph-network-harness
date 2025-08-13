@@ -5,7 +5,6 @@
 //! the orchestration system.
 
 use async_runtime_compat::Spawner;
-use service_registry::Registry;
 use std::sync::Arc;
 
 use crate::{StackConfig, StateManager, executors::ExecutorRegistry};
@@ -19,9 +18,6 @@ use crate::{StackConfig, StateManager, executors::ExecutorRegistry};
 pub struct OrchestrationContext {
     /// Runtime spawner for parallel execution
     pub spawner: Arc<dyn Spawner>,
-
-    /// Service registry for discovery
-    pub registry: Arc<Registry>,
 
     /// Stack configuration
     pub config: Arc<StackConfig>,
@@ -40,7 +36,7 @@ impl OrchestrationContext {
     /// - `smol` feature uses SmolSpawner
     /// - `tokio` feature uses TokioSpawner
     /// - `async-std` feature uses AsyncStdSpawner
-    pub fn new(config: StackConfig, registry: Registry) -> Self {
+    pub fn new(config: StackConfig) -> Self {
         let spawner: Arc<dyn Spawner> = {
             #[cfg(feature = "smol")]
             {
@@ -67,7 +63,6 @@ impl OrchestrationContext {
 
         Self {
             spawner,
-            registry: Arc::new(registry),
             config: Arc::new(config),
             executors: Arc::new(ExecutorRegistry::new()),
             state_manager: Arc::new(StateManager::new()),
@@ -79,12 +74,10 @@ impl OrchestrationContext {
     /// This is useful for testing or when you need explicit control over the runtime.
     pub fn with_spawner(
         config: StackConfig,
-        registry: Registry,
         spawner: Arc<dyn Spawner>,
     ) -> Self {
         Self {
             spawner,
-            registry: Arc::new(registry),
             config: Arc::new(config),
             executors: Arc::new(ExecutorRegistry::new()),
             state_manager: Arc::new(StateManager::new()),
@@ -106,10 +99,6 @@ impl OrchestrationContext {
         &self.config
     }
 
-    /// Get a reference to the service registry
-    pub fn registry(&self) -> &Registry {
-        &self.registry
-    }
 
     /// Get a reference to the executor registry
     pub fn executors(&self) -> &ExecutorRegistry {
@@ -138,10 +127,8 @@ mod tests {
             services: HashMap::new(),
             tasks: HashMap::new(),
         };
-        let registry = Registry::new().await;
-
         // Create context
-        let ctx = OrchestrationContext::new(config, registry);
+        let ctx = OrchestrationContext::new(config);
 
         // Verify we can access the config
         assert_eq!(ctx.config().name, "test");
@@ -158,8 +145,7 @@ mod tests {
             services: HashMap::new(),
             tasks: HashMap::new(),
         };
-        let registry = Registry::new().await;
-        let ctx = OrchestrationContext::new(config, registry);
+        let ctx = OrchestrationContext::new(config);
 
         // Test spawning
         let flag = Arc::new(AtomicBool::new(false));

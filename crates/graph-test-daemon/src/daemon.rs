@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use harness_core::prelude::*;
-use harness_core::{Error, Registry, ServiceManager};
+use harness_core::{Error, ServiceManager};
 use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::result::Result;
@@ -98,8 +98,5 @@ impl Daemon for GraphTestDaemon {
         self.base.service_manager()
     }
 
-    fn service_registry(&self) -> &Registry {
-        self.base.service_registry()
-    }
 }
 

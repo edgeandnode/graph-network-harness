@@ -85,8 +85,9 @@ mod tests {
         let config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
-                binary: "test".to_string(),
-                args: vec![],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "test".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },
@@ -104,7 +105,9 @@ mod tests {
         let config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
+                params: HashMap::new(),
                 image: "test:latest".to_string(),
+                command_template: None,
                 env: HashMap::new(),
                 ports: vec![],
                 volumes: vec![],

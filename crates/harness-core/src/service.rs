@@ -480,9 +480,11 @@ mod tests {
         }
 
         async fn add_value(&self, amount: i32) -> Result<i32, Error> {
-            let mut val = self.value.lock().unwrap();
-            *val += amount;
-            let new_val = *val;
+            let new_val = {
+                let mut val = self.value.lock().unwrap();
+                *val += amount;
+                *val
+            }; // Drop the lock before await
             
             self.event_tx.send(TestEvent {
                 value: new_val,

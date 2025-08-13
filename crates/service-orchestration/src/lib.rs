@@ -37,10 +37,10 @@
 mod config;
 mod context;
 mod dependency_graph;
-mod discovery;
+// mod discovery; // TODO: Refactor to remove service-registry dependency
 mod executors;
 mod health;
-mod health_integration;
+// mod health_integration; // TODO: Refactor to remove service-registry dependency
 mod manager;
 mod state;
 mod task_config;
@@ -51,14 +51,14 @@ pub use config::{
 };
 pub use context::OrchestrationContext;
 pub use dependency_graph::{DependencyGraph, DependencyNode};
-pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint};
+// pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint}; // TODO: Refactor
 pub use executors::{
     AttachedService, DockerAttachedExecutor, DockerExecutor, EventStreamable,
     LayeredServiceExecutor, ManagedService, ProcessExecutor, RunningService, ServiceExecutor,
     SystemdAttachedExecutor, layered::LayerConfig,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
-pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager};
+// pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager}; // TODO: Refactor
 pub use manager::ServiceManager;
 pub use state::{
     DeploymentState, DeploymentStatus, DeploymentSummary, ServiceDeploymentState, ServiceState,
@@ -73,9 +73,7 @@ pub use OrchestrationError as Error;
 /// Error types for orchestration operations
 #[derive(thiserror::Error, Debug)]
 pub enum OrchestrationError {
-    /// Service registry errors
-    #[error("Service registry error: {0}")]
-    Registry(#[from] service_registry::Error),
+    // Registry errors removed - no longer using service-registry
 
     /// Command executor errors  
     #[error("Command execution error: {0}")]

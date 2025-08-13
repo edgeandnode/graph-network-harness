@@ -545,6 +545,7 @@ mod tests {
         let layered_config = ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Layered {
+                params: HashMap::new(),
                 layers: vec![LayerConfig::Ssh {
                     host: "example.com".to_string(),
                     user: "testuser".to_string(),
@@ -553,10 +554,12 @@ mod tests {
                     identity_file: None,
                     options: vec![],
                 }],
-                command: CommandSpec {
+                command_template: None,
+                command: Some(CommandSpec {
                     binary: "echo".to_string(),
                     args: vec!["hello".to_string()],
-                },
+                }),
+                health_check: None,
             },
             dependencies: vec![],
             health_check: None,
@@ -568,8 +571,9 @@ mod tests {
         let process_config = ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo hello".to_string(),
+                },
                 env: HashMap::new(),
                 working_dir: None,
             },

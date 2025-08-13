@@ -54,6 +54,10 @@ pub enum Error {
     /// Validation error
     #[error("Validation error: {0}")]
     Validation(String),
+
+    /// Service not found error
+    #[error("Service not found: {0}")]
+    ServiceNotFound(String),
 }
 
 impl Error {
@@ -89,5 +93,15 @@ impl Error {
     /// Create a validation error
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation(message.into())
+    }
+
+    /// Create a service not found error
+    pub fn service_not_found(name: impl Into<String>) -> Self {
+        Self::ServiceNotFound(name.into())
+    }
+
+    /// Create a service orchestration error
+    pub fn service_orchestration(error: service_orchestration::Error) -> Self {
+        Self::ServiceOrchestration(error)
     }
 }

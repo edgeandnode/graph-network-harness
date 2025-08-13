@@ -11,6 +11,7 @@ authors.workspace = true
 async-trait = { workspace = true }
 async-channel = { workspace = true }
 futures = { workspace = true }
+smol = { workspace = true }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }

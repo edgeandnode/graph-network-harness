@@ -6,7 +6,7 @@
 use async_runtime_compat::prelude::*;
 use async_runtime_compat::smol::SmolSpawner;
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::Value;
 use service_orchestration::{
     DependencyGraph, DependencyNode, ServiceConfig, ServiceStatus, StackConfig,
 };
@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::action::{Action, ActionRegistry};
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
 use crate::service::{JsonServiceRegistry, Service};
 use crate::task::{DeploymentTask, JsonTaskRegistry};
@@ -25,7 +24,7 @@ use std::result::Result;
 
 /// Core daemon trait that all harness daemons must implement
 #[async_trait]
-pub trait Daemon: Action + Send + Sync {
+pub trait Daemon: Send + Sync {
     /// Start the daemon
     async fn start(&self) -> Result<(), Error>;
 
@@ -49,9 +48,6 @@ pub struct BaseDaemon {
 
     /// Service registry for discovery
     service_registry: Registry,
-
-    /// Action registry for custom functionality
-    action_registry: ActionRegistry,
 
     /// Registry of JSON-wrapped services
     json_service_registry: JsonServiceRegistry,
@@ -269,16 +265,6 @@ impl BaseDaemon {
     }
 }
 
-#[async_trait]
-impl Action for BaseDaemon {
-    fn actions(&self) -> &ActionRegistry {
-        &self.action_registry
-    }
-
-    fn actions_mut(&mut self) -> &mut ActionRegistry {
-        &mut self.action_registry
-    }
-}
 
 #[async_trait]
 impl Daemon for BaseDaemon {
@@ -329,7 +315,6 @@ impl Daemon for BaseDaemon {
 pub struct DaemonBuilder {
     endpoint: SocketAddr,
     state_dir: Option<std::path::PathBuf>,
-    action_registry: ActionRegistry,
     json_service_registry: JsonServiceRegistry,
     json_task_registry: JsonTaskRegistry,
     stack_config: StackConfig,
@@ -343,7 +328,6 @@ impl DaemonBuilder {
         Self {
             endpoint: "127.0.0.1:9443".parse().unwrap(),
             state_dir: None,
-            action_registry: ActionRegistry::new(),
             json_service_registry: JsonServiceRegistry::new(),
             json_task_registry: JsonTaskRegistry::new(),
             stack_config,
@@ -522,21 +506,6 @@ impl DaemonBuilder {
         Ok(self)
     }
 
-    /// Register an action
-    pub fn register_action<F, Fut>(
-        mut self,
-        name: impl Into<String>,
-        description: impl Into<String>,
-        action: F,
-    ) -> Result<Self, Error>
-    where
-        F: Fn(Value) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = Result<Value, Error>> + Send + 'static,
-    {
-        self.action_registry
-            .register_simple(name, description, action)?;
-        Ok(self)
-    }
 
     /// Build the daemon
     pub async fn build(self) -> Result<BaseDaemon, Error> {
@@ -578,7 +547,6 @@ impl DaemonBuilder {
         Ok(BaseDaemon {
             service_manager,
             service_registry,
-            action_registry: self.action_registry,
             json_service_registry: self.json_service_registry,
             json_task_registry: self.json_task_registry,
             endpoint: self.endpoint,
@@ -785,53 +753,21 @@ mod tests {
 
     #[smol_potat::test]
     async fn test_daemon_builder() {
-        let daemon = BaseDaemon::builder()
+        let config = StackConfig::default();
+        let daemon = BaseDaemon::builder(config)
             .with_test_mode()
             .with_endpoint("127.0.0.1:8080".parse().unwrap())
-            .register_action("test", "Test action", |params| async move {
-                Ok::<_, Error>(json!({ "echo": params }))
-            })
-            .unwrap()
             .build()
             .await
             .unwrap();
 
         assert_eq!(daemon.endpoint().port(), 8080);
-        assert!(daemon.actions().has_action("test"));
-    }
-
-    #[smol_potat::test]
-    async fn test_action_invocation() {
-        let daemon = BaseDaemon::builder()
-            .with_test_mode()
-            .register_action("echo", "Echo the input", |params| async move {
-                Ok::<_, Error>(json!({ "result": params }))
-            })
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-
-        let result = daemon
-            .invoke_action("echo", json!({ "message": "hello" }))
-            .await
-            .unwrap();
-
-        assert_eq!(result, json!({ "result": { "message": "hello" } }));
     }
 
     #[smol_potat::test]
     async fn test_validation_missing_service_type() {
-        let config = json!({
-            "services": {
-                "test-svc": {
-                    "service_type": "unknown-type",
-                    "dependencies": []
-                }
-            }
-        });
-
-        let result = BaseDaemon::builder().with_test_mode().build().await;
+        let config = StackConfig::default();
+        let result = BaseDaemon::builder(config).with_test_mode().build().await;
 
         assert!(result.is_err());
         if let Err(err) = result {

@@ -8,7 +8,7 @@ use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;

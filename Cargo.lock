@@ -303,6 +303,7 @@ dependencies = [
  "async-channel 2.5.0",
  "async-global-executor",
  "async-std",
+ "cfg-if",
  "futures",
  "smol",
  "smol-potat",

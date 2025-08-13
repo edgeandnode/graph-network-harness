@@ -6,7 +6,8 @@
 
 #![warn(missing_docs)]
 
-pub mod action;
+pub mod base_service;
+pub mod base_task;
 pub mod client;
 pub mod config_traits;
 pub mod daemon;
@@ -18,7 +19,8 @@ pub use error::Error;
 
 /// Convenience prelude for harness-core users
 pub mod prelude {
-    pub use crate::action::{Action, ActionRegistry};
+    pub use crate::base_service::{BaseService, BaseServiceState, ServiceCommand};
+    pub use crate::base_task::{BaseTask, BaseTaskState, TaskContext, TaskContextBuilder};
     pub use crate::client::TestClient;
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::Error;

@@ -45,35 +45,6 @@ impl GraphTestDaemon {
             .wire_task::<TapContractsTask>("tap-contracts-deployment")?
             .wire_task::<SubgraphDeployTask>("subgraph-deployment")?;
 
-        // Register Graph-specific actions on the base daemon
-        builder = builder
-            .register_action(
-                "setup-test-stack",
-                "Set up a complete Graph Protocol test stack",
-                |_params| async move {
-                    info!("Setting up Graph Protocol test stack");
-                    // Note: Actual stack launch happens via launch_stack() method
-                    // This action is a placeholder for WebSocket API compatibility
-                    Ok(json!({
-                        "status": "success",
-                        "message": "To launch stack, call launch_stack() method or use --auto-start CLI flag"
-                    }))
-                },
-            )?
-            .register_action(
-                "health-check-stack",
-                "Check health of all Graph Protocol services",
-                |_params| async move {
-                    info!("Checking health of Graph Protocol stack");
-                    Ok(json!({
-                        "anvil": "healthy",
-                        "ipfs": "healthy",
-                        "postgres": "healthy",
-                        "graph-node": "healthy"
-                    }))
-                },
-            )?;
-
         let base = builder.build().await?;
 
         Ok(Self { base })
@@ -132,16 +103,3 @@ impl Daemon for GraphTestDaemon {
     }
 }
 
-// Implement Action trait to inherit base daemon actions
-#[async_trait]
-impl Action for GraphTestDaemon {
-    fn actions(&self) -> &ActionRegistry {
-        self.base.actions()
-    }
-
-    fn actions_mut(&mut self) -> &mut ActionRegistry {
-        // Note: This requires mutable access to base, which we don't have
-        // In practice, actions would be registered during construction
-        unimplemented!("Actions should be registered during daemon construction")
-    }
-}

@@ -43,6 +43,9 @@ tempfile = { workspace = true }
 smol-potat = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 service-orchestration = { path = "../service-orchestration", features = ["smol"] }
+signal-hook = "0.3"
+libc = "0.2"
+async-io = "2.3"
 
 [[bin]]
 name = "graph-test-daemon"

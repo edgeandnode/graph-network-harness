@@ -24,7 +24,15 @@ pub struct GraphTestDaemon {
 }
 
 impl GraphTestDaemon {
+    /// Create a new Graph Test Daemon from a pre-configured builder
+    /// This allows the caller to control exactly which services and tasks are registered
+    pub async fn from_builder(builder: harness_core::daemon::DaemonBuilder) -> Result<Self, Error> {
+        let base = builder.build().await?;
+        Ok(Self { base })
+    }
+
     /// Create a new Graph Test Daemon from a stack configuration
+    /// This registers all known Graph Protocol services and tasks that exist in the config
     pub async fn from_stack_config(
         endpoint: SocketAddr,
         config: GraphStackConfig,

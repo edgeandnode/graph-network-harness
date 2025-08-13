@@ -16,9 +16,9 @@ services:
         password: graph-password
       image: postgres:14
       env:
-        POSTGRES_USER: graph-node
-        POSTGRES_PASSWORD: graph-password
-        POSTGRES_DB: graph-node
+        POSTGRES_USER: "{user}"
+        POSTGRES_PASSWORD: "{password}"
+        POSTGRES_DB: "{database}"
       ports: [5432]
     health_check:
       command: pg_isready

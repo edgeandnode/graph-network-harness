@@ -17,10 +17,9 @@ services:
     name: echo-service
     target:
       type: process
-      binary: echo
-      args: ["Starting echo service"]
+      params: {}
+      command_template: "echo Starting echo service"
       env: {}
-      working_dir: null
     health_check: null
     dependencies: []
 
@@ -29,10 +28,9 @@ services:
     name: sleep-service
     target:
       type: process
-      binary: sleep
-      args: ["1"]
+      params: {}
+      command_template: "sleep 1"
       env: {}
-      working_dir: null
     health_check: null
     dependencies:
       - service: echo-service
@@ -42,10 +40,9 @@ tasks:
     task_type: graph-contracts-deployment
     target:
       type: process
-      binary: echo
-      args: ["Running test task"]
+      params: {}
+      command_template: "echo Running test task"
       env: {}
-      working_dir: null
     dependencies:
       - service: echo-service
     config: {}

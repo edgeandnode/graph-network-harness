@@ -4,7 +4,8 @@
 
 use service_orchestration::{
     DockerExecutor, HealthCheck, HealthChecker, HealthStatus, LayerConfig, LayeredServiceExecutor,
-    ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
+    ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus,
+    ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -13,7 +14,9 @@ fn test_service_config_yaml_roundtrip() {
     let config = ServiceConfig {
         name: "test-service".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "echo hello world".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "echo hello world".to_string(),
+            },
             env: HashMap::from([
                 ("LOG_LEVEL".to_string(), "debug".to_string()),
                 ("PORT".to_string(), "8080".to_string()),
@@ -130,7 +133,9 @@ fn test_service_target_env_methods() {
     env.insert("TEST_VAR".to_string(), "test_value".to_string());
 
     let target = ServiceTarget::Process {
-        command: ProcessCommand::Legacy { command: "test".to_string() },
+        command: ProcessCommand::Legacy {
+            command: "test".to_string(),
+        },
         env: env.clone(),
         working_dir: None,
     };
@@ -186,7 +191,9 @@ async fn test_service_manager_initialization() {
     let process_config = ServiceConfig {
         name: "test-process".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "echo test".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "echo test".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -251,7 +258,9 @@ fn test_executor_type_detection() {
     let process_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "test".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "test".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -323,7 +332,9 @@ fn test_service_config_env_injection() {
     let config = ServiceConfig {
         name: "test-service".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "test".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "test".to_string(),
+            },
             env: original_env.clone(),
             working_dir: None,
         },

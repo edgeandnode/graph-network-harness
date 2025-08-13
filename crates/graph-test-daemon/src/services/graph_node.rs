@@ -6,12 +6,15 @@ use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, service::{Service, ServiceSetup, ServiceEvents}};
-use harness_macros::{json_actions, json_action};
-use std::result::Result;
+use harness_core::{
+    Error,
+    service::{Service, ServiceEvents, ServiceSetup},
+};
+use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::ServiceConfig;
+use std::result::Result;
 use tracing::info;
 
 /// Graph Node service that can deploy and manage subgraphs
@@ -33,7 +36,7 @@ impl GraphNodeService {
             event_rx,
         }
     }
-    
+
     /// Deploy a new subgraph
     #[json_action]
     pub async fn deploy_subgraph(
@@ -43,63 +46,79 @@ impl GraphNodeService {
         version_label: Option<String>,
     ) -> Result<DeploymentResult, Error> {
         info!("Deploying subgraph {} from IPFS hash {}", name, ipfs_hash);
-        
+
         // In a real implementation, this would call Graph Node's admin API
         let deployment_id = format!("Qm{}_{}", &ipfs_hash[2..10], uuid::Uuid::new_v4());
-        
+
         // Emit events
-        let _ = self.event_tx.send(GraphNodeEvent::DeploymentStarted {
-            deployment_id: deployment_id.clone(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        }).await;
-        
+        let _ = self
+            .event_tx
+            .send(GraphNodeEvent::DeploymentStarted {
+                deployment_id: deployment_id.clone(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            })
+            .await;
+
         // Simulate deployment progress
-        let _ = self.event_tx.send(GraphNodeEvent::DeploymentProgress {
-            deployment_id: deployment_id.clone(),
-            status: "Syncing blocks".to_string(),
-            percent: 50,
-        }).await;
-        
+        let _ = self
+            .event_tx
+            .send(GraphNodeEvent::DeploymentProgress {
+                deployment_id: deployment_id.clone(),
+                status: "Syncing blocks".to_string(),
+                percent: 50,
+            })
+            .await;
+
         let endpoints = vec![
             format!("http://{}:8000/subgraphs/name/{}", self.endpoint, name),
             format!("http://{}:8030/graphql", self.endpoint),
         ];
-        
-        let _ = self.event_tx.send(GraphNodeEvent::DeploymentCompleted {
-            deployment_id: deployment_id.clone(),
-            endpoints: endpoints.clone(),
-        }).await;
-        
+
+        let _ = self
+            .event_tx
+            .send(GraphNodeEvent::DeploymentCompleted {
+                deployment_id: deployment_id.clone(),
+                endpoints: endpoints.clone(),
+            })
+            .await;
+
         Ok(DeploymentResult {
             deployment_id,
             endpoints,
         })
     }
-    
+
     /// Query a deployed subgraph
     #[json_action]
-    pub async fn query_subgraph(&self, subgraph_name: String, query: String) -> Result<serde_json::Value, Error> {
+    pub async fn query_subgraph(
+        &self,
+        subgraph_name: String,
+        query: String,
+    ) -> Result<serde_json::Value, Error> {
         info!("Querying subgraph {} with query: {}", subgraph_name, query);
-        
+
         // In a real implementation, this would send a GraphQL query to the subgraph
         let result = serde_json::json!({
             "data": {
                 "example": "response"
             }
         });
-        
-        let _ = self.event_tx.send(GraphNodeEvent::QueryResult {
-            data: result.clone(),
-        }).await;
-        
+
+        let _ = self
+            .event_tx
+            .send(GraphNodeEvent::QueryResult {
+                data: result.clone(),
+            })
+            .await;
+
         Ok(result)
     }
-    
+
     /// Remove a subgraph deployment
     #[json_action]
     pub async fn remove_subgraph(&self, deployment_id: String) -> Result<bool, Error> {
         info!("Removing subgraph deployment: {}", deployment_id);
-        
+
         // In a real implementation, this would call Graph Node's admin API
         Ok(true)
     }
@@ -189,17 +208,14 @@ impl ServiceEvents for GraphNodeService {
 #[async_trait]
 impl ServiceSetup for GraphNodeService {
     async fn validate_setup(&self) -> Result<(), Error> {
-        info!(
-            "Validating Graph Node setup at endpoint: {}",
-            self.endpoint
-        );
+        info!("Validating Graph Node setup at endpoint: {}", self.endpoint);
 
         // In a real implementation, this would:
         // 1. Check GraphQL endpoint is responding
         // 2. Verify database connection
         // 3. Check IPFS connectivity
         // 4. Ensure Ethereum RPC connection
-        
+
         // For now, assume setup is valid if we can construct the service
         Ok(())
     }

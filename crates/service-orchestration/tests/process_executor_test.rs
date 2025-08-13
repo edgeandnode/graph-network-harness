@@ -1,7 +1,9 @@
 //! Test that ProcessExecutor actually starts processes
 
 use async_runtime_compat::AsyncSpawner;
-use service_orchestration::{ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceTarget};
+use service_orchestration::{
+    ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceTarget,
+};
 use std::collections::HashMap;
 
 #[smol_potat::test]
@@ -14,7 +16,9 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-echo".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "echo hello world".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "echo hello world".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -51,7 +55,9 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-sleep".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "sleep 2".to_string() }, // Sleep for 2 seconds
+            command: ProcessCommand::Legacy {
+                command: "sleep 2".to_string(),
+            }, // Sleep for 2 seconds
             env: HashMap::new(),
             working_dir: None,
         },
@@ -111,7 +117,9 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-env".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "sh -c 'echo TEST_VAR=$TEST_VAR && sleep 1'".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "sh -c 'echo TEST_VAR=$TEST_VAR && sleep 1'".to_string(),
+            },
             env,
             working_dir: None,
         },

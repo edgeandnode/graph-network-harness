@@ -117,7 +117,9 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-echo".to_string(),
         target: ServiceTarget::Process {
-            command: ProcessCommand::Legacy { command: "echo hello from service".to_string() },
+            command: ProcessCommand::Legacy {
+                command: "echo hello from service".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -126,7 +128,9 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     };
 
     // Start the service using launch_service
-    let (_events, running_service) = manager.launch_service("test-echo", config, &spawner).await?;
+    let (_events, running_service) = manager
+        .launch_service("test-echo", config, &spawner)
+        .await?;
 
     // Verify service was started
     assert!(running_service.pid.is_some());

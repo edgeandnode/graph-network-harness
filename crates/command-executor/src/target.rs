@@ -15,7 +15,7 @@ pub enum Target {
     Command,
     /// Managed process
     ManagedProcess(ManagedProcess),
-    // Note: Other target types (Docker, Systemd, etc.) are handled at the 
+    // Note: Other target types (Docker, Systemd, etc.) are handled at the
     // service-orchestration layer or via the layered executor system
 }
 

@@ -280,7 +280,6 @@ impl ServiceManager {
         }
     }
 
-
     /// Get detailed information about a running service
     pub async fn get_service_info(
         &self,

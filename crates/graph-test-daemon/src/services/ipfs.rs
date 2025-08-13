@@ -6,8 +6,11 @@ use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, service::{Service, ServiceEvents, ServiceSetup}};
-use harness_macros::{json_actions, json_action};
+use harness_core::{
+    Error,
+    service::{Service, ServiceEvents, ServiceSetup},
+};
+use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -40,7 +43,7 @@ impl IpfsService {
     #[json_action]
     pub async fn check_status(&self) -> Result<IpfsStatusResult, Error> {
         info!("Checking IPFS status on API port {}", self.api_port);
-        
+
         // In a real implementation, this would call IPFS API
         let status = IpfsStatusResult {
             online: true,
@@ -49,11 +52,14 @@ impl IpfsService {
         };
 
         // Emit event
-        let _ = self.event_tx.send(IpfsEvent::StatusChecked {
-            healthy: status.online,
-            version: "0.15.0".to_string(),
-            peer_count: status.peer_count as u32,
-        }).await;
+        let _ = self
+            .event_tx
+            .send(IpfsEvent::StatusChecked {
+                healthy: status.online,
+                version: "0.15.0".to_string(),
+                peer_count: status.peer_count as u32,
+            })
+            .await;
 
         Ok(status)
     }
@@ -62,13 +68,14 @@ impl IpfsService {
     #[json_action]
     pub async fn pin_hash(&self, hash: String) -> Result<(), Error> {
         info!("Pinning hash {} to IPFS", hash);
-        
+
         // In a real implementation, this would call IPFS pin API
-        
+
         // Emit event
-        let _ = self.event_tx.send(IpfsEvent::Pinned {
-            hash: hash.clone(),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(IpfsEvent::Pinned { hash: hash.clone() })
+            .await;
 
         Ok(())
     }
@@ -77,15 +84,16 @@ impl IpfsService {
     #[json_action]
     pub async fn add_data(&self, data: Vec<u8>) -> Result<String, Error> {
         info!("Adding {} bytes of data to IPFS", data.len());
-        
+
         // In a real implementation, this would call IPFS add API
         // For now, generate a mock hash
         let hash = format!("Qm{}", uuid::Uuid::new_v4().to_string().replace("-", ""));
-        
+
         // Emit event
-        let _ = self.event_tx.send(IpfsEvent::Pinned {
-            hash: hash.clone(),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(IpfsEvent::Pinned { hash: hash.clone() })
+            .await;
 
         Ok(hash)
     }
@@ -94,7 +102,7 @@ impl IpfsService {
     #[json_action]
     pub async fn get_data(&self, hash: String) -> Result<Vec<u8>, Error> {
         info!("Getting data from IPFS hash {}", hash);
-        
+
         // In a real implementation, this would call IPFS cat API
         // For now, return mock data
         Ok(b"mock IPFS data".to_vec())

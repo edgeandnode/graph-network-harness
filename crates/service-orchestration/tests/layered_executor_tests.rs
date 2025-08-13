@@ -97,7 +97,9 @@ async fn test_layered_executor_rejects_non_layered() {
     let config = ServiceConfig {
         name: "test-process".to_string(),
         target: ServiceTarget::Process {
-            command: service_orchestration::ProcessCommand::Legacy { command: "echo hello".to_string() },
+            command: service_orchestration::ProcessCommand::Legacy {
+                command: "echo hello".to_string(),
+            },
             env: HashMap::new(),
             working_dir: None,
         },

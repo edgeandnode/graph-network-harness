@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::base_service::BaseService;
 use crate::Error;
+use crate::base_service::BaseService;
 use std::result::Result;
 
 /// Base task states that track progress
@@ -54,7 +54,7 @@ impl TaskContext {
             shared_state: Arc::new(HashMap::new()),
         }
     }
-    
+
     /// Get a service by name
     pub fn get_service(&self, name: &str) -> Result<Arc<BaseService>, Error> {
         self.services
@@ -62,23 +62,27 @@ impl TaskContext {
             .cloned()
             .ok_or_else(|| Error::service_not_found(name))
     }
-    
+
     /// Get configuration value
     pub fn get_config<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T, Error> {
         self.config
             .get(key)
             .ok_or_else(|| Error::daemon(format!("Config key '{}' not found", key)))
-            .and_then(|v| serde_json::from_value(v.clone())
-                .map_err(|e| Error::daemon(format!("Failed to deserialize config: {}", e))))
+            .and_then(|v| {
+                serde_json::from_value(v.clone())
+                    .map_err(|e| Error::daemon(format!("Failed to deserialize config: {}", e)))
+            })
     }
-    
+
     /// Get shared state value
     pub fn get_state<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<T, Error> {
         self.shared_state
             .get(key)
             .ok_or_else(|| Error::daemon(format!("State key '{}' not found", key)))
-            .and_then(|v| serde_json::from_value(v.clone())
-                .map_err(|e| Error::daemon(format!("Failed to deserialize state: {}", e))))
+            .and_then(|v| {
+                serde_json::from_value(v.clone())
+                    .map_err(|e| Error::daemon(format!("Failed to deserialize state: {}", e)))
+            })
     }
 }
 
@@ -100,7 +104,7 @@ impl BaseTask {
     /// Create a new base task
     pub fn new(name: String, context: TaskContext) -> Self {
         let (tx, rx) = async_channel::unbounded();
-        
+
         Self {
             name,
             state_stream: rx,
@@ -109,22 +113,22 @@ impl BaseTask {
             current_state: BaseTaskState::Idle,
         }
     }
-    
+
     /// Get task name
     pub fn name(&self) -> &str {
         &self.name
     }
-    
+
     /// Get state update stream
     pub fn states(&self) -> &Receiver<BaseTaskState> {
         &self.state_stream
     }
-    
+
     /// Get current state
     pub fn current_state(&self) -> &BaseTaskState {
         &self.current_state
     }
-    
+
     /// Update task state
     pub async fn update_state(&mut self, state: BaseTaskState) -> Result<(), Error> {
         self.current_state = state.clone();
@@ -133,50 +137,56 @@ impl BaseTask {
             .await
             .map_err(|e| Error::daemon(format!("Failed to send state update: {}", e)))
     }
-    
+
     /// Set progress for running state
-    pub async fn set_progress(&mut self, progress: f32, message: impl Into<String>) -> Result<(), Error> {
+    pub async fn set_progress(
+        &mut self,
+        progress: f32,
+        message: impl Into<String>,
+    ) -> Result<(), Error> {
         self.update_state(BaseTaskState::Running {
             progress,
             message: message.into(),
-        }).await
+        })
+        .await
     }
-    
+
     /// Mark task as completed
     pub async fn complete(&mut self) -> Result<(), Error> {
         self.update_state(BaseTaskState::Completed).await
     }
-    
+
     /// Mark task as failed
     pub async fn fail(&mut self, reason: impl Into<String>) -> Result<(), Error> {
-        self.update_state(BaseTaskState::Failed(reason.into())).await
+        self.update_state(BaseTaskState::Failed(reason.into()))
+            .await
     }
-    
+
     /// Get task context
     pub fn context(&self) -> &TaskContext {
         &self.context
     }
-    
+
     /// Get a service from context
     pub fn get_service(&self, name: &str) -> Result<Arc<BaseService>, Error> {
         self.context.get_service(name)
     }
-    
+
     /// Check if task is complete
     pub fn is_complete(&self) -> bool {
         matches!(self.current_state, BaseTaskState::Completed)
     }
-    
+
     /// Check if task failed
     pub fn is_failed(&self) -> bool {
         matches!(self.current_state, BaseTaskState::Failed(_))
     }
-    
+
     /// Check if task is running
     pub fn is_running(&self) -> bool {
         matches!(self.current_state, BaseTaskState::Running { .. })
     }
-    
+
     /// Get progress if running
     pub fn progress(&self) -> Option<f32> {
         match &self.current_state {
@@ -200,19 +210,19 @@ impl TaskContextBuilder {
             config: HashMap::new(),
         }
     }
-    
+
     /// Add a service
     pub fn with_service(mut self, name: impl Into<String>, service: Arc<BaseService>) -> Self {
         self.services.insert(name.into(), service);
         self
     }
-    
+
     /// Add configuration
     pub fn with_config(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         self.config.insert(key.into(), value);
         self
     }
-    
+
     /// Build the context
     pub fn build(self) -> TaskContext {
         TaskContext::new(self.services, self.config)

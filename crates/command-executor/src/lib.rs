@@ -32,7 +32,6 @@ pub use layered::{
 };
 pub use process::{ExitResult, ExitStatus, ProcessHandle};
 pub use target::{
-    AttachedService, AttachedServiceBuilder, ManagedProcess,
-    ManagedProcessBuilder, ManagedService, ManagedServiceBuilder,
-    Target,
+    AttachedService, AttachedServiceBuilder, ManagedProcess, ManagedProcessBuilder, ManagedService,
+    ManagedServiceBuilder, Target,
 };

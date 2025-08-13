@@ -79,7 +79,7 @@ fn test_json_schema_generation() {
     // The #[json_actions] macro generates action types from the service methods
     // We can test that events can generate JSON schemas
     use graph_test_daemon::services::GraphNodeEvent;
-    
+
     let event_schema = schemars::schema_for!(GraphNodeEvent);
 
     // Convert to JSON to verify they're valid

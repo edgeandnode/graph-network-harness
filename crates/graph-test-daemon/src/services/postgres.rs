@@ -6,8 +6,11 @@ use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, service::{Service, ServiceSetup, ServiceEvents}};
-use harness_macros::{json_actions, json_action};
+use harness_core::{
+    Error,
+    service::{Service, ServiceEvents, ServiceSetup},
+};
+use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -35,46 +38,52 @@ impl PostgresService {
             event_rx,
         }
     }
-    
+
     /// Check database status
     #[json_action]
     pub async fn check_status(&self) -> Result<PostgresStatusResult, Error> {
         info!("Checking PostgreSQL status for database '{}'", self.db_name);
-        
+
         // In a real implementation, this would query PostgreSQL
         let result = PostgresStatusResult {
             healthy: true,
             version: "15.0".to_string(),
             connections: 5,
         };
-        
+
         // Emit event
-        let _ = self.event_tx.send(PostgresEvent::StatusChecked {
-            healthy: result.healthy,
-            version: result.version.clone(),
-            connections: result.connections,
-        }).await;
-        
+        let _ = self
+            .event_tx
+            .send(PostgresEvent::StatusChecked {
+                healthy: result.healthy,
+                version: result.version.clone(),
+                connections: result.connections,
+            })
+            .await;
+
         Ok(result)
     }
-    
+
     /// Backup the database
     #[json_action]
     pub async fn backup(&self, backup_path: String) -> Result<BackupResult, Error> {
         info!("Backing up database '{}' to {}", self.db_name, backup_path);
-        
+
         // In a real implementation, this would perform a pg_dump
         let result = BackupResult {
             path: backup_path.clone(),
             size_bytes: 1024000, // Mock size
         };
-        
+
         // Emit event
-        let _ = self.event_tx.send(PostgresEvent::BackupCompleted {
-            path: result.path.clone(),
-            size_bytes: result.size_bytes,
-        }).await;
-        
+        let _ = self
+            .event_tx
+            .send(PostgresEvent::BackupCompleted {
+                path: result.path.clone(),
+                size_bytes: result.size_bytes,
+            })
+            .await;
+
         Ok(result)
     }
 }
@@ -173,7 +182,7 @@ impl ServiceSetup for PostgresService {
         // 3. Required users and permissions are set up
         // 4. All required tables exist
         // 5. Required extensions are installed
-        
+
         // For now, return error to indicate setup is needed
         Err(Error::service_type("PostgreSQL setup not yet complete"))
     }

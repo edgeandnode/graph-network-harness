@@ -537,7 +537,8 @@ mod tests {
             name: "service1".to_string(),
             target: ServiceTarget::Process {
                 command: crate::config::ProcessCommand::Legacy {
-                    command: "sh -c \"while true; do echo 'Service 1 log'; sleep 0.2; done\"".to_string(),
+                    command: "sh -c \"while true; do echo 'Service 1 log'; sleep 0.2; done\""
+                        .to_string(),
                 },
                 env: HashMap::new(),
                 working_dir: None,
@@ -550,7 +551,8 @@ mod tests {
             name: "service2".to_string(),
             target: ServiceTarget::Process {
                 command: crate::config::ProcessCommand::Legacy {
-                    command: "sh -c \"while true; do echo 'Service 2 log'; sleep 0.2; done\"".to_string(),
+                    command: "sh -c \"while true; do echo 'Service 2 log'; sleep 0.2; done\""
+                        .to_string(),
                 },
                 env: HashMap::new(),
                 working_dir: None,

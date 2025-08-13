@@ -2,8 +2,8 @@
 
 use crate::{SpawnHandle, Spawner, SpawnerWithHandle, Task};
 use std::future::Future;
-use std::pin::Pin;
 use std::marker::PhantomData;
+use std::pin::Pin;
 
 /// Spawner for the Smol runtime
 #[derive(Debug, Clone, Copy)]
@@ -17,7 +17,10 @@ impl Spawner for SmolSpawner {
 
 impl SmolSpawner {
     /// Spawn a future and return a handle to it
-    pub fn spawn_with_handle<T>(&self, future: Pin<Box<dyn Future<Output = T> + Send + 'static>>) -> Task<T>
+    pub fn spawn_with_handle<T>(
+        &self,
+        future: Pin<Box<dyn Future<Output = T> + Send + 'static>>,
+    ) -> Task<T>
     where
         T: Send + 'static,
     {

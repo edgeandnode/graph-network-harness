@@ -6,8 +6,11 @@ use async_channel::Receiver;
 use async_trait::async_trait;
 use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
-use harness_core::{Error, service::{Service, ServiceEvents}};
-use harness_macros::{json_actions, json_action};
+use harness_core::{
+    Error,
+    service::{Service, ServiceEvents},
+};
+use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceConfig, ServiceTarget};
@@ -40,7 +43,7 @@ impl AnvilService {
     #[json_action]
     pub async fn mine_blocks(&self, count: u64) -> Result<Vec<String>, Error> {
         info!("Mining {} blocks on chain {}", count, self.chain_id);
-        
+
         // In a real implementation, this would call Anvil's RPC
         // For now, generate mock block hashes
         let mut block_hashes = Vec::new();
@@ -49,10 +52,13 @@ impl AnvilService {
         }
 
         // Emit event
-        let _ = self.event_tx.send(AnvilEvent::BlocksMined {
-            count,
-            latest_block: 100 + count, // Mock block number
-        }).await;
+        let _ = self
+            .event_tx
+            .send(AnvilEvent::BlocksMined {
+                count,
+                latest_block: 100 + count, // Mock block number
+            })
+            .await;
 
         Ok(block_hashes)
     }
@@ -61,14 +67,17 @@ impl AnvilService {
     #[json_action]
     pub async fn set_balance(&self, address: String, balance: String) -> Result<(), Error> {
         info!("Setting balance for {} to {} wei", address, balance);
-        
+
         // In a real implementation, this would call Anvil's RPC
-        
+
         // Emit event
-        let _ = self.event_tx.send(AnvilEvent::BalanceSet {
-            address: address.clone(),
-            balance: balance.clone(),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(AnvilEvent::BalanceSet {
+                address: address.clone(),
+                balance: balance.clone(),
+            })
+            .await;
 
         Ok(())
     }
@@ -77,7 +86,7 @@ impl AnvilService {
     #[json_action]
     pub async fn get_block_number(&self) -> Result<u64, Error> {
         info!("Getting current block number");
-        
+
         // In a real implementation, this would call Anvil's RPC
         Ok(100) // Mock block number
     }
@@ -86,14 +95,17 @@ impl AnvilService {
     #[json_action]
     pub async fn create_snapshot(&self) -> Result<String, Error> {
         info!("Creating blockchain snapshot");
-        
+
         // In a real implementation, this would call Anvil's RPC
         let snapshot_id = format!("snapshot_{}", uuid::Uuid::new_v4());
-        
+
         // Emit event
-        let _ = self.event_tx.send(AnvilEvent::SnapshotCreated {
-            snapshot_id: snapshot_id.clone(),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(AnvilEvent::SnapshotCreated {
+                snapshot_id: snapshot_id.clone(),
+            })
+            .await;
 
         Ok(snapshot_id)
     }
@@ -102,13 +114,16 @@ impl AnvilService {
     #[json_action]
     pub async fn revert_to_snapshot(&self, snapshot_id: String) -> Result<bool, Error> {
         info!("Reverting to snapshot: {}", snapshot_id);
-        
+
         // In a real implementation, this would call Anvil's RPC
-        
+
         // Emit event
-        let _ = self.event_tx.send(AnvilEvent::SnapshotReverted {
-            snapshot_id: snapshot_id.clone(),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(AnvilEvent::SnapshotReverted {
+                snapshot_id: snapshot_id.clone(),
+            })
+            .await;
 
         Ok(true)
     }

@@ -5,12 +5,15 @@
 
 #![cfg(test)]
 
-use harness_macros::{json_actions, json_action};
-use harness_core::{Error, service::{Service, ServiceEvents}};
-use harness_core::action::{JsonAction, JsonActionRegistry, ServiceJsonActions};
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use harness_core::action::{JsonAction, JsonActionRegistry, ServiceJsonActions};
+use harness_core::{
+    service::{Service, ServiceEvents},
+    Error,
+};
+use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::result::Result;
 
 /// A simple test service to verify macro generation
@@ -29,7 +32,7 @@ pub struct TestEvent {
 impl TestService {
     pub fn new() -> Self {
         let (tx, rx) = async_channel::unbounded();
-        Self { 
+        Self {
             value: 42,
             event_tx: tx,
             event_rx: rx,
@@ -39,9 +42,12 @@ impl TestService {
     #[json_action]
     pub async fn add(&self, amount: i32) -> Result<i32, Error> {
         let result = self.value + amount;
-        let _ = self.event_tx.send(TestEvent {
-            message: format!("Added {}, result: {}", amount, result),
-        }).await;
+        let _ = self
+            .event_tx
+            .send(TestEvent {
+                message: format!("Added {}, result: {}", amount, result),
+            })
+            .await;
         Ok(result)
     }
 
@@ -87,27 +93,35 @@ impl ServiceEvents for TestService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[smol_potat::test]
     async fn test_dispatch_json_action() {
         let service = TestService::new();
-        
+
         // Test dispatching add action via JSON
         let input = serde_json::json!({ "amount": 15 });
         let result = service.dispatch_json_action("add", input).await.unwrap();
         assert_eq!(result, 57); // 42 + 15
-        
+
         // Test dispatching multiply action via JSON
         let input = serde_json::json!({ "factor": 2 });
-        let result = service.dispatch_json_action("multiply", input).await.unwrap();
+        let result = service
+            .dispatch_json_action("multiply", input)
+            .await
+            .unwrap();
         assert_eq!(result, 84); // 42 * 2
-        
+
         // Test dispatching get_value action via JSON (empty input)
-        let result = service.dispatch_json_action("get_value", serde_json::json!({})).await.unwrap();
+        let result = service
+            .dispatch_json_action("get_value", serde_json::json!({}))
+            .await
+            .unwrap();
         assert_eq!(result, 42);
-        
+
         // Test unknown action
-        let result = service.dispatch_json_action("unknown", serde_json::json!({})).await;
+        let result = service
+            .dispatch_json_action("unknown", serde_json::json!({}))
+            .await;
         assert!(result.is_err());
     }
 
@@ -130,7 +144,7 @@ mod tests {
     fn test_service_registration() {
         let mut registry = JsonActionRegistry::new();
         TestService::register_actions(&mut registry).unwrap();
-        
+
         let action_names = registry.action_names();
         assert!(action_names.contains(&"add".to_string()));
         assert!(action_names.contains(&"multiply".to_string()));
@@ -140,17 +154,17 @@ mod tests {
     #[smol_potat::test]
     async fn test_action_execution() {
         let service = TestService::new();
-        
+
         // Test add action
         let add_action = AddAction { amount: 10 };
         let result = add_action.execute(&service).await.unwrap();
         assert_eq!(result, 52); // 42 + 10
-        
+
         // Test multiply action
         let multiply_action = MultiplyAction { factor: 3 };
         let result = multiply_action.execute(&service).await.unwrap();
         assert_eq!(result, 126); // 42 * 3
-        
+
         // Test get_value action
         let get_action = GetValueAction {};
         let result = get_action.execute(&service).await.unwrap();
@@ -160,11 +174,11 @@ mod tests {
     #[smol_potat::test]
     async fn test_event_emission() {
         let service = TestService::new();
-        
+
         // Execute add action which emits an event
         let add_action = AddAction { amount: 10 };
         let _ = add_action.execute(&service).await.unwrap();
-        
+
         // Check that event was emitted
         let event = service.event_stream().recv().await.unwrap();
         assert_eq!(event.message, "Added 10, result: 52");
@@ -175,7 +189,7 @@ mod tests {
         let action = AddAction { amount: 25 };
         let json = serde_json::to_string(&action).unwrap();
         assert_eq!(json, r#"{"amount":25}"#);
-        
+
         let deserialized: AddAction = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.amount, 25);
     }

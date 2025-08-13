@@ -74,7 +74,6 @@ pub use OrchestrationError as Error;
 #[derive(thiserror::Error, Debug)]
 pub enum OrchestrationError {
     // Registry errors removed - no longer using service-registry
-
     /// Command executor errors  
     #[error("Command execution error: {0}")]
     CommandExecutor(#[from] command_executor::Error),

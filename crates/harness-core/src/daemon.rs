@@ -3,7 +3,7 @@
 //! This module provides the `Daemon` trait and `BaseDaemon` implementation
 //! that serves as the foundation for domain-specific daemons.
 
-use async_runtime_compat::{prelude::*, Task, AsyncSpawner};
+use async_runtime_compat::{AsyncSpawner, Task, prelude::*};
 use async_trait::async_trait;
 use serde_json::Value;
 use service_orchestration::{
@@ -17,7 +17,7 @@ use tracing::{info, warn};
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
 use crate::service::{JsonService, JsonServiceRegistry, Service};
 use crate::task::{DeploymentTask, JsonTaskRegistry};
-use crate::websocket_dispatch::{WebSocketServer};
+use crate::websocket_dispatch::WebSocketServer;
 use crate::{Error, ServiceManager};
 use service_orchestration::TaskConfig;
 use std::result::Result;
@@ -36,7 +36,6 @@ pub trait Daemon: Send + Sync {
 
     /// Get the service manager
     fn service_manager(&self) -> &ServiceManager;
-
 }
 
 /// Base daemon implementation that provides core functionality
@@ -74,7 +73,6 @@ impl BaseDaemon {
     pub fn service_manager(&self) -> &ServiceManager {
         &self.service_manager
     }
-
 
     /// Get the endpoint
     pub fn endpoint(&self) -> SocketAddr {
@@ -260,7 +258,6 @@ impl BaseDaemon {
     }
 }
 
-
 #[async_trait]
 impl Daemon for BaseDaemon {
     async fn start(&self) -> Result<(), Error> {
@@ -273,7 +270,7 @@ impl Daemon for BaseDaemon {
         // Start WebSocket server
         let ws_server = WebSocketServer::new(self.json_service_registry.clone(), self.endpoint);
         let shutdown_tx = ws_server.shutdown_handle();
-        
+
         // Spawn the WebSocket server
         let spawner = AsyncSpawner::new();
         let handle = spawner.spawn_with_handle(Box::pin(async move {
@@ -281,7 +278,7 @@ impl Daemon for BaseDaemon {
                 tracing::error!("WebSocket server error: {}", e);
             }
         }));
-        
+
         // Store the handle and shutdown channel
         *self.ws_server_handle.lock().await = Some(handle);
         *self.ws_shutdown_tx.lock().await = Some(shutdown_tx);
@@ -301,7 +298,7 @@ impl Daemon for BaseDaemon {
         if let Some(shutdown_tx) = self.ws_shutdown_tx.lock().await.take() {
             let _ = shutdown_tx.send(()).await;
         }
-        
+
         // Wait for the server to stop
         if let Some(handle) = self.ws_server_handle.lock().await.take() {
             handle.await;
@@ -318,7 +315,6 @@ impl Daemon for BaseDaemon {
     fn service_manager(&self) -> &ServiceManager {
         &self.service_manager
     }
-
 }
 
 /// Builder for creating daemon instances
@@ -373,10 +369,7 @@ impl DaemonBuilder {
         service: Box<dyn JsonService>,
     ) -> Result<&mut Self, Error> {
         // Log the service registration
-        tracing::info!(
-            "Registering service '{}'",
-            instance_name
-        );
+        tracing::info!("Registering service '{}'", instance_name);
 
         // Register with the JSON service registry
         self.json_service_registry
@@ -392,20 +385,29 @@ impl DaemonBuilder {
         config: &ServiceConfig,
     ) -> Result<&mut Self, Error>
     where
-        S: Service + ServiceFromConfig + crate::action::ServiceJsonActions + crate::service::HasDispatchJson + 'static,
+        S: Service
+            + ServiceFromConfig
+            + crate::action::ServiceJsonActions
+            + crate::service::HasDispatchJson
+            + 'static,
     {
         // Create the service from config
         let service = S::from_config(config)?;
 
         // Register it using the automatic wrapping
-        self.json_service_registry.register(instance_name, service)?;
+        self.json_service_registry
+            .register(instance_name, service)?;
         Ok(self)
     }
 
     /// Wire up all services of a given type from the stored configuration
     pub fn wire_service<S>(&mut self, service_type: &str) -> Result<&mut Self, Error>
     where
-        S: Service + ServiceFromConfig + crate::action::ServiceJsonActions + crate::service::HasDispatchJson + 'static,
+        S: Service
+            + ServiceFromConfig
+            + crate::action::ServiceJsonActions
+            + crate::service::HasDispatchJson
+            + 'static,
     {
         let config = &self.stack_config;
 
@@ -441,9 +443,10 @@ impl DaemonBuilder {
 
             // Create the service from config
             let service = S::from_config(&service_config)?;
-            
+
             // Register it using the automatic wrapping
-            self.json_service_registry.register(instance_name, service)?;
+            self.json_service_registry
+                .register(instance_name, service)?;
         }
 
         Ok(self)
@@ -512,7 +515,6 @@ impl DaemonBuilder {
         Ok(self)
     }
 
-
     /// Build the daemon
     pub async fn build(self) -> Result<BaseDaemon, Error> {
         info!("Building daemon with endpoint {}", self.endpoint);
@@ -569,7 +571,6 @@ impl DaemonBuilder {
             config.services.len()
         );
         for (name, service_config) in &config.services {
-
             // Validate dependencies using the strongly-typed Dependency enum
             for dep in &service_config.orchestration.dependencies {
                 match dep {
@@ -594,7 +595,6 @@ impl DaemonBuilder {
         // Validate task dependencies
         info!("Validating {} task configurations", config.tasks.len());
         for (name, task_config) in &config.tasks {
-
             // Validate dependencies using the strongly-typed Dependency enum
             for dep in &task_config.dependencies {
                 match dep {
@@ -716,19 +716,25 @@ mod tests {
             &self,
             action: &str,
             _input: serde_json::Value,
-        ) -> Result<(async_channel::Receiver<serde_json::Value>, std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>), Error> {
+        ) -> Result<
+            (
+                async_channel::Receiver<serde_json::Value>,
+                std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+            ),
+            Error,
+        > {
             if action != "test_action" {
                 return Err(Error::service_type(format!("Unknown action: {}", action)));
             }
-            
+
             let (tx, rx) = async_channel::bounded(1);
             self.dispatch_test_action(TestAction).await?;
-            
+
             // Create a future that sends the result
             let future = async move {
                 let _ = tx.send(serde_json::json!({})).await;
             };
-            
+
             Ok((rx, Box::pin(future)))
         }
 
@@ -817,17 +823,15 @@ mod tests {
         };
         let mut builder = BaseDaemon::builder(config);
         builder
-            .register_json_service("test-instance".to_string(), Box::new(TestService::default()))
+            .register_json_service(
+                "test-instance".to_string(),
+                Box::new(TestService::default()),
+            )
             .unwrap();
 
         let daemon = builder.with_test_mode().build().await.unwrap();
 
-        assert!(
-            daemon
-                .json_service_registry
-                .get("test-instance")
-                .is_some()
-        );
+        assert!(daemon.json_service_registry.get("test-instance").is_some());
     }
 
     #[smol_potat::test]

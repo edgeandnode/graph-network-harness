@@ -10,9 +10,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::Error;
@@ -94,7 +94,7 @@ impl ServiceState {
 ///
 /// Services implementing this trait can perform initialization tasks
 /// such as contract deployment, configuration generation, or state setup.
-/// 
+///
 /// The framework ensures idempotency by calling validate_setup() before
 /// perform_setup(). Setup is only performed if validation fails.
 #[async_trait]
@@ -102,7 +102,7 @@ pub trait ServiceSetup: Service {
     /// Validate that setup is complete and correct.
     ///
     /// This method is called by the framework BEFORE perform_setup() to check
-    /// if setup is already done (idempotency check). 
+    /// if setup is already done (idempotency check).
     ///
     /// Returns Ok(()) if setup is complete and valid - perform_setup() will be skipped.
     /// Returns an error if setup is incomplete or invalid - perform_setup() will be called.
@@ -225,12 +225,12 @@ pub trait JsonService: Send + Sync {
     fn has_setup(&self) -> bool {
         false
     }
-    
+
     /// Check if this service implements ServiceEvents
     fn has_events(&self) -> bool {
         false
     }
-    
+
     /// Get the event schema if this service emits events
     fn event_schema(&self) -> Option<Value> {
         None
@@ -238,17 +238,21 @@ pub trait JsonService: Send + Sync {
 
     /// Validate setup if this service implements ServiceSetup
     async fn validate_setup(&self) -> Result<(), Error> {
-        Err(Error::service_type("Service does not implement ServiceSetup"))
+        Err(Error::service_type(
+            "Service does not implement ServiceSetup",
+        ))
     }
 
     /// Perform setup if this service implements ServiceSetup
     async fn perform_setup(&self) -> Result<(), Error> {
-        Err(Error::service_type("Service does not implement ServiceSetup"))
+        Err(Error::service_type(
+            "Service does not implement ServiceSetup",
+        ))
     }
 }
 
 /// Adapter that wraps services with JSON actions into JsonService
-/// 
+///
 /// This adapter is generic over the service type and calls dispatch_json_action
 /// directly without needing a function pointer.
 pub struct JsonServiceAdapter<S> {
@@ -264,10 +268,10 @@ where
     pub fn new(service: S) -> Result<Self, Error> {
         let service = Arc::new(service);
         let mut registry = crate::action::JsonActionRegistry::new();
-        
+
         // Register the service's actions
         S::register_actions(&mut registry)?;
-        
+
         Ok(Self { service, registry })
     }
 }
@@ -277,11 +281,7 @@ where
 #[async_trait]
 pub trait HasDispatchJson: Send + Sync {
     /// Dispatch a JSON action to this service
-    async fn dispatch_json_action(
-        &self,
-        action_name: &str,
-        input: Value,
-    ) -> Result<Value, Error>;
+    async fn dispatch_json_action(&self, action_name: &str, input: Value) -> Result<Value, Error>;
 }
 
 #[async_trait]
@@ -292,26 +292,32 @@ where
     fn name(&self) -> &str {
         self.service.name()
     }
-    
+
     fn description(&self) -> &str {
         self.service.description()
     }
-    
+
     fn available_actions(&self) -> Vec<ActionDescriptor> {
-        self.registry.action_names().iter().map(|name| {
-            let (input_schema, response_schema) = self.registry.get_schema(name)
-                .cloned()
-                .unwrap_or((Value::Null, Value::Null));
-            
-            ActionDescriptor {
-                name: name.clone(),
-                description: self.service.description().to_string(),
-                input_schema,
-                event_schema: response_schema,
-            }
-        }).collect()
+        self.registry
+            .action_names()
+            .iter()
+            .map(|name| {
+                let (input_schema, response_schema) = self
+                    .registry
+                    .get_schema(name)
+                    .cloned()
+                    .unwrap_or((Value::Null, Value::Null));
+
+                ActionDescriptor {
+                    name: name.clone(),
+                    description: self.service.description().to_string(),
+                    input_schema,
+                    event_schema: response_schema,
+                }
+            })
+            .collect()
     }
-    
+
     async fn dispatch_json(
         &self,
         action_name: &str,
@@ -319,11 +325,11 @@ where
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
         // Create a channel for the response
         let (tx, rx) = async_channel::bounded(1);
-        
+
         // Call dispatch_json_action directly on the service
         let service = self.service.clone();
         let action_name = action_name.to_string();
-        
+
         let dispatcher = async move {
             match service.dispatch_json_action(&action_name, input).await {
                 Ok(result) => {
@@ -338,10 +344,10 @@ where
                 }
             }
         };
-        
+
         Ok((rx, Box::pin(dispatcher)))
     }
-    
+
     // Note: ServiceSetup detection would require additional trait bounds
     // For now, services that implement ServiceSetup should provide their own JsonService wrapper
     // that properly implements has_setup(), validate_setup(), and perform_setup()
@@ -365,7 +371,7 @@ impl JsonServiceRegistry {
             service_types: HashSet::new(),
         }
     }
-    
+
     /// Register a service with automatic JSON wrapping
     ///
     /// This method automatically wraps the service in a JsonServiceAdapter
@@ -428,7 +434,7 @@ impl JsonServiceRegistry {
             })
             .collect()
     }
-    
+
     /// Get all service type identifiers
     pub fn list_types(&self) -> Vec<&str> {
         self.service_types.iter().map(|s| s.as_str()).collect()
@@ -485,11 +491,12 @@ mod tests {
                 *val += amount;
                 *val
             }; // Drop the lock before await
-            
-            self.event_tx.send(TestEvent {
-                value: new_val,
-            }).await.unwrap();
-            
+
+            self.event_tx
+                .send(TestEvent { value: new_val })
+                .await
+                .unwrap();
+
             Ok(new_val)
         }
     }

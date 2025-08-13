@@ -6,8 +6,8 @@
 
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 
 use crate::Error;
@@ -56,23 +56,24 @@ impl JsonActionRegistry {
         S: 'static,
     {
         let name = A::action_name().to_string();
-        
+
         if self.action_names.contains(&name) {
             return Err(Error::service_type(format!(
                 "Action '{}' already registered",
                 name
             )));
         }
-        
+
         // Generate and store schemas
-        let input_schema = serde_json::to_value(schemars::schema_for!(A))
-            .unwrap_or(serde_json::Value::Null);
+        let input_schema =
+            serde_json::to_value(schemars::schema_for!(A)).unwrap_or(serde_json::Value::Null);
         let response_schema = serde_json::to_value(schemars::schema_for!(A::Response))
             .unwrap_or(serde_json::Value::Null);
-        
+
         self.action_names.push(name.clone());
-        self.action_schemas.insert(name, (input_schema, response_schema));
-        
+        self.action_schemas
+            .insert(name, (input_schema, response_schema));
+
         Ok(())
     }
 

@@ -105,6 +105,4 @@ impl Daemon for GraphTestDaemon {
     fn service_manager(&self) -> &ServiceManager {
         self.base.service_manager()
     }
-
 }
-

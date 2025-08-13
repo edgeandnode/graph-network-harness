@@ -191,22 +191,21 @@ pub async fn ensure_container_running() -> Result<()> {
     let image_check = std::process::Command::new("docker")
         .args(["images", "-q", image_name])
         .output()?;
-    
+
     if image_check.stdout.is_empty() {
         eprintln!("Docker image {} not found, building...", image_name);
-        
+
         // Get the dockerfile directory
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
-        let docker_dir = std::path::PathBuf::from(manifest_dir)
-            .join("tests/docker-test-env");
-        
+        let docker_dir = std::path::PathBuf::from(manifest_dir).join("tests/docker-test-env");
+
         // Build the image
         let build_output = std::process::Command::new("docker")
             .args(["build", "-t", image_name, "."])
             .current_dir(&docker_dir)
             .output()
             .context("Failed to build Docker image")?;
-        
+
         if !build_output.status.success() {
             let stderr = String::from_utf8_lossy(&build_output.stderr);
             anyhow::bail!("Docker build failed: {}", stderr);
@@ -218,29 +217,44 @@ pub async fn ensure_container_running() -> Result<()> {
 
     // Get SSH keys directory
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
-    let ssh_keys_dir = std::path::PathBuf::from(manifest_dir)
-        .join("tests/docker-test-env/ssh-keys");
+    let ssh_keys_dir =
+        std::path::PathBuf::from(manifest_dir).join("tests/docker-test-env/ssh-keys");
 
     // Start the container
     eprintln!("Starting container {}...", CONTAINER_NAME);
     let run_output = std::process::Command::new("docker")
         .args([
-            "run", "-d",
-            "--name", CONTAINER_NAME,
+            "run",
+            "-d",
+            "--name",
+            CONTAINER_NAME,
             "--privileged",
             "--cgroupns=host",
-            "-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-            "-p", "2222:22",
-            "-p", "5432:5432",
-            "-p", "5001:5001",
-            "-p", "8080:8080",
-            "-p", "8545:8545",
-            "-p", "8000:8000",
-            "-p", "8001:8001",
-            "-p", "8020:8020",
-            "-p", "8040:8040",
-            "-v", &format!("{}:/home/testuser/.ssh/authorized_keys:ro", 
-                ssh_keys_dir.join("authorized_keys").display()),
+            "-v",
+            "/sys/fs/cgroup:/sys/fs/cgroup:rw",
+            "-p",
+            "2222:22",
+            "-p",
+            "5432:5432",
+            "-p",
+            "5001:5001",
+            "-p",
+            "8080:8080",
+            "-p",
+            "8545:8545",
+            "-p",
+            "8000:8000",
+            "-p",
+            "8001:8001",
+            "-p",
+            "8020:8020",
+            "-p",
+            "8040:8040",
+            "-v",
+            &format!(
+                "{}:/home/testuser/.ssh/authorized_keys:ro",
+                ssh_keys_dir.join("authorized_keys").display()
+            ),
             image_name,
         ])
         .output()
@@ -264,8 +278,8 @@ pub async fn ensure_container_running() -> Result<()> {
 }
 
 async fn wait_for_ssh_ready() -> Result<()> {
-    use std::time::Duration;
     use async_io::Timer;
+    use std::time::Duration;
 
     let max_attempts = 30;
 
@@ -279,7 +293,7 @@ async fn wait_for_ssh_ready() -> Result<()> {
         if let Ok(output) = output {
             if output.status.success() {
                 eprintln!("SSH is ready on port 2222");
-                
+
                 // Give SSH a moment to fully initialize
                 Timer::after(Duration::from_secs(1)).await;
                 return Ok(());

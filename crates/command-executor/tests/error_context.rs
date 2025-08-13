@@ -58,7 +58,7 @@ async fn test_ssh_error_context() {
 }
 */
 
-// Docker container target has been removed - use layered executor or 
+// Docker container target has been removed - use layered executor or
 // service-orchestration's ServiceTarget::Docker instead
 
 // SSH and Docker functionality moved to layered system - use LayeredExecutor instead

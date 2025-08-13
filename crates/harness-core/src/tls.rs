@@ -8,8 +8,8 @@ use std::path::Path;
 use std::result::Result;
 use std::sync::Arc;
 
-use rustls::{ClientConfig, ServerConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
 #[derive(Clone)]
@@ -87,8 +87,9 @@ impl TlsServerConfig {
         use rcgen::generate_simple_self_signed;
 
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
-        let cert = generate_simple_self_signed(subject_alt_names)
-            .map_err(|e| Error::service_type(format!("Failed to generate self-signed cert: {}", e)))?;
+        let cert = generate_simple_self_signed(subject_alt_names).map_err(|e| {
+            Error::service_type(format!("Failed to generate self-signed cert: {}", e))
+        })?;
 
         let cert_der = cert.cert.der().to_vec();
         let key_der = cert.key_pair.serialize_der();
@@ -125,11 +126,11 @@ impl TlsClientConfig {
     /// Create TLS client configuration that accepts self-signed certificates (for testing)
     #[cfg(test)]
     pub fn dangerous_accept_any_cert() -> Result<Self, Error> {
+        use rustls::DigitallySignedStruct;
         use rustls::client::danger::{
             HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
         };
         use rustls::pki_types::{ServerName, UnixTime};
-        use rustls::DigitallySignedStruct;
 
         #[derive(Debug)]
         struct DangerousAcceptAnyVerifier;

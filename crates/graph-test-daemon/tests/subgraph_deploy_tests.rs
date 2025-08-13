@@ -1,5 +1,5 @@
 //! Tests for SubgraphDeployTask
-//! 
+//!
 //! NOTE: These tests are temporarily disabled as they use the old task-based architecture
 //! that's being replaced with the new service-based architecture.
 

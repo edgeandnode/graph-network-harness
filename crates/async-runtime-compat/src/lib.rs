@@ -28,11 +28,11 @@
 
 use cfg_if::cfg_if;
 use std::future::Future;
-use std::pin::Pin;
 use std::marker::PhantomData;
+use std::pin::Pin;
 
 /// Opaque task handle that can be used to cancel or await a spawned future
-/// 
+///
 /// This type wraps runtime-specific task handles to provide a unified interface.
 pub struct Task<T> {
     #[doc(hidden)]
@@ -52,33 +52,30 @@ impl<T> Task<T> {
             #[cfg(feature = "smol")]
             InnerTask::Smol(task) => drop(task), // Dropping cancels in smol
             #[allow(unreachable_patterns)]
-            _ => {},
+            _ => {}
         }
     }
 }
 
 impl<T> Future for Task<T> {
     type Output = Option<T>;
-    
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
         match &mut this.inner {
             #[cfg(feature = "tokio")]
-            InnerTask::Tokio(handle) => {
-                match Pin::new(handle).poll(cx) {
-                    std::task::Poll::Ready(Ok(val)) => std::task::Poll::Ready(Some(val)),
-                    std::task::Poll::Ready(Err(_)) => std::task::Poll::Ready(None),
-                    std::task::Poll::Pending => std::task::Poll::Pending,
-                }
-            }
+            InnerTask::Tokio(handle) => match Pin::new(handle).poll(cx) {
+                std::task::Poll::Ready(Ok(val)) => std::task::Poll::Ready(Some(val)),
+                std::task::Poll::Ready(Err(_)) => std::task::Poll::Ready(None),
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            },
             #[cfg(feature = "async-std")]
-            InnerTask::AsyncStd(handle) => {
-                Pin::new(handle).poll(cx).map(Some)
-            }
+            InnerTask::AsyncStd(handle) => Pin::new(handle).poll(cx).map(Some),
             #[cfg(feature = "smol")]
-            InnerTask::Smol(task) => {
-                Pin::new(task).poll(cx).map(Some)
-            }
+            InnerTask::Smol(task) => Pin::new(task).poll(cx).map(Some),
             #[allow(unreachable_patterns)]
             _ => std::task::Poll::Ready(None),
         }
@@ -172,7 +169,10 @@ impl Spawner for AsyncSpawner {
 
 impl AsyncSpawner {
     /// Spawn a future and return a handle to it
-    pub fn spawn_with_handle<T>(&self, future: Pin<Box<dyn Future<Output = T> + Send + 'static>>) -> Task<T>
+    pub fn spawn_with_handle<T>(
+        &self,
+        future: Pin<Box<dyn Future<Output = T> + Send + 'static>>,
+    ) -> Task<T>
     where
         T: Send + 'static,
     {

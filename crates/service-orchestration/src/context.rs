@@ -72,10 +72,7 @@ impl OrchestrationContext {
     /// Create a context with a specific spawner
     ///
     /// This is useful for testing or when you need explicit control over the runtime.
-    pub fn with_spawner(
-        config: StackConfig,
-        spawner: Arc<dyn Spawner>,
-    ) -> Self {
+    pub fn with_spawner(config: StackConfig, spawner: Arc<dyn Spawner>) -> Self {
         Self {
             spawner,
             config: Arc::new(config),
@@ -98,7 +95,6 @@ impl OrchestrationContext {
     pub fn config(&self) -> &StackConfig {
         &self.config
     }
-
 
     /// Get a reference to the executor registry
     pub fn executors(&self) -> &ExecutorRegistry {

@@ -21,21 +21,30 @@ async fn test_daemon_creation() -> anyhow::Result<()> {
     // Load configuration from YAML file
     let config_content = std::fs::read_to_string(config_path)?;
     let config: StackConfig = serde_yaml::from_str(&config_content)?;
-    
+
     // Create the daemon using builder to only register services that exist
     let mut builder = BaseDaemon::builder(config.clone()).with_endpoint(endpoint);
-    
+
     // Register services that exist in the config
     for (_, service) in &config.services {
         match service.service_type.as_str() {
-            "graph-node" => { builder.wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?; }
-            "anvil" => { builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?; }
-            "postgres" => { builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?; }
-            "ipfs" => { builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?; }
+            "graph-node" => {
+                builder
+                    .wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?;
+            }
+            "anvil" => {
+                builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+            }
+            "postgres" => {
+                builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
+            }
+            "ipfs" => {
+                builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?;
+            }
             _ => {} // Skip unknown service types
         }
     }
-    
+
     let daemon = GraphTestDaemon::from_builder(builder).await?;
 
     // Start the daemon
@@ -69,21 +78,30 @@ async fn test_launch_stack_method_exists() -> anyhow::Result<()> {
     // Load configuration from YAML file
     let config_content = std::fs::read_to_string(config_path)?;
     let config: StackConfig = serde_yaml::from_str(&config_content)?;
-    
+
     // Create the daemon using builder to only register services that exist
     let mut builder = BaseDaemon::builder(config.clone()).with_endpoint(endpoint);
-    
+
     // Register services that exist in the config
     for (_, service) in &config.services {
         match service.service_type.as_str() {
-            "graph-node" => { builder.wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?; }
-            "anvil" => { builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?; }
-            "postgres" => { builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?; }
-            "ipfs" => { builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?; }
+            "graph-node" => {
+                builder
+                    .wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?;
+            }
+            "anvil" => {
+                builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+            }
+            "postgres" => {
+                builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
+            }
+            "ipfs" => {
+                builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?;
+            }
             _ => {} // Skip unknown service types
         }
     }
-    
+
     let daemon = GraphTestDaemon::from_builder(builder).await?;
 
     // The method should exist and be callable

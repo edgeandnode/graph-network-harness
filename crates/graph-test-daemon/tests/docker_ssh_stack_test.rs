@@ -19,7 +19,8 @@ async fn test_graph_stack_via_ssh_docker() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     // Ensure the shared container is running
-    common::shared_container::ensure_container_running().await
+    common::shared_container::ensure_container_running()
+        .await
         .context("Failed to ensure container is running")?;
 
     // Load the YAML configuration
@@ -33,20 +34,20 @@ async fn test_graph_stack_via_ssh_docker() -> Result<()> {
     info!("Loading configuration from: {:?}", config_path);
 
     // Load configuration from YAML file
-    let config_content = std::fs::read_to_string(&config_path)
-        .context("Failed to read config file")?;
-    
-    let config: StackConfig = serde_yaml::from_str(&config_content)
-        .context("Failed to parse config YAML")?;
+    let config_content =
+        std::fs::read_to_string(&config_path).context("Failed to read config file")?;
+
+    let config: StackConfig =
+        serde_yaml::from_str(&config_content).context("Failed to parse config YAML")?;
 
     // Create the daemon with configuration
     // Since this test only has anvil service, use the builder to register only what we need
     let endpoint: SocketAddr = "127.0.0.1:9444".parse()?;
     let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
-    
+
     // Only register anvil service since that's all we have in the test config
     builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
-    
+
     let daemon = GraphTestDaemon::from_builder(builder)
         .await
         .context("Failed to create GraphTestDaemon")?;
@@ -93,7 +94,8 @@ async fn test_graph_stack_with_postgres() -> Result<()> {
     let _ = tracing_subscriber::fmt::try_init();
 
     // Ensure the shared container is running
-    common::shared_container::ensure_container_running().await
+    common::shared_container::ensure_container_running()
+        .await
         .context("Failed to ensure container is running")?;
 
     // This test could use a different config that includes postgres

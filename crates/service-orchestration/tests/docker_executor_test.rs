@@ -42,7 +42,7 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
 
     // Create spawner
     let spawner = AsyncSpawner::new();
-    
+
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;
 
@@ -86,7 +86,7 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
 
     // Create spawner
     let spawner = AsyncSpawner::new();
-    
+
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;
 
@@ -171,7 +171,7 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
 
     // Create spawner
     let spawner = AsyncSpawner::new();
-    
+
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;
 

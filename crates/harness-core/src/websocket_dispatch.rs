@@ -4,19 +4,19 @@
 //! It routes incoming JSON action requests to the appropriate services
 //! and streams back responses.
 
+use async_channel::Receiver;
+use async_net::{TcpListener, TcpStream};
 use async_trait::async_trait;
+use async_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
+use futures::{FutureExt, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use async_channel::Receiver;
-use async_net::{TcpListener, TcpStream};
-use async_tungstenite::{accept_async, tungstenite::Message, WebSocketStream};
-use futures::{SinkExt, StreamExt, FutureExt};
 use tracing::{error, info, warn};
 
-use crate::service::JsonServiceRegistry;
-use crate::tls::{TlsServerConfig, TlsAcceptor};
 use crate::Error;
+use crate::service::JsonServiceRegistry;
+use crate::tls::{TlsAcceptor, TlsServerConfig};
 use std::result::Result;
 
 /// JSON-RPC style request for service actions
@@ -73,17 +73,20 @@ pub enum WebSocketMessage {
     /// List available actions for a service
     ListActions { service: String },
     /// Response to ListActions
-    Actions { service: String, actions: Vec<ActionInfo> },
+    Actions {
+        service: String,
+        actions: Vec<ActionInfo>,
+    },
     /// Validate if setup is complete for a service
     ValidateSetup { service: String },
     /// Perform setup for a service
     PerformSetup { service: String },
     /// Response to setup operations
-    SetupStatus { 
-        service: String, 
-        valid: bool, 
+    SetupStatus {
+        service: String,
+        valid: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
-        error: Option<String> 
+        error: Option<String>,
     },
 }
 
@@ -128,16 +131,15 @@ impl WebSocketDispatcher {
     pub fn new(registry: Arc<JsonServiceRegistry>) -> Self {
         Self { registry }
     }
-    
+
     /// Handle an incoming WebSocket message
-    pub async fn handle_message(&self, message: WebSocketMessage) -> Result<Vec<WebSocketMessage>, Error> {
+    pub async fn handle_message(
+        &self,
+        message: WebSocketMessage,
+    ) -> Result<Vec<WebSocketMessage>, Error> {
         match message {
-            WebSocketMessage::Request(request) => {
-                self.handle_action_request(request).await
-            }
-            WebSocketMessage::ListServices => {
-                Ok(vec![self.handle_list_services()])
-            }
+            WebSocketMessage::Request(request) => self.handle_action_request(request).await,
+            WebSocketMessage::ListServices => Ok(vec![self.handle_list_services()]),
             WebSocketMessage::ListActions { service } => {
                 Ok(vec![self.handle_list_actions(&service)?])
             }
@@ -153,13 +155,20 @@ impl WebSocketDispatcher {
             }
         }
     }
-    
+
     /// Handle an action request
-    async fn handle_action_request(&self, request: ActionRequest) -> Result<Vec<WebSocketMessage>, Error> {
+    async fn handle_action_request(
+        &self,
+        request: ActionRequest,
+    ) -> Result<Vec<WebSocketMessage>, Error> {
         let mut messages = Vec::new();
-        
+
         // Dispatch the action
-        match self.registry.dispatch(&request.service, &request.action, request.params.clone()).await {
+        match self
+            .registry
+            .dispatch(&request.service, &request.action, request.params.clone())
+            .await
+        {
             Ok((result_rx, _converter)) => {
                 // Wait for the result
                 match result_rx.recv().await {
@@ -187,13 +196,15 @@ impl WebSocketDispatcher {
                 }));
             }
         }
-        
+
         Ok(messages)
     }
-    
+
     /// Handle list services request
     fn handle_list_services(&self) -> WebSocketMessage {
-        let services: Vec<ServiceInfo> = self.registry.list()
+        let services: Vec<ServiceInfo> = self
+            .registry
+            .list()
             .into_iter()
             .map(|(name, service)| ServiceInfo {
                 name: name.to_string(),
@@ -204,16 +215,19 @@ impl WebSocketDispatcher {
                 event_schema: service.event_schema(),
             })
             .collect();
-        
+
         WebSocketMessage::Services { services }
     }
-    
+
     /// Handle list actions request
     fn handle_list_actions(&self, service_name: &str) -> Result<WebSocketMessage, Error> {
-        let service = self.registry.get(service_name)
+        let service = self
+            .registry
+            .get(service_name)
             .ok_or_else(|| Error::service_type(format!("Service '{}' not found", service_name)))?;
-        
-        let actions: Vec<ActionInfo> = service.available_actions()
+
+        let actions: Vec<ActionInfo> = service
+            .available_actions()
             .into_iter()
             .map(|action| ActionInfo {
                 name: action.name,
@@ -222,18 +236,20 @@ impl WebSocketDispatcher {
                 response_schema: action.event_schema, // Using event_schema as response for now
             })
             .collect();
-        
+
         Ok(WebSocketMessage::Actions {
             service: service_name.to_string(),
             actions,
         })
     }
-    
+
     /// Handle validate setup request
     async fn handle_validate_setup(&self, service_name: &str) -> Result<WebSocketMessage, Error> {
-        let service = self.registry.get(service_name)
+        let service = self
+            .registry
+            .get(service_name)
             .ok_or_else(|| Error::service_type(format!("Service '{}' not found", service_name)))?;
-        
+
         if !service.has_setup() {
             return Ok(WebSocketMessage::SetupStatus {
                 service: service_name.to_string(),
@@ -241,7 +257,7 @@ impl WebSocketDispatcher {
                 error: Some("Service does not implement ServiceSetup".to_string()),
             });
         }
-        
+
         match service.validate_setup().await {
             Ok(()) => Ok(WebSocketMessage::SetupStatus {
                 service: service_name.to_string(),
@@ -255,12 +271,14 @@ impl WebSocketDispatcher {
             }),
         }
     }
-    
+
     /// Handle perform setup request
     async fn handle_perform_setup(&self, service_name: &str) -> Result<WebSocketMessage, Error> {
-        let service = self.registry.get(service_name)
+        let service = self
+            .registry
+            .get(service_name)
             .ok_or_else(|| Error::service_type(format!("Service '{}' not found", service_name)))?;
-        
+
         if !service.has_setup() {
             return Ok(WebSocketMessage::SetupStatus {
                 service: service_name.to_string(),
@@ -268,7 +286,7 @@ impl WebSocketDispatcher {
                 error: Some("Service does not implement ServiceSetup".to_string()),
             });
         }
-        
+
         // First validate to check if setup is needed (idempotency)
         if service.validate_setup().await.is_ok() {
             // Setup already complete
@@ -278,7 +296,7 @@ impl WebSocketDispatcher {
                 error: None,
             });
         }
-        
+
         // Perform the setup
         match service.perform_setup().await {
             Ok(()) => {
@@ -310,10 +328,10 @@ impl WebSocketDispatcher {
 pub trait WebSocketTransport: Send + Sync {
     /// Send a message over the WebSocket
     async fn send(&self, message: WebSocketMessage) -> Result<(), Error>;
-    
+
     /// Receive a message from the WebSocket
     async fn recv(&self) -> Result<WebSocketMessage, Error>;
-    
+
     /// Check if the connection is still open
     fn is_connected(&self) -> bool;
 }
@@ -339,7 +357,7 @@ impl WebSocketServer {
             shutdown_tx,
         }
     }
-    
+
     /// Create a new WebSocket server with TLS
     pub fn new_tls(
         registry: Arc<JsonServiceRegistry>,
@@ -355,19 +373,20 @@ impl WebSocketServer {
             shutdown_tx,
         }
     }
-    
+
     /// Get a shutdown handle for this server
     pub fn shutdown_handle(&self) -> async_channel::Sender<()> {
         self.shutdown_tx.clone()
     }
-    
+
     /// Run the WebSocket server
     pub async fn run(self) -> Result<(), Error> {
-        let listener = TcpListener::bind(self.address).await
+        let listener = TcpListener::bind(self.address)
+            .await
             .map_err(|e| Error::service_type(format!("Failed to bind WebSocket server: {}", e)))?;
-        
+
         info!("WebSocket server listening on {}", self.address);
-        
+
         loop {
             futures::select! {
                 result = listener.accept().fuse() => {
@@ -376,7 +395,7 @@ impl WebSocketServer {
                             info!("New WebSocket connection from {}", addr);
                             let dispatcher = self.dispatcher.clone();
                             let tls_config = self.tls_config.clone();
-                            
+
                             // Spawn a task to handle this connection
                             let _ = smol::spawn(async move {
                                 if let Err(e) = handle_connection(stream, dispatcher, tls_config).await {
@@ -395,7 +414,7 @@ impl WebSocketServer {
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -408,42 +427,50 @@ async fn handle_connection(
 ) -> Result<(), Error> {
     // Handle TLS if configured
     use futures::{SinkExt, stream::SplitSink, stream::SplitStream};
-    
+
     enum WsStream {
         Plain(WebSocketStream<TcpStream>),
         Tls(WebSocketStream<futures_rustls::server::TlsStream<TcpStream>>),
     }
-    
+
     let ws_stream = match tls_config {
         Some(config) => {
             let acceptor = TlsAcceptor::from(config.config);
-            let tls_stream = acceptor.accept(stream).await
+            let tls_stream = acceptor
+                .accept(stream)
+                .await
                 .map_err(|e| Error::service_type(format!("TLS handshake failed: {}", e)))?;
-            let ws = accept_async(tls_stream).await
+            let ws = accept_async(tls_stream)
+                .await
                 .map_err(|e| Error::service_type(format!("WebSocket handshake failed: {}", e)))?;
             WsStream::Tls(ws)
         }
         None => {
-            let ws = accept_async(stream).await
+            let ws = accept_async(stream)
+                .await
                 .map_err(|e| Error::service_type(format!("WebSocket handshake failed: {}", e)))?;
             WsStream::Plain(ws)
         }
     };
-    
+
     let (mut ws_sender, mut ws_receiver) = match ws_stream {
         WsStream::Plain(ws) => {
             let (s, r) = ws.split();
-            (Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>, 
-             Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>)
+            (
+                Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>,
+                Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>,
+            )
         }
         WsStream::Tls(ws) => {
             let (s, r) = ws.split();
-            (Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>,
-             Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>)
+            (
+                Box::new(s) as Box<dyn futures::Sink<Message, Error = _> + Send + Unpin>,
+                Box::new(r) as Box<dyn futures::Stream<Item = Result<Message, _>> + Send + Unpin>,
+            )
         }
     };
     let (tx, rx) = async_channel::unbounded();
-    
+
     // Spawn a task to send messages
     let send_task = smol::spawn(async move {
         while let Ok(msg) = rx.recv().await {
@@ -453,7 +480,7 @@ async fn handle_connection(
             }
         }
     });
-    
+
     // Process incoming messages
     while let Some(msg) = ws_receiver.next().await {
         match msg {
@@ -479,7 +506,9 @@ async fn handle_connection(
                                     "type": "Error",
                                     "error": e.to_string()
                                 });
-                                let _ = tx.send(Message::Text(error_response.to_string().into())).await;
+                                let _ = tx
+                                    .send(Message::Text(error_response.to_string().into()))
+                                    .await;
                             }
                         }
                     }
@@ -489,7 +518,9 @@ async fn handle_connection(
                             "type": "Error",
                             "error": format!("Invalid message format: {}", e)
                         });
-                        let _ = tx.send(Message::Text(error_response.to_string().into())).await;
+                        let _ = tx
+                            .send(Message::Text(error_response.to_string().into()))
+                            .await;
                     }
                 }
             }
@@ -506,11 +537,11 @@ async fn handle_connection(
             }
         }
     }
-    
+
     // Close the sender channel and wait for send task to finish
     drop(tx);
     send_task.await;
-    
+
     Ok(())
 }
 
@@ -518,7 +549,7 @@ async fn handle_connection(
 mod tests {
     use super::*;
     use crate::service::JsonServiceRegistry;
-    
+
     #[test]
     fn test_message_serialization() {
         let request = ActionRequest {
@@ -527,16 +558,16 @@ mod tests {
             action: "mine_blocks".to_string(),
             params: serde_json::json!({ "count": 10 }),
         };
-        
+
         let message = WebSocketMessage::Request(request);
         let json = serde_json::to_string(&message).unwrap();
-        
+
         assert!(json.contains("\"type\":\"Request\""));
         assert!(json.contains("\"id\":\"req-1\""));
         assert!(json.contains("\"service\":\"anvil\""));
         assert!(json.contains("\"action\":\"mine_blocks\""));
     }
-    
+
     #[test]
     fn test_response_serialization() {
         let response = ActionResponse {
@@ -544,10 +575,10 @@ mod tests {
             result: Some(serde_json::json!({"blocks": 10})),
             error: None,
         };
-        
+
         let message = WebSocketMessage::Response(response);
         let json = serde_json::to_string(&message).unwrap();
-        
+
         assert!(json.contains("\"type\":\"Response\""));
         assert!(json.contains("\"result\""));
         assert!(!json.contains("\"error\""));

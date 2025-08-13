@@ -117,7 +117,7 @@ async fn test_concurrent_modifications() -> Result<()> {
     // Test concurrent-like operations by running them in quick succession
     // First try to stop the service
     let stop_result = ctx.run_cli_command(&["stop", "echo-service"]);
-    
+
     // Then quickly try to restart it
     let restart_result = ctx.run_cli_command(&["restart", "echo-service"]);
 

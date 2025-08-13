@@ -98,13 +98,6 @@ impl Launcher for LocalLauncher {
 
                 Ok((events, handle))
             }
-
-            _ => {
-                // Other target types not implemented yet
-                Err(Error::spawn_failed(
-                    "Target type not yet implemented for LocalLauncher",
-                ))
-            }
         }
     }
 }

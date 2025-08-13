@@ -71,7 +71,7 @@ async fn test_task_dependency_handling() -> anyhow::Result<()> {
     let graph = DependencyGraph::from_stack_config(&config);
 
     // Get topological sort
-    let order = graph.topological_sort()?;
+    let order = graph.topological_sort().map_err(|e| anyhow::anyhow!(e))?;
 
     // Verify that tasks come after their dependencies
     let mut seen = std::collections::HashSet::new();

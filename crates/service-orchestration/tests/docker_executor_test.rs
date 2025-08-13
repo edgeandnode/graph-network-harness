@@ -2,6 +2,7 @@
 //!
 //! These tests require Docker to be installed and running
 
+use async_runtime_compat::AsyncSpawner;
 use service_orchestration::{DockerExecutor, ServiceConfig, ServiceExecutor, ServiceTarget};
 use std::collections::HashMap;
 
@@ -28,7 +29,9 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-hello".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "hello-world:latest".to_string(),
+            command_template: None,
             env: HashMap::new(),
             ports: vec![],
             volumes: vec![],
@@ -37,8 +40,11 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
         health_check: None,
     };
 
+    // Create spawner
+    let spawner = AsyncSpawner::new();
+    
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a container ID
     assert!(running_service.container_id.is_some());
@@ -48,7 +54,7 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
     println!("Started container with ID: {}", &container_id[..12]);
 
     // Stop the service
-    executor.stop(&running_service).await?;
+    executor.stop(&running_service, &spawner).await?;
 
     Ok(())
 }
@@ -67,7 +73,9 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-nginx".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "nginx:alpine".to_string(),
+            command_template: None,
             env: HashMap::new(),
             ports: vec![8080], // Map port 8080
             volumes: vec![],
@@ -76,8 +84,11 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
         health_check: None,
     };
 
+    // Create spawner
+    let spawner = AsyncSpawner::new();
+    
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a container ID
     assert!(running_service.container_id.is_some());
@@ -103,7 +114,7 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
     );
 
     // Stop the service
-    executor.stop(&running_service).await?;
+    executor.stop(&running_service, &spawner).await?;
 
     // Verify container is stopped/removed
     let output = std::process::Command::new("docker")
@@ -144,7 +155,9 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-env".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "alpine:latest".to_string(),
+            command_template: None,
             env,
             ports: vec![],
             volumes: vec![],
@@ -156,8 +169,11 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
     // Note: Alpine with no command will exit immediately, but that's OK for this test
     // We just want to verify the container was created with the right environment
 
+    // Create spawner
+    let spawner = AsyncSpawner::new();
+    
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a container ID
     assert!(running_service.container_id.is_some());
@@ -166,7 +182,7 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
 
     // The container will exit quickly since alpine has no long-running process,
     // but we can still stop/remove it
-    let _ = executor.stop(&running_service).await;
+    let _ = executor.stop(&running_service, &spawner).await;
 
     Ok(())
 }

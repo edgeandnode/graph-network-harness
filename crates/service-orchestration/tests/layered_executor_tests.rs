@@ -1,6 +1,6 @@
 //! Integration tests for the LayeredServiceExecutor
 
-use async_runtime_compat::smol::SmolSpawner;
+use async_runtime_compat::AsyncSpawner;
 use service_orchestration::{
     CommandSpec, LayerConfig, LayeredServiceExecutor, ServiceConfig, ServiceExecutor, ServiceTarget,
 };
@@ -13,14 +13,16 @@ async fn test_layered_executor_local_only() {
     let config = ServiceConfig {
         name: "test-local-layered".to_string(),
         target: ServiceTarget::Layered {
+            params: HashMap::new(),
             layers: vec![LayerConfig::Local {
                 env: HashMap::from([("TEST_VAR".to_string(), "test_value".to_string())]),
                 working_dir: Some("/tmp".to_string()),
             }],
-            command: CommandSpec {
+            command_template: None,
+            command: Some(CommandSpec {
                 binary: "echo".to_string(),
                 args: vec!["hello layered".to_string()],
-            },
+            }),
             health_check: None,
         },
         dependencies: vec![],
@@ -29,7 +31,7 @@ async fn test_layered_executor_local_only() {
 
     assert!(executor.can_handle(&config));
 
-    let spawner = SmolSpawner;
+    let spawner = AsyncSpawner::new();
     let running = executor.start(config, &spawner).await.unwrap();
     assert_eq!(running.name, "test-local-layered");
     assert_eq!(
@@ -60,6 +62,7 @@ async fn test_layered_executor_docker_layer() {
     let config = ServiceConfig {
         name: "test-docker-layered".to_string(),
         target: ServiceTarget::Layered {
+            params: HashMap::new(),
             layers: vec![LayerConfig::Docker {
                 container: container_name,
                 user: None,
@@ -68,17 +71,18 @@ async fn test_layered_executor_docker_layer() {
                 interactive: false,
                 tty: false,
             }],
-            command: CommandSpec {
+            command_template: None,
+            command: Some(CommandSpec {
                 binary: "sh".to_string(),
                 args: vec!["-c".to_string(), "echo 'hello from docker'".to_string()],
-            },
+            }),
             health_check: None,
         },
         dependencies: vec![],
         health_check: None,
     };
 
-    let spawner = SmolSpawner;
+    let spawner = AsyncSpawner::new();
     let running = executor.start(config, &spawner).await.unwrap();
     assert_eq!(running.name, "test-docker-layered");
 
@@ -93,8 +97,7 @@ async fn test_layered_executor_rejects_non_layered() {
     let config = ServiceConfig {
         name: "test-process".to_string(),
         target: ServiceTarget::Process {
-            binary: "echo".to_string(),
-            args: vec!["hello".to_string()],
+            command: service_orchestration::ProcessCommand::Legacy { command: "echo hello".to_string() },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -104,7 +107,7 @@ async fn test_layered_executor_rejects_non_layered() {
 
     assert!(!executor.can_handle(&config));
 
-    let spawner = SmolSpawner;
+    let spawner = AsyncSpawner::new();
     let result = executor.start(config, &spawner).await;
     assert!(result.is_err());
 
@@ -229,8 +232,9 @@ dependencies: []
         }
 
         // Check command
-        assert_eq!(command.binary, "node");
-        assert_eq!(command.args, vec!["server.js", "--port", "8080"]);
+        let cmd = command.as_ref().unwrap();
+        assert_eq!(cmd.binary, "node");
+        assert_eq!(cmd.args, vec!["server.js", "--port", "8080"]);
     } else {
         panic!("Expected Layered target");
     }

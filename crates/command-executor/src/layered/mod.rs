@@ -7,17 +7,18 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use command_executor::layered::{LayeredExecutor, layers::{SshLayer, DockerLayer}};
-//! use command_executor::{Command, Target, backends::local::LocalLauncher};
+//! use command_executor::layered::{LayeredExecutor, SshLayer, DockerLayer};
+//! use command_executor::{Command};
+//! use command_executor::backends::LocalLauncher;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let executor = LayeredExecutor::new(LocalLauncher)
 //!     .with_layer(SshLayer::new("user@remote-host"))
 //!     .with_layer(DockerLayer::new("my-container"));
 //!
-//! let command = Command::new("echo").arg("hello world");
-//! let target = Target::Command;
-//! let (events, handle) = executor.launch(&target, command).await?;
+//! let mut command = Command::new("echo");
+//! command.arg("hello world");
+//! let (events, handle) = executor.execute_command(command).await?;
 //! # Ok(())
 //! # }
 //! ```

@@ -32,7 +32,7 @@ pub use layered::{
 };
 pub use process::{ExitResult, ExitStatus, ProcessHandle};
 pub use target::{
-    AttachedService, AttachedServiceBuilder, ComposeService, DockerContainer, ManagedProcess,
-    ManagedProcessBuilder, ManagedService, ManagedServiceBuilder, SystemdPortable, SystemdService,
+    AttachedService, AttachedServiceBuilder, ManagedProcess,
+    ManagedProcessBuilder, ManagedService, ManagedServiceBuilder,
     Target,
 };

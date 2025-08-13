@@ -1,6 +1,7 @@
 //! Integration test for launch_stack with real services
 
-use async_runtime_compat::smol::SmolSpawner;
+use async_runtime_compat::AsyncSpawner;
+use service_orchestration::ProcessCommand;
 use std::fs;
 
 #[smol_potat::test]
@@ -68,7 +69,7 @@ tasks:
     let graph = DependencyGraph::from_stack_config(&config);
 
     // Get topological sort to verify order
-    let order = graph.topological_sort()?;
+    let order = graph.topological_sort().map_err(|e| anyhow::anyhow!(e))?;
 
     // Should be: echo-service, then test-task and sleep-service
     assert!(order.len() >= 3);
@@ -112,19 +113,14 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     use std::collections::HashMap;
 
     // Create a service manager
-    let spawner = SmolSpawner;
+    let spawner = AsyncSpawner::new();
     let manager = ServiceManager::new().await?;
 
     // Create a simple echo service config
     let config = ServiceConfig {
         name: "test-echo".to_string(),
         target: ServiceTarget::Process {
-            binary: "echo".to_string(),
-            args: vec![
-                "hello".to_string(),
-                "from".to_string(),
-                "service".to_string(),
-            ],
+            command: ProcessCommand::Legacy { command: "echo hello from service".to_string() },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -133,7 +129,7 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     };
 
     // Start the service using launch_service
-    let (_events, running_service) = manager.launch_service(config, &spawner).await?;
+    let (_events, running_service) = manager.launch_service("test-echo", config, &spawner).await?;
 
     // Verify service was started
     assert!(running_service.pid.is_some());
@@ -144,14 +140,14 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
     println!("Service status: {:?}", status);
 
     // List services
-    let services = manager.list_services().await?;
+    let services = manager.list_services();
     assert!(services.contains(&"test-echo".to_string()));
 
     // Stop the service
     manager.stop_service("test-echo", &spawner).await?;
 
     // Verify service is gone
-    let services_after = manager.list_services().await?;
+    let services_after = manager.list_services();
     assert!(!services_after.contains(&"test-echo".to_string()));
 
     Ok(())

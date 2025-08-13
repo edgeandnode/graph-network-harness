@@ -1,19 +1,20 @@
 //! Test that ProcessExecutor actually starts processes
 
-use service_orchestration::{ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceTarget};
+use async_runtime_compat::AsyncSpawner;
+use service_orchestration::{ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceTarget};
 use std::collections::HashMap;
 
 #[smol_potat::test]
 async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
-    // Create a ProcessExecutor
+    // Create a ProcessExecutor and spawner
     let executor = ProcessExecutor::new();
+    let spawner = AsyncSpawner::new();
 
     // Create a simple echo service config
     let config = ServiceConfig {
         name: "test-echo".to_string(),
         target: ServiceTarget::Process {
-            binary: "echo".to_string(),
-            args: vec!["hello".to_string(), "world".to_string()],
+            command: ProcessCommand::Legacy { command: "echo hello world".to_string() },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -22,7 +23,7 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
     };
 
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a PID
     assert!(running_service.pid.is_some());
@@ -35,22 +36,22 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
     // For echo, it exits immediately after printing
 
     // Stop the service (though echo probably already exited)
-    let _ = executor.stop(&running_service).await;
+    let _ = executor.stop(&running_service, &spawner).await;
 
     Ok(())
 }
 
 #[smol_potat::test]
 async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
-    // Create a ProcessExecutor
+    // Create a ProcessExecutor and spawner
     let executor = ProcessExecutor::new();
+    let spawner = AsyncSpawner::new();
 
     // Create a sleep service that stays alive
     let config = ServiceConfig {
         name: "test-sleep".to_string(),
         target: ServiceTarget::Process {
-            binary: "sleep".to_string(),
-            args: vec!["2".to_string()], // Sleep for 2 seconds
+            command: ProcessCommand::Legacy { command: "sleep 2".to_string() }, // Sleep for 2 seconds
             env: HashMap::new(),
             working_dir: None,
         },
@@ -59,7 +60,7 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
     };
 
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a PID
     assert!(running_service.pid.is_some());
@@ -79,7 +80,7 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
     }
 
     // Stop the service
-    executor.stop(&running_service).await?;
+    executor.stop(&running_service, &spawner).await?;
 
     // Give it a moment to actually stop
     smol::Timer::after(std::time::Duration::from_millis(100)).await;
@@ -99,8 +100,9 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
 
 #[smol_potat::test]
 async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
-    // Create a ProcessExecutor
+    // Create a ProcessExecutor and spawner
     let executor = ProcessExecutor::new();
+    let spawner = AsyncSpawner::new();
 
     // Create a service that uses environment variables
     let mut env = HashMap::new();
@@ -109,11 +111,7 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
     let config = ServiceConfig {
         name: "test-env".to_string(),
         target: ServiceTarget::Process {
-            binary: "sh".to_string(),
-            args: vec![
-                "-c".to_string(),
-                "echo TEST_VAR=$TEST_VAR && sleep 1".to_string(),
-            ],
+            command: ProcessCommand::Legacy { command: "sh -c 'echo TEST_VAR=$TEST_VAR && sleep 1'".to_string() },
             env,
             working_dir: None,
         },
@@ -122,7 +120,7 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
     };
 
     // Start the service
-    let running_service = executor.start(config.clone()).await?;
+    let running_service = executor.start(config.clone(), &spawner).await?;
 
     // Check that we got a PID
     assert!(running_service.pid.is_some());
@@ -130,7 +128,7 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
     println!("Started sh process with PID: {:?}", running_service.pid);
 
     // Stop the service
-    executor.stop(&running_service).await?;
+    executor.stop(&running_service, &spawner).await?;
 
     Ok(())
 }

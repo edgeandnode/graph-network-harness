@@ -4,7 +4,7 @@
 
 use service_orchestration::{
     DockerExecutor, HealthCheck, HealthChecker, HealthStatus, LayerConfig, LayeredServiceExecutor,
-    ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
+    ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -13,8 +13,7 @@ fn test_service_config_yaml_roundtrip() {
     let config = ServiceConfig {
         name: "test-service".to_string(),
         target: ServiceTarget::Process {
-            binary: "echo".to_string(),
-            args: vec!["hello".to_string(), "world".to_string()],
+            command: ProcessCommand::Legacy { command: "echo hello world".to_string() },
             env: HashMap::from([
                 ("LOG_LEVEL".to_string(), "debug".to_string()),
                 ("PORT".to_string(), "8080".to_string()),
@@ -52,7 +51,9 @@ fn test_docker_service_config() {
     let config = ServiceConfig {
         name: "nginx-service".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "nginx:latest".to_string(),
+            command_template: None,
             env: HashMap::from([("NGINX_PORT".to_string(), "80".to_string())]),
             ports: vec![80, 443],
             volumes: vec!["/data:/usr/share/nginx/html".to_string()],
@@ -84,6 +85,7 @@ fn test_layered_ssh_service_config() {
     let config = ServiceConfig {
         name: "remote-api".to_string(),
         target: ServiceTarget::Layered {
+            params: HashMap::new(),
             layers: vec![
                 LayerConfig::Ssh {
                     host: "192.168.1.100".to_string(),
@@ -98,10 +100,12 @@ fn test_layered_ssh_service_config() {
                     working_dir: None,
                 },
             ],
-            command: service_orchestration::CommandSpec {
+            command_template: None,
+            command: Some(service_orchestration::CommandSpec {
                 binary: "./api-server".to_string(),
                 args: vec!["--port".to_string(), "3000".to_string()],
-            },
+            }),
+            health_check: None,
         },
         dependencies: vec![service_orchestration::Dependency::Service {
             service: "database".to_string(),
@@ -126,8 +130,7 @@ fn test_service_target_env_methods() {
     env.insert("TEST_VAR".to_string(), "test_value".to_string());
 
     let target = ServiceTarget::Process {
-        binary: "test".to_string(),
-        args: vec![],
+        command: ProcessCommand::Legacy { command: "test".to_string() },
         env: env.clone(),
         working_dir: None,
     };
@@ -183,8 +186,7 @@ async fn test_service_manager_initialization() {
     let process_config = ServiceConfig {
         name: "test-process".to_string(),
         target: ServiceTarget::Process {
-            binary: "echo".to_string(),
-            args: vec!["test".to_string()],
+            command: ProcessCommand::Legacy { command: "echo test".to_string() },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -195,7 +197,9 @@ async fn test_service_manager_initialization() {
     let docker_config = ServiceConfig {
         name: "test-docker".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "hello-world".to_string(),
+            command_template: None,
             env: HashMap::new(),
             ports: vec![],
             volumes: vec![],
@@ -206,7 +210,7 @@ async fn test_service_manager_initialization() {
 
     // The manager should be able to find appropriate executors
     // (We can't test the actual service starting without infrastructure)
-    assert!(manager.list_services().await.unwrap().is_empty());
+    assert!(manager.list_services().is_empty());
 }
 
 #[test]
@@ -247,8 +251,7 @@ fn test_executor_type_detection() {
     let process_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Process {
-            binary: "test".to_string(),
-            args: vec![],
+            command: ProcessCommand::Legacy { command: "test".to_string() },
             env: HashMap::new(),
             working_dir: None,
         },
@@ -259,7 +262,9 @@ fn test_executor_type_detection() {
     let docker_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "test".to_string(),
+            command_template: None,
             env: HashMap::new(),
             ports: vec![],
             volumes: vec![],
@@ -271,6 +276,7 @@ fn test_executor_type_detection() {
     let layered_config = ServiceConfig {
         name: "test".to_string(),
         target: ServiceTarget::Layered {
+            params: HashMap::new(),
             layers: vec![
                 LayerConfig::Ssh {
                     host: "test.example.com".to_string(),
@@ -285,10 +291,12 @@ fn test_executor_type_detection() {
                     working_dir: None,
                 },
             ],
-            command: service_orchestration::CommandSpec {
+            command_template: None,
+            command: Some(service_orchestration::CommandSpec {
                 binary: "test".to_string(),
                 args: vec![],
-            },
+            }),
+            health_check: None,
         },
         dependencies: vec![],
         health_check: None,
@@ -315,8 +323,7 @@ fn test_service_config_env_injection() {
     let config = ServiceConfig {
         name: "test-service".to_string(),
         target: ServiceTarget::Process {
-            binary: "test".to_string(),
-            args: vec![],
+            command: ProcessCommand::Legacy { command: "test".to_string() },
             env: original_env.clone(),
             working_dir: None,
         },

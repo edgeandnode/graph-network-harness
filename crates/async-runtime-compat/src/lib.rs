@@ -26,10 +26,11 @@
 
 #![warn(missing_docs)]
 
+use cfg_if::cfg_if;
 use std::future::Future;
 use std::pin::Pin;
 
-/// A spawner that can spawn futures on an async runtime
+/// Trait for spawning futures on an async runtime
 pub trait Spawner: Send + Sync {
     /// Spawn a future on the runtime
     ///
@@ -39,6 +40,65 @@ pub trait Spawner: Send + Sync {
     /// Spawn a future and detach it (alias for spawn)
     fn spawn_detached(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
         self.spawn(future);
+    }
+}
+
+/// Internal spawner enum that holds the runtime-specific implementation
+#[derive(Clone, Copy, Debug)]
+enum InnerSpawner {
+    #[cfg(feature = "tokio")]
+    Tokio(crate::tokio::TokioSpawner),
+    #[cfg(feature = "async-std")]
+    AsyncStd(crate::async_std::AsyncStdSpawner),
+    #[cfg(feature = "smol")]
+    Smol(crate::smol::SmolSpawner),
+}
+
+/// A unified spawner that composes the appropriate runtime spawner based on feature flags
+#[derive(Clone, Copy, Debug)]
+pub struct AsyncSpawner {
+    inner: InnerSpawner,
+}
+
+impl AsyncSpawner {
+    /// Create a new spawner for the enabled runtime
+    pub fn new() -> Self {
+        cfg_if! {
+            if #[cfg(feature = "tokio")] {
+                AsyncSpawner {
+                    inner: InnerSpawner::Tokio(crate::tokio::TokioSpawner),
+                }
+            } else if #[cfg(feature = "async-std")] {
+                AsyncSpawner {
+                    inner: InnerSpawner::AsyncStd(crate::async_std::AsyncStdSpawner),
+                }
+            } else if #[cfg(feature = "smol")] {
+                AsyncSpawner {
+                    inner: InnerSpawner::Smol(crate::smol::SmolSpawner),
+                }
+            } else {
+                compile_error!("No async runtime feature enabled");
+            }
+        }
+    }
+}
+
+impl Default for AsyncSpawner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Spawner for AsyncSpawner {
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
+        match self.inner {
+            #[cfg(feature = "tokio")]
+            InnerSpawner::Tokio(spawner) => spawner.spawn(future),
+            #[cfg(feature = "async-std")]
+            InnerSpawner::AsyncStd(spawner) => spawner.spawn(future),
+            #[cfg(feature = "smol")]
+            InnerSpawner::Smol(spawner) => spawner.spawn(future),
+        }
     }
 }
 
@@ -109,8 +169,9 @@ pub mod runtime_utils;
 /// Prelude for common imports
 pub mod prelude {
     pub use crate::runtime_utils::{sleep, timeout, TimeoutError};
-    pub use crate::{SpawnHandle, Spawner, SpawnerWithHandle};
+    pub use crate::{AsyncSpawner, SpawnHandle, Spawner, SpawnerWithHandle};
 
+    // Runtime-specific spawners are available if needed for special cases
     #[cfg(feature = "tokio")]
     pub use crate::tokio::TokioSpawner;
 
@@ -121,21 +182,12 @@ pub mod prelude {
     pub use crate::smol::SmolSpawner;
 }
 
-/// Create a spawner for the current runtime (if detectable)
+/// Create a spawner for the current runtime
 ///
-/// This requires the appropriate feature flag to be enabled.
-pub fn current_runtime_spawner() -> Option<Box<dyn Spawner>> {
-    #[cfg(feature = "tokio")]
-    {
-        if tokio::runtime::Handle::try_current().is_ok() {
-            return Some(Box::new(tokio::TokioSpawner));
-        }
-    }
-
-    // Other runtimes don't have reliable detection
-    // Could check thread-local state or environment variables
-
-    None
+/// This returns the unified AsyncSpawner that uses the appropriate runtime
+/// based on the enabled feature flag.
+pub fn current_runtime_spawner() -> AsyncSpawner {
+    AsyncSpawner::new()
 }
 
 #[cfg(test)]

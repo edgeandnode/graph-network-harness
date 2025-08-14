@@ -66,6 +66,7 @@ impl ServiceExecutor for ProcessExecutor {
             command,
             env,
             working_dir,
+            validation: _,
         } = &config.target
         else {
             return Err(crate::Error::Config(

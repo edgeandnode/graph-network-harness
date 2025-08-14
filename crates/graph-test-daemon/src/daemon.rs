@@ -14,7 +14,6 @@ use tracing::info;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
-use harness_core::service_setup_task::{IpfsSetupTask, PostgresSetupTask, ServiceSetupTask};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -38,10 +37,7 @@ impl AutoWire for GraphTestDaemon {
         builder
             .wire_task_type::<GraphContractsTask>()?
             .wire_task_type::<TapContractsTask>()?
-            .wire_task_type::<SubgraphDeployTask>()?
-            .wire_task_type::<PostgresSetupTask>()?
-            .wire_task_type::<IpfsSetupTask>()?
-            .wire_task_type::<ServiceSetupTask>()?;
+            .wire_task_type::<SubgraphDeployTask>()?;
 
         Ok(())
     }

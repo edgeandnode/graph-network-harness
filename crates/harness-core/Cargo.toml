@@ -61,6 +61,7 @@ tempfile = { workspace = true }
 smol = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 rcgen = "0.13"
+serde_yaml = { workspace = true }
 
 [features]
 default = []

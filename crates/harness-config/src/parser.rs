@@ -204,6 +204,7 @@ pub fn convert_to_orchestrator_with_context(
             },
             env,
             working_dir: working_dir.clone(),
+            validation: None,
         },
 
         ServiceType::Remote {

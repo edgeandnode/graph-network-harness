@@ -203,6 +203,9 @@ pub enum ServiceTarget {
         /// Working directory (optional)
         #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
+        /// Validation command for idempotent tasks (optional)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        validation: Option<String>,
     },
     /// Docker container execution (managed)
     #[serde(rename = "docker")]
@@ -274,6 +277,9 @@ pub enum ServiceTarget {
         /// Optional health check to run through the same layers
         #[serde(skip_serializing_if = "Option::is_none")]
         health_check: Option<HealthCheck>,
+        /// Validation command for idempotent tasks (optional)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        validation: Option<String>,
     },
 }
 
@@ -452,11 +458,13 @@ impl ServiceTarget {
             ServiceTarget::Process {
                 command,
                 working_dir,
+                validation,
                 ..
             } => ServiceTarget::Process {
                 command: command.clone(),
                 env: new_env,
                 working_dir: working_dir.clone(),
+                validation: validation.clone(),
             },
             ServiceTarget::Docker {
                 params,
@@ -498,12 +506,14 @@ impl ServiceTarget {
                 command_template,
                 command,
                 health_check,
+                validation,
             } => ServiceTarget::Layered {
                 params: params.clone(),
                 layers: layers.clone(),
                 command_template: command_template.clone(),
                 command: command.clone(),
                 health_check: health_check.clone(),
+                validation: validation.clone(),
             },
         }
     }

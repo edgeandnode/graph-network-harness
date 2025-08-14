@@ -169,6 +169,7 @@ fn test_graph_stack_config_specifics() {
         .map(|d| match d {
             service_orchestration::Dependency::Service { service } => service.clone(),
             service_orchestration::Dependency::Task { task } => task.clone(),
+            service_orchestration::Dependency::Namespaced(s) => s.clone(),
         })
         .collect();
 

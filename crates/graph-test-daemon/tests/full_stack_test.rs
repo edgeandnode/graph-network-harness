@@ -43,13 +43,9 @@ async fn test_full_graph_stack() -> Result<()> {
 
     // Create the daemon with configuration
     let endpoint: SocketAddr = "127.0.0.1:9445".parse()?;
-    let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
+    let builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
-    // Register all services we want to test
-    builder.wire_service_type::<graph_test_daemon::services::PostgresService>()?;
-    builder.wire_service_type::<graph_test_daemon::services::IpfsService>()?;
-    builder.wire_service_type::<graph_test_daemon::services::AnvilService>()?;
-
+    // GraphTestDaemon::from_builder will auto-wire all known services and tasks
     let daemon = GraphTestDaemon::from_builder(builder)
         .await
         .context("Failed to create GraphTestDaemon")?;

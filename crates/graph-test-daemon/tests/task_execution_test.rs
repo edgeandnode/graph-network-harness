@@ -95,6 +95,18 @@ async fn test_task_dependency_handling() -> anyhow::Result<()> {
                             service_orchestration::Dependency::Task { task } => {
                                 format!("task:{}", task)
                             }
+                            service_orchestration::Dependency::Namespaced(s) => {
+                                // For namespaced, we need to resolve it first
+                                match dep.resolve() {
+                                    service_orchestration::Dependency::Service { service } => {
+                                        format!("service:{}", service)
+                                    }
+                                    service_orchestration::Dependency::Task { task } => {
+                                        format!("task:{}", task)
+                                    }
+                                    _ => s.clone(),
+                                }
+                            }
                         };
 
                         // The dependency should have been processed already

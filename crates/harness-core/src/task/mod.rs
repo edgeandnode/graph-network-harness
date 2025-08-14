@@ -4,6 +4,13 @@
 //! perform one-time setup operations. Tasks are strongly typed with their action
 //! and event types, and can leverage command-executor for process management.
 
+pub mod base_task;
+pub mod yaml_task;
+
+// Re-export commonly used types
+pub use base_task::{BaseTask, BaseTaskState, TaskContext, TaskContextBuilder};
+pub use yaml_task::{YamlTask, YamlTaskConfig, YamlTaskState};
+
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use async_trait::async_trait;

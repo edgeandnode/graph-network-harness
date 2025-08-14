@@ -18,6 +18,7 @@ use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
 use crate::service::{JsonService, JsonServiceRegistry, Service};
 use crate::task::{DeploymentTask, JsonTaskRegistry};
 use crate::websocket_dispatch::WebSocketServer;
+use crate::task::YamlTask;
 use crate::{Error, ServiceManager};
 use service_orchestration::TaskConfig;
 use std::result::Result;
@@ -70,6 +71,15 @@ pub struct BaseDaemon {
     /// WebSocket server task handle and shutdown channel
     ws_server_handle: Arc<futures::lock::Mutex<Option<Task<()>>>>,
     ws_shutdown_tx: Arc<futures::lock::Mutex<Option<async_channel::Sender<()>>>>,
+}
+
+impl AutoWire for BaseDaemon {
+    fn auto_wire_types(builder: &mut DaemonBuilder) -> Result<(), Error> {
+        // Wire generic task types that are available in harness-core
+        builder.wire_task_type::<YamlTask>()?;
+        
+        Ok(())
+    }
 }
 
 impl BaseDaemon {
@@ -209,8 +219,21 @@ impl BaseDaemon {
             let state_rx = self.json_task_registry.execute(task_name, &spawner).await?;
 
             // Wait for task to complete by consuming all state updates
+            let mut last_state = None;
             while let Ok(state) = state_rx.recv().await {
                 info!("Task {} state: {:?}", task_name, state);
+                last_state = Some(state);
+            }
+
+            // Check if the task failed by examining the last state
+            if let Some(final_state) = last_state {
+                // Check if the state indicates failure
+                // We check the state as a JSON value since we don't know the concrete type
+                if let serde_json::Value::String(state_str) = &final_state {
+                    if state_str == "Failed" {
+                        return Err(Error::action(format!("Task {} failed", task_name)));
+                    }
+                }
             }
 
             info!("Task {} completed successfully", task_name);
@@ -538,8 +561,11 @@ impl DaemonBuilder {
     }
 
     /// Build the daemon
-    pub async fn build(self) -> Result<BaseDaemon, Error> {
+    pub async fn build(mut self) -> Result<BaseDaemon, Error> {
         info!("Building daemon with endpoint {}", self.endpoint);
+
+        // Auto-wire base daemon types
+        BaseDaemon::auto_wire_types(&mut self)?;
 
         // Validate configuration
         self.validate_config()?;

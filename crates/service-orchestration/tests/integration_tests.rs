@@ -22,6 +22,7 @@ fn test_service_config_yaml_roundtrip() {
                 ("PORT".to_string(), "8080".to_string()),
             ]),
             working_dir: Some("/tmp".to_string()),
+            validation: None,
         },
         depends_on: vec![
             service_orchestration::Dependency::Service {
@@ -109,6 +110,7 @@ fn test_layered_ssh_service_config() {
                 args: vec!["--port".to_string(), "3000".to_string()],
             }),
             health_check: None,
+            validation: None,
         },
         depends_on: vec![service_orchestration::Dependency::Service {
             service: "database".to_string(),
@@ -138,6 +140,7 @@ fn test_service_target_env_methods() {
         },
         env: env.clone(),
         working_dir: None,
+        validation: None,
     };
 
     // Test env() method
@@ -196,6 +199,7 @@ async fn test_service_manager_initialization() {
             },
             env: HashMap::new(),
             working_dir: None,
+            validation: None,
         },
         depends_on: vec![],
         health_check: None,
@@ -263,6 +267,7 @@ fn test_executor_type_detection() {
             },
             env: HashMap::new(),
             working_dir: None,
+            validation: None,
         },
         depends_on: vec![],
         health_check: None,
@@ -306,6 +311,7 @@ fn test_executor_type_detection() {
                 args: vec![],
             }),
             health_check: None,
+            validation: None,
         },
         depends_on: vec![],
         health_check: None,
@@ -337,6 +343,7 @@ fn test_service_config_env_injection() {
             },
             env: original_env.clone(),
             working_dir: None,
+            validation: None,
         },
         depends_on: vec![service_orchestration::Dependency::Service {
             service: "db".to_string(),

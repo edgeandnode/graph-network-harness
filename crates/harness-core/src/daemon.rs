@@ -16,9 +16,10 @@ use tracing::{info, warn};
 
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
 use crate::service::{JsonService, JsonServiceRegistry, Service};
-use crate::task::{DeploymentTask, JsonTaskRegistry};
-use crate::websocket_dispatch::WebSocketServer;
 use crate::task::YamlTask;
+use crate::task::{DeploymentTask, JsonTaskRegistry};
+use crate::typed_registry::{TypedServiceRegistry, TypedTaskRegistry};
+use crate::websocket_dispatch::WebSocketServer;
 use crate::{Error, ServiceManager};
 use service_orchestration::TaskConfig;
 use std::result::Result;
@@ -53,11 +54,17 @@ pub struct BaseDaemon {
     /// Service manager for orchestrating services
     service_manager: ServiceManager,
 
-    /// Registry of JSON-wrapped services
+    /// Registry of JSON-wrapped services (for WebSocket boundary)
     json_service_registry: Arc<JsonServiceRegistry>,
 
-    /// Registry of JSON-wrapped tasks
+    /// Registry of JSON-wrapped tasks (for WebSocket boundary)
     json_task_registry: JsonTaskRegistry,
+
+    /// Type-safe registry of concrete services
+    typed_service_registry: Arc<TypedServiceRegistry>,
+
+    /// Type-safe registry of concrete tasks
+    typed_task_registry: Arc<TypedTaskRegistry>,
 
     /// WebSocket server address
     endpoint: SocketAddr,
@@ -77,7 +84,7 @@ impl AutoWire for BaseDaemon {
     fn auto_wire_types(builder: &mut DaemonBuilder) -> Result<(), Error> {
         // Wire generic task types that are available in harness-core
         builder.wire_task_type::<YamlTask>()?;
-        
+
         Ok(())
     }
 }
@@ -106,6 +113,33 @@ impl BaseDaemon {
     /// Get the JSON task registry
     pub fn json_task_registry(&self) -> &JsonTaskRegistry {
         &self.json_task_registry
+    }
+
+    /// Get a typed service instance by name
+    ///
+    /// This allows implementers to access concrete service types directly
+    /// without going through JSON serialization.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let graph_node = daemon.get_service::<GraphNodeService>("graph-node-1");
+    /// ```
+    pub fn get_service<S>(&self, name: &str) -> Option<Arc<S>>
+    where
+        S: Service + 'static,
+    {
+        self.typed_service_registry.get_service::<S>(name)
+    }
+
+    /// Get a typed task instance by name
+    ///
+    /// This allows implementers to access concrete task types directly
+    /// without going through JSON serialization.
+    pub fn get_task<T>(&self, name: &str) -> Option<Arc<T>>
+    where
+        T: DeploymentTask + 'static,
+    {
+        self.typed_task_registry.get_task::<T>(name)
     }
 
     /// Launch all services in the stack in dependency order
@@ -363,6 +397,8 @@ pub struct DaemonBuilder {
     state_dir: Option<std::path::PathBuf>,
     json_service_registry: JsonServiceRegistry,
     json_task_registry: JsonTaskRegistry,
+    typed_service_registry: TypedServiceRegistry,
+    typed_task_registry: TypedTaskRegistry,
     stack_config: StackConfig,
     #[cfg(test)]
     test_mode: bool,
@@ -376,6 +412,8 @@ impl DaemonBuilder {
             state_dir: None,
             json_service_registry: JsonServiceRegistry::new(),
             json_task_registry: JsonTaskRegistry::new(),
+            typed_service_registry: TypedServiceRegistry::new(),
+            typed_task_registry: TypedTaskRegistry::new(),
             stack_config,
             #[cfg(test)]
             test_mode: false,
@@ -434,9 +472,15 @@ impl DaemonBuilder {
         // Create the service from config
         let service = S::from_config(config)?;
 
-        // Register it using the automatic wrapping
+        // Register in typed registry first
+        self.typed_service_registry
+            .register(instance_name.clone(), service)?;
+
+        // Get it back and register in JSON registry for WebSocket
+        // We need to create a new instance for JSON registry since we moved it
+        let service_for_json = S::from_config(config)?;
         self.json_service_registry
-            .register(instance_name, service)?;
+            .register(instance_name, service_for_json)?;
         Ok(self)
     }
 
@@ -476,6 +520,12 @@ impl DaemonBuilder {
 
         // Register each matching service
         for (instance_name, service_config) in matching_services {
+            // Check if already registered (for idempotency)
+            if self.json_service_registry.get(&instance_name).is_some() {
+                tracing::debug!("Service '{}' already registered, skipping", instance_name);
+                continue;
+            }
+
             tracing::info!(
                 "Wiring service '{}' of type '{}'",
                 instance_name,
@@ -485,9 +535,14 @@ impl DaemonBuilder {
             // Create the service from config
             let service = S::from_config(&service_config)?;
 
-            // Register it using the automatic wrapping
+            // Register in typed registry
+            self.typed_service_registry
+                .register(instance_name.clone(), service)?;
+
+            // Create another instance for JSON registry
+            let service_for_json = S::from_config(&service_config)?;
             self.json_service_registry
-                .register(instance_name, service)?;
+                .register(instance_name, service_for_json)?;
         }
 
         Ok(self)
@@ -496,12 +551,17 @@ impl DaemonBuilder {
     /// Register a task with the task stack
     pub fn register_task<T>(&mut self, task_name: String, task: T) -> Result<&mut Self, Error>
     where
-        T: DeploymentTask + 'static,
+        T: DeploymentTask + Clone + 'static,
         T::State: schemars::JsonSchema,
     {
         // Log the task registration
         tracing::info!("Registering task '{}'", task_name);
 
+        // Register in typed registry
+        self.typed_task_registry
+            .register(task_name.clone(), task.clone())?;
+
+        // Register in JSON registry for WebSocket
         self.json_task_registry.register(task_name, task)?;
         Ok(self)
     }
@@ -513,7 +573,7 @@ impl DaemonBuilder {
         config: &TaskConfig,
     ) -> Result<&mut Self, Error>
     where
-        T: DeploymentTask + TaskFromConfig + 'static,
+        T: DeploymentTask + TaskFromConfig + Clone + 'static,
         T::State: schemars::JsonSchema,
     {
         // Create the task from config
@@ -526,7 +586,7 @@ impl DaemonBuilder {
     /// Wire up all tasks of a given type from the stored configuration
     pub fn wire_task_type<T>(&mut self) -> Result<&mut Self, Error>
     where
-        T: DeploymentTask + TaskFromConfig + 'static,
+        T: DeploymentTask + TaskFromConfig + Clone + 'static,
         T::State: schemars::JsonSchema,
     {
         let config = &self.stack_config;
@@ -546,6 +606,12 @@ impl DaemonBuilder {
 
         // Register each matching task
         for (task_name, task_config) in matching_tasks {
+            // Check if already registered (for idempotency)
+            if self.json_task_registry.get(&task_name).is_some() {
+                tracing::debug!("Task '{}' already registered, skipping", task_name);
+                continue;
+            }
+
             tracing::info!("Wiring task '{}' of type '{}'", task_name, T::TASK_TYPE);
 
             self.register_task_from_config::<T>(task_name, &task_config)?;
@@ -601,6 +667,8 @@ impl DaemonBuilder {
             service_manager,
             json_service_registry: Arc::new(self.json_service_registry),
             json_task_registry: self.json_task_registry,
+            typed_service_registry: Arc::new(self.typed_service_registry),
+            typed_task_registry: Arc::new(self.typed_task_registry),
             endpoint: self.endpoint,
             running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             stack_config: Some(self.stack_config),
@@ -808,6 +876,7 @@ mod tests {
     }
 
     // Test task for validation
+    #[derive(Clone)]
     struct TestTask {
         state: std::sync::Arc<std::sync::Mutex<TestTaskState>>,
     }

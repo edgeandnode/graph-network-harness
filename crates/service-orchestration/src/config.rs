@@ -588,6 +588,7 @@ mod tests {
                 },
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                 working_dir: Some("/tmp".to_string()),
+                validation: None,
             },
             depends_on: vec![Dependency::Service {
                 service: "database".to_string(),

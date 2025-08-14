@@ -178,7 +178,7 @@ services:
     let service_config = parser::convert_to_orchestrator(&config, "test-service").unwrap();
 
     assert_eq!(service_config.name, "test-service");
-    assert_eq!(service_config.dependencies.len(), 0);
+    assert_eq!(service_config.depends_on.len(), 0);
     assert!(service_config.health_check.is_some());
 
     let hc = service_config.health_check.unwrap();

@@ -21,7 +21,7 @@ pub type GraphStackConfig = StackConfig;
 /// Graph Protocol specialized testing daemon
 pub struct GraphTestDaemon {
     /// Base daemon functionality  
-    base: BaseDaemon,
+    pub base: BaseDaemon,
 }
 
 impl AutoWire for GraphTestDaemon {

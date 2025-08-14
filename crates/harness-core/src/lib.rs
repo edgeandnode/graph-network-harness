@@ -15,6 +15,7 @@ pub mod error;
 pub mod service;
 pub mod task;
 pub mod tls;
+pub mod typed_registry;
 pub mod websocket_dispatch;
 
 pub use error::Error;
@@ -30,8 +31,8 @@ pub mod prelude {
         StatefulService,
     };
     pub use crate::task::{
-        BaseTask, BaseTaskState, DeploymentTask, JsonTask, JsonTaskRegistry, TaskContext, 
-        TaskContextBuilder, YamlTask, YamlTaskConfig, YamlTaskState
+        BaseTask, BaseTaskState, DeploymentTask, JsonTask, JsonTaskRegistry, TaskContext,
+        TaskContextBuilder, YamlTask, YamlTaskConfig, YamlTaskState,
     };
 
     // Re-export commonly used types from dependencies

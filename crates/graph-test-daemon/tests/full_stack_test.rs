@@ -7,7 +7,8 @@ mod common;
 
 use anyhow::{Context, Result};
 use graph_test_daemon::GraphTestDaemon;
-use harness_core::prelude::{BaseDaemon, Daemon};
+use harness_core::prelude::{BaseDaemon, Daemon, DeploymentTask};
+use harness_core::task::YamlTask;
 use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -56,6 +57,20 @@ async fn test_full_graph_stack() -> Result<()> {
     daemon.start().await.context("Failed to start daemon")?;
 
     info!("Daemon started successfully");
+
+    // Check build-graph-node task before launching stack
+    info!("Checking build-graph-node task...");
+
+    if let Some(build_task) = daemon.base.get_task::<YamlTask>("build-graph-node") {
+        // Check if it needs to run
+        match build_task.validate().await {
+            Ok(true) => info!("  Graph node binary already built"),
+            Ok(false) => info!("  Graph node needs to be built"),
+            Err(e) => info!("  Could not validate build status: {}", e),
+        }
+    } else {
+        info!("  build-graph-node task not found");
+    }
 
     // Launch the stack
     info!("Launching Graph Protocol stack...");

@@ -301,6 +301,7 @@ mod tests {
                 },
                 env: HashMap::new(),
                 working_dir: None,
+                validation: None,
             },
             depends_on: vec![crate::config::Dependency::Service {
                 service: "postgres-1".to_string(),

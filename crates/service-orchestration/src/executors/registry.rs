@@ -90,6 +90,7 @@ mod tests {
                 },
                 env: HashMap::new(),
                 working_dir: None,
+                validation: None,
             },
             depends_on: vec![],
             health_check: None,

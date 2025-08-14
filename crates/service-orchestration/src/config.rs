@@ -619,6 +619,7 @@ mod tests {
             },
             env: HashMap::new(),
             working_dir: None,
+            validation: None,
         };
 
         let updated = target.with_env(env.clone());

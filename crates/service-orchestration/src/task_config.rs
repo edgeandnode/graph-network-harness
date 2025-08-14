@@ -91,6 +91,7 @@ mod tests {
                 },
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
                 working_dir: Some("./contracts".to_string()),
+                validation: None,
             },
             depends_on: vec![Dependency::Service {
                 service: "anvil".to_string(),
@@ -122,6 +123,7 @@ mod tests {
                         },
                         env: HashMap::new(),
                         working_dir: None,
+                        validation: None,
                     },
                 ),
             )]),

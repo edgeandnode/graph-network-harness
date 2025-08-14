@@ -7,9 +7,8 @@ use crate::{
     OrchestrationError,
     config::{HealthCheck, ServiceConfig, ServiceStatus, ServiceTarget},
     executors::{
-        AttachedService, DockerAttachedExecutor, DockerExecutor, LayeredServiceExecutor,
-        ProcessExecutor, RunningService, ServiceExecutor, attached::LocalProcessAttachedExecutor,
-        traits::EventStreamable,
+        AttachedService, DockerExecutor, LayeredAttachedExecutor, LayeredServiceExecutor,
+        ProcessExecutor, RunningService, ServiceExecutor, traits::EventStreamable,
     },
     health::{HealthChecker, HealthMonitor, HealthStatus},
 };
@@ -152,49 +151,26 @@ impl ServiceManager {
         // Inject network configuration
         let network_config = self.inject_network_config(&config).await?;
 
-        // Handle attach based on target type
-        let (running_service, event_stream) = match &network_config.target {
+        // Use the unified LayeredAttachedExecutor for all attachment types
+        let executor = LayeredAttachedExecutor::new();
+
+        // Create a modified config with the appropriate metadata in env
+        let mut attach_config = network_config.clone();
+        match &mut attach_config.target {
             ServiceTarget::DockerAttach { container, env } => {
-                // Use DockerAttachedExecutor
-                let executor = DockerAttachedExecutor::new();
-
-                // Create a modified config with the container name in env for the executor
-                let mut attach_config = network_config.clone();
-                if let ServiceTarget::DockerAttach { env, .. } = &mut attach_config.target {
-                    env.insert("CONTAINER_NAME".to_string(), container.clone());
-                }
-
-                let service = executor.attach(attach_config.clone(), spawner).await?;
-                let stream = executor.stream_events(&service, spawner).await?;
-                (service, stream)
+                env.insert("CONTAINER_NAME".to_string(), container.clone());
             }
             ServiceTarget::ProcessAttach {
                 pid,
                 process_name,
                 env,
             } => {
-                // Use LocalProcessAttachedExecutor
-                let executor = LocalProcessAttachedExecutor::new();
-
-                // Create a modified config with PID or process name in env for the executor
-                let mut attach_config = network_config.clone();
-                if let ServiceTarget::ProcessAttach {
-                    pid,
-                    process_name,
-                    env,
-                } = &mut attach_config.target
-                {
-                    if let Some(p) = pid {
-                        env.insert("PID".to_string(), p.to_string());
-                    }
-                    if let Some(pn) = process_name {
-                        env.insert("PROCESS_NAME".to_string(), pn.clone());
-                    }
+                if let Some(p) = pid {
+                    env.insert("PID".to_string(), p.to_string());
                 }
-
-                let service = executor.attach(attach_config.clone(), spawner).await?;
-                let stream = executor.stream_events(&service, spawner).await?;
-                (service, stream)
+                if let Some(pn) = process_name {
+                    env.insert("PROCESS_NAME".to_string(), pn.clone());
+                }
             }
             _ => {
                 return Err(OrchestrationError::Config(format!(
@@ -202,7 +178,10 @@ impl ServiceManager {
                     network_config.target
                 )));
             }
-        };
+        }
+
+        let running_service = executor.attach(attach_config.clone(), spawner).await?;
+        let event_stream = executor.stream_events(&running_service, spawner).await?;
 
         // event_stream is already a Receiver, just use it directly
         let rx = event_stream;

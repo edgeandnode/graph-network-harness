@@ -10,7 +10,7 @@ pub mod process;
 pub mod registry;
 pub mod traits;
 
-pub use attached::{DockerAttachedExecutor, SystemdAttachedExecutor};
+pub use attached::LayeredAttachedExecutor;
 pub use docker::DockerExecutor;
 pub use layered::LayeredServiceExecutor;
 pub use process::ProcessExecutor;

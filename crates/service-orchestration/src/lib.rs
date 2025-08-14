@@ -53,9 +53,9 @@ pub use context::OrchestrationContext;
 pub use dependency_graph::{DependencyGraph, DependencyNode};
 // pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint}; // TODO: Refactor
 pub use executors::{
-    AttachedService, DockerAttachedExecutor, DockerExecutor, EventStreamable,
+    AttachedService, DockerExecutor, EventStreamable, LayeredAttachedExecutor,
     LayeredServiceExecutor, ManagedService, ProcessExecutor, RunningService, ServiceExecutor,
-    SystemdAttachedExecutor, layered::LayerConfig,
+    layered::LayerConfig,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 // pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager}; // TODO: Refactor

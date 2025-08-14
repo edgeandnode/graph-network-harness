@@ -23,16 +23,11 @@
 //! # }
 //! ```
 
-mod attacher;
 mod executor;
 #[cfg(test)]
 mod integration_tests;
 mod layers;
 
-pub use attacher::{
-    AttachmentLayer, DockerAttachmentLayer, LayeredAttacher, LocalAttachmentLayer,
-    SshAttachmentLayer,
-};
 pub use executor::LayeredExecutor;
 pub use layers::{DockerLayer, ExecutionLayer, LocalLayer, SshLayer};
 

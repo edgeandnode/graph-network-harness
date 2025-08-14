@@ -5,7 +5,6 @@
 
 #![warn(missing_docs)]
 
-pub mod attacher;
 pub mod backends;
 pub mod command;
 pub mod error;
@@ -20,18 +19,11 @@ pub mod target;
 #[cfg(test)]
 mod stdin_test;
 
-pub use attacher::{AttachConfig, AttachedHandle, Attacher, ServiceStatus};
 pub use command::Command;
 pub use error::Error;
 pub use event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 pub use executor::Executor;
 pub use launcher::Launcher;
-pub use layered::{
-    AttachmentLayer, DockerAttachmentLayer, DockerLayer, ExecutionLayer, LayeredAttacher,
-    LayeredExecutor, LocalAttachmentLayer, LocalLayer, SshAttachmentLayer, SshLayer,
-};
+pub use layered::{DockerLayer, ExecutionLayer, LayeredExecutor, LocalLayer, SshLayer};
 pub use process::{ExitResult, ExitStatus, ProcessHandle};
-pub use target::{
-    AttachedService, AttachedServiceBuilder, ManagedProcess, ManagedProcessBuilder, ManagedService,
-    ManagedServiceBuilder, Target,
-};
+pub use target::{ManagedProcess, ManagedProcessBuilder, Target};

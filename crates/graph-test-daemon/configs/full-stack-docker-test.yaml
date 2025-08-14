@@ -1,0 +1,132 @@
+# Full Graph Protocol Stack Configuration - Docker Integration Test
+name: graph-full-stack-docker
+description: Complete Graph Protocol test environment in Docker container via SSH
+
+services:
+  # PostgreSQL - Database for Graph Node
+  postgres:
+    service_type: postgres
+    target:
+      type: layered
+      params:
+        binary: /usr/lib/postgresql/14/bin/postgres
+        data_dir: /var/lib/postgresql/data
+        host: 0.0.0.0
+        port: 5432
+      layers:
+        - type: ssh
+          host: localhost
+          user: testuser
+          port: 2222
+          identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+          env:
+            POSTGRES_USER: postgres
+            POSTGRES_DB: graph-node
+      command_template: "{binary} -D {data_dir} -h {host} -p {port}"
+      health_check:
+        command: pg_isready
+        args:
+          - "-h"
+          - "localhost"
+          - "-p"
+          - "5432"
+        interval: 2
+        timeout: 1
+        retries: 10
+    dependencies: []
+
+  # IPFS - Content storage
+  ipfs:
+    service_type: ipfs
+    target:
+      type: layered
+      params:
+        binary: ipfs
+      layers:
+        - type: ssh
+          host: localhost
+          user: testuser
+          port: 2222
+          identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+          env:
+            IPFS_PATH: /home/testuser/.ipfs
+      command_template: "{binary} daemon"
+      health_check:
+        command: ipfs
+        args:
+          - "id"
+        interval: 2
+        timeout: 1
+        retries: 10
+    dependencies: []
+
+  # Anvil - Local Ethereum node
+  anvil:
+    service_type: anvil
+    target:
+      type: layered
+      params:
+        binary: /root/.foundry/bin/anvil
+        host: "0.0.0.0"
+        port: 8545
+        chain_id: 31337
+        block_time: 1
+      layers:
+        - type: ssh
+          host: localhost
+          user: testuser
+          port: 2222
+          identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+          env:
+            RUST_LOG: info
+      command_template: "{binary} --host {host} --port {port} --chain-id {chain_id} --block-time {block_time}"
+      health_check:
+        command: curl
+        args:
+          - "-s"
+          - "-X"
+          - "POST"
+          - "-H"
+          - "Content-Type: application/json"
+          - "--data"
+          - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+          - "http://localhost:8545"
+        interval: 2
+        timeout: 1
+        retries: 10
+    dependencies: []
+
+  # Graph Node - The main indexing service
+  # Note: Graph Node requires building from source or downloading a binary
+  # For now we'll comment it out until we have it available in the container
+  # graph-node:
+  #   service_type: graph-node
+  #   target:
+  #     type: layered
+  #     params:
+  #       binary: graph-node
+  #       postgres_url: "postgresql://postgres@localhost:5432/graph-node"
+  #       ipfs_url: "http://localhost:5001"
+  #       ethereum_url: "mainnet:http://localhost:8545"
+  #     layers:
+  #       - type: ssh
+  #         host: localhost
+  #         user: testuser
+  #         port: 2222
+  #         identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+  #         env:
+  #           RUST_LOG: info
+  #           GRAPH_LOG: info
+  #     command_template: "{binary} --postgres-url {postgres_url} --ipfs {ipfs_url} --ethereum-rpc {ethereum_url}"
+  #     health_check:
+  #       command: curl
+  #       args:
+  #         - "-s"
+  #         - "http://localhost:8000"
+  #       interval: 3
+  #       timeout: 2
+  #       retries: 20
+  #   dependencies:
+  #     - postgres
+  #     - ipfs
+  #     - anvil

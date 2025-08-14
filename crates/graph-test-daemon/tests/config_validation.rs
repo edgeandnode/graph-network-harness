@@ -161,7 +161,7 @@ fn test_graph_stack_config_specifics() {
 
     // Verify graph-node dependencies
     let graph_node = config.services.get("graph-node").unwrap();
-    let deps = &graph_node.orchestration.dependencies;
+    let deps = &graph_node.orchestration.depends_on;
     assert_eq!(deps.len(), 3, "Graph node should have 3 dependencies");
 
     let dep_names: Vec<String> = deps

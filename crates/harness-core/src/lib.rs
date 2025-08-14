@@ -10,10 +10,12 @@ pub mod action;
 pub mod base_service;
 pub mod base_task;
 pub mod client;
+pub mod command_event_state;
 pub mod config_traits;
 pub mod daemon;
 pub mod error;
 pub mod service;
+pub mod service_setup_task;
 pub mod task;
 pub mod tls;
 pub mod websocket_dispatch;
@@ -25,11 +27,17 @@ pub mod prelude {
     pub use crate::base_service::{BaseService, BaseServiceState, ServiceCommand};
     pub use crate::base_task::{BaseTask, BaseTaskState, TaskContext, TaskContextBuilder};
     pub use crate::client::TestClient;
+    pub use crate::command_event_state::{
+        CommandBuilder, CommandEvent, CommandExecutingTask, CommandTaskContext, CommandTaskState,
+    };
     pub use crate::daemon::{BaseDaemon, Daemon};
     pub use crate::error::Error;
     pub use crate::service::{
         ActionDescriptor, JsonService, JsonServiceRegistry, Service, ServiceSetup, ServiceState,
         StatefulService,
+    };
+    pub use crate::service_setup_task::{
+        IpfsSetupTask, PostgresSetupTask, ServiceSetupConfig, ServiceSetupTask,
     };
     pub use crate::task::{DeploymentTask, JsonTask, JsonTaskRegistry};
 

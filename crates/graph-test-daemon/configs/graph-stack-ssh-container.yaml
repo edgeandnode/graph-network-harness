@@ -123,7 +123,7 @@ services:
         ipfs: localhost:5001
         ethereum: mainnet:http://localhost:8545
         GRAPH_LOG: info
-    dependencies:
+    depends_on:
       - service: postgres
       - service: ipfs
       - service: anvil

@@ -33,7 +33,7 @@ services:
         interval: 2
         timeout: 1
         retries: 10
-    dependencies: []
+    depends_on: []
 
   # IPFS - Content storage
   ipfs:
@@ -58,7 +58,7 @@ services:
         interval: 2
         timeout: 1
         retries: 10
-    dependencies: []
+    depends_on: []
 
   # Anvil - Local Ethereum node
   anvil:
@@ -94,7 +94,7 @@ services:
         interval: 2
         timeout: 1
         retries: 10
-    dependencies: []
+    depends_on: []
 
   # Graph Node - The main indexing service
   # Note: Graph Node requires building from source or downloading a binary
@@ -126,7 +126,7 @@ services:
   #       interval: 3
   #       timeout: 2
   #       retries: 20
-  #   dependencies:
+  #   depends_on:
   #     - postgres
   #     - ipfs
   #     - anvil

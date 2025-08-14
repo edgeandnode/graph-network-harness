@@ -142,9 +142,7 @@ pub enum PostgresEvent {
 }
 
 impl Service for PostgresService {
-    fn service_type() -> &'static str {
-        "postgres"
-    }
+    const SERVICE_TYPE: &'static str = "postgres";
 
     fn name(&self) -> &str {
         "postgres"

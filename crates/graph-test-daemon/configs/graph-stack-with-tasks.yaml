@@ -4,6 +4,23 @@ description: Complete Graph Protocol test environment with deployment tasks
 
 # Deployment tasks that run once
 tasks:
+  # Setup tasks for services
+  postgres-setup:
+    task_type: postgres-setup
+    target:
+      type: process
+      command_template: "echo 'PostgreSQL setup placeholder'"
+    depends_on:
+      - service: postgres
+  
+  ipfs-setup:
+    task_type: ipfs-setup
+    target:
+      type: process
+      command_template: "echo 'IPFS setup placeholder'"
+    depends_on:
+      - service: ipfs
+  
   deploy-graph-contracts:
     task_type: graph-contracts-deployment
     target:
@@ -15,7 +32,7 @@ tasks:
       env:
         ETHEREUM_URL: "http://localhost:8545"
       working_dir: ./contracts/graph-contracts
-    dependencies:
+    depends_on:
       - service: anvil  # Need blockchain running first
     config:
       network_name: localhost
@@ -32,7 +49,7 @@ tasks:
       env:
         ETHEREUM_URL: "http://localhost:8545"
       working_dir: ./contracts/tap-contracts
-    dependencies:
+    depends_on:
       - service: anvil
       - task: deploy-graph-contracts  # TAP contracts depend on Graph contracts
     config:
@@ -142,10 +159,12 @@ services:
         GRAPH_LOG: info
         GRAPH_ENDPOINT: localhost
       ports: [8000, 8001, 8020, 8030, 8040]
-    dependencies:
+    depends_on:
       - service: postgres
       - service: ipfs
       - service: anvil
+      - task: postgres-setup  # Ensure PostgreSQL is initialized
+      - task: ipfs-setup      # Ensure IPFS is configured
       - task: deploy-graph-contracts  # Must have contracts deployed first
     health_check:
       command: curl
@@ -192,6 +211,6 @@ services:
           - http://graph-node:8000/subgraphs/name/graph-network
       env:
         INDEXER_AGENT_ETHEREUM: http://anvil:8545
-    dependencies:
+    depends_on:
       - service: graph-node
       - task: deploy-graph-contracts

@@ -104,7 +104,7 @@ services:
         GRAPH_LOG: info
         GRAPH_ENDPOINT: localhost
       ports: [8000, 8001, 8020, 8030, 8040]
-    dependencies:
+    depends_on:
       - service: postgres
       - service: ipfs
       - service: anvil

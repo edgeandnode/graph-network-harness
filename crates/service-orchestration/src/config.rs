@@ -97,19 +97,59 @@ impl From<bool> for ParamValue {
 }
 
 /// Dependency specification for services and tasks
+///
+/// Supports two syntaxes in YAML:
+/// 1. Explicit (currently used): `- service: postgres` or `- task: deploy`
+/// 2. Namespaced (alternative): `- services.postgres` or `- tasks.deploy`
+///
+/// The explicit syntax deserializes directly to Service/Task variants.
+/// The namespaced syntax deserializes to Namespaced and needs resolve().
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged, rename_all = "kebab-case")]
 pub enum Dependency {
-    /// Dependency on a service
+    /// Namespaced dependency string that needs resolution
+    /// Examples: "services.postgres", "tasks.deploy", or bare "postgres"
+    /// Use resolve() to convert to Service or Task variant
+    Namespaced(String),
+    /// Explicit service dependency (from `service: name` in YAML)
     Service {
         /// Name of the service this depends on
         service: String,
     },
-    /// Dependency on a task
+    /// Explicit task dependency (from `task: name` in YAML)
     Task {
         /// Name of the task this depends on
         task: String,
     },
+}
+
+impl Dependency {
+    /// Parse a namespaced dependency string into Service or Task variant
+    ///
+    /// This is only needed for Namespaced variants. Service and Task variants
+    /// are already resolved and will be returned unchanged.
+    ///
+    /// Our YAML configs use the explicit syntax (service:/task:) so they don't
+    /// need resolution, but this method enables the alternative string syntax.
+    pub fn resolve(&self) -> Self {
+        match self {
+            Dependency::Namespaced(s) => {
+                if let Some(name) = s.strip_prefix("services.") {
+                    Dependency::Service {
+                        service: name.to_string(),
+                    }
+                } else if let Some(name) = s.strip_prefix("tasks.") {
+                    Dependency::Task {
+                        task: name.to_string(),
+                    }
+                } else {
+                    // Default to service for backward compatibility
+                    Dependency::Service { service: s.clone() }
+                }
+            }
+            other => other.clone(),
+        }
+    }
 }
 
 /// Configuration for a service to be managed by the orchestrator
@@ -122,7 +162,7 @@ pub struct ServiceConfig {
     pub target: ServiceTarget,
     /// Services and tasks this service depends on
     #[serde(default)]
-    pub dependencies: Vec<Dependency>,
+    pub depends_on: Vec<Dependency>,
     /// Optional health check configuration
     pub health_check: Option<HealthCheck>,
 }
@@ -475,7 +515,7 @@ impl ServiceConfig {
         ServiceConfig {
             name: self.name.clone(),
             target: self.target.with_env(env),
-            dependencies: self.dependencies.clone(),
+            depends_on: self.depends_on.clone(),
             health_check: self.health_check.clone(),
         }
     }
@@ -539,7 +579,7 @@ mod tests {
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
                 working_dir: Some("/tmp".to_string()),
             },
-            dependencies: vec![Dependency::Service {
+            depends_on: vec![Dependency::Service {
                 service: "database".to_string(),
             }],
             health_check: Some(HealthCheck {
@@ -615,9 +655,54 @@ mod tests {
     }
 
     #[test]
+    fn test_namespaced_dependency_parsing() {
+        // Test namespaced service dependency
+        let yaml = "services.postgres";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "postgres".to_string()
+            }
+        );
+
+        // Test namespaced task dependency
+        let yaml = "tasks.deploy-contracts";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Task {
+                task: "deploy-contracts".to_string()
+            }
+        );
+
+        // Test plain string defaults to service
+        let yaml = "some-service";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "some-service".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn test_dependencies_in_yaml() {
         let yaml = r#"
-dependencies:
+depends_on:
   - service: postgres
   - service: redis
   - task: deploy-contracts
@@ -626,21 +711,125 @@ dependencies:
 
         #[derive(Deserialize)]
         struct TestConfig {
-            dependencies: Vec<Dependency>,
+            depends_on: Vec<Dependency>,
         }
 
         let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.dependencies.len(), 4);
+        assert_eq!(config.depends_on.len(), 4);
 
-        match &config.dependencies[0] {
+        match &config.depends_on[0] {
             Dependency::Service { service } => assert_eq!(service, "postgres"),
             _ => panic!("Expected service dependency"),
         }
 
-        match &config.dependencies[2] {
+        match &config.depends_on[2] {
             Dependency::Task { task } => assert_eq!(task, "deploy-contracts"),
             _ => panic!("Expected task dependency"),
         }
+    }
+
+    #[test]
+    fn test_namespaced_dependencies_in_yaml() {
+        let yaml = r#"
+depends_on:
+  - services.postgres
+  - tasks.deploy-contracts
+  - services.redis
+  - my-other-service
+"#;
+
+        #[derive(Deserialize)]
+        struct TestConfig {
+            depends_on: Vec<Dependency>,
+        }
+
+        let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.depends_on.len(), 4);
+
+        // First dependency should resolve to service
+        let resolved = config.depends_on[0].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "postgres".to_string()
+            }
+        );
+
+        // Second dependency should resolve to task
+        let resolved = config.depends_on[1].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Task {
+                task: "deploy-contracts".to_string()
+            }
+        );
+
+        // Third dependency should resolve to service
+        let resolved = config.depends_on[2].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "redis".to_string()
+            }
+        );
+
+        // Fourth dependency (plain string) defaults to service
+        let resolved = config.depends_on[3].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "my-other-service".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_both_dependency_syntaxes() {
+        use crate::task_config::StackConfig;
+
+        // Test that both explicit and namespaced syntaxes work
+        let yaml = r#"
+        name: test-stack
+        services:
+          test-service:
+            service_type: test
+            target:
+              type: process
+              command: "test"
+            depends_on:
+              # Explicit syntax (what we use in YAML)
+              - service: postgres
+              - task: setup-db
+              # Namespaced syntax (alternative)
+              - services.redis
+              - tasks.migrate-schema
+              # Plain string (defaults to service for backward compat)
+              - mongodb
+        "#;
+
+        let config: StackConfig = serde_yaml::from_str(yaml).unwrap();
+        let service = config.services.get("test-service").unwrap();
+        let deps = &service.orchestration.depends_on;
+
+        // First dependency - explicit service
+        assert!(matches!(&deps[0], Dependency::Service { service } if service == "postgres"));
+
+        // Second dependency - explicit task
+        assert!(matches!(&deps[1], Dependency::Task { task } if task == "setup-db"));
+
+        // Third dependency - namespaced service (needs resolve)
+        assert!(matches!(&deps[2], Dependency::Namespaced(s) if s == "services.redis"));
+        assert!(matches!(deps[2].resolve(), Dependency::Service { service } if service == "redis"));
+
+        // Fourth dependency - namespaced task (needs resolve)
+        assert!(matches!(&deps[3], Dependency::Namespaced(s) if s == "tasks.migrate-schema"));
+        assert!(matches!(deps[3].resolve(), Dependency::Task { task } if task == "migrate-schema"));
+
+        // Fifth dependency - plain string defaults to service
+        assert!(matches!(&deps[4], Dependency::Namespaced(s) if s == "mongodb"));
+        assert!(
+            matches!(deps[4].resolve(), Dependency::Service { service } if service == "mongodb")
+        );
     }
 
     #[test]

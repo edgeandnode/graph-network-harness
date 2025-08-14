@@ -36,7 +36,7 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
             ports: vec![],
             volumes: vec![],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -80,7 +80,7 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
             ports: vec![8080], // Map port 8080
             volumes: vec![],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -162,7 +162,7 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
             ports: vec![],
             volumes: vec![],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 

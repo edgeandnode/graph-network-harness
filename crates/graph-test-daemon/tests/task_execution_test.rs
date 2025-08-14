@@ -30,11 +30,11 @@ async fn test_stack_with_tasks() -> anyhow::Result<()> {
     // Verify task dependencies
     let graph_contracts = &config.tasks["deploy-graph-contracts"];
     assert_eq!(graph_contracts.task_type, "graph-contracts-deployment");
-    assert_eq!(graph_contracts.dependencies.len(), 1); // depends on anvil
+    assert_eq!(graph_contracts.depends_on.len(), 1); // depends on anvil
 
     let tap_contracts = &config.tasks["deploy-tap-contracts"];
     assert_eq!(tap_contracts.task_type, "tap-contracts-deployment");
-    assert_eq!(tap_contracts.dependencies.len(), 2); // depends on anvil and graph-contracts
+    assert_eq!(tap_contracts.depends_on.len(), 2); // depends on anvil and graph-contracts
 
     // Task configuration validated successfully
 
@@ -87,7 +87,7 @@ async fn test_task_dependency_handling() -> anyhow::Result<()> {
 
                 // Check that dependencies were seen before this task
                 if let Some(task_config) = config.tasks.get(&name) {
-                    for dep in &task_config.dependencies {
+                    for dep in &task_config.depends_on {
                         let dep_key = match dep {
                             service_orchestration::Dependency::Service { service } => {
                                 format!("service:{}", service)

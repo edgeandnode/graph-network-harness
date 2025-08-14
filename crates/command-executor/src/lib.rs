@@ -24,6 +24,8 @@ pub use error::Error;
 pub use event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 pub use executor::Executor;
 pub use launcher::Launcher;
-pub use layered::{DockerLayer, ExecutionLayer, LayeredExecutor, LocalLayer, SshLayer, WrapperLayer};
+pub use layered::{
+    DockerLayer, ExecutionLayer, LayeredExecutor, LocalLayer, SshLayer, WrapperLayer,
+};
 pub use process::{ExitResult, ExitStatus, ProcessHandle};
 pub use target::{ManagedProcess, ManagedProcessBuilder, Target};

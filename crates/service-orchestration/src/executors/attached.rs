@@ -403,7 +403,7 @@ mod tests {
                 env: HashMap::from([("SYSTEMD_SERVICE".to_string(), "nginx".to_string())]),
                 working_dir: None,
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
         assert!(executor.can_handle(&config));
@@ -422,7 +422,7 @@ mod tests {
                 ports: vec![],
                 volumes: vec![],
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
         assert!(executor.can_handle(&config));
@@ -440,7 +440,7 @@ mod tests {
                 env: HashMap::from([("PID".to_string(), "1234".to_string())]),
                 working_dir: None,
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
         assert!(executor.can_handle(&config));

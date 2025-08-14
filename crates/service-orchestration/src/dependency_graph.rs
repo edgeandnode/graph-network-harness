@@ -50,10 +50,14 @@ impl DependencyGraph {
             nodes.insert(node.clone());
 
             // Process dependencies
-            for dep in &service_config.orchestration.dependencies {
-                let dep_node = match dep {
-                    Dependency::Service { service } => DependencyNode::Service(service.clone()),
-                    Dependency::Task { task } => DependencyNode::Task(task.clone()),
+            for dep in &service_config.orchestration.depends_on {
+                // Resolve in case it's namespaced, otherwise use as-is
+                let dep_node = match dep.resolve() {
+                    Dependency::Service { service } => DependencyNode::Service(service),
+                    Dependency::Task { task } => DependencyNode::Task(task),
+                    Dependency::Namespaced(_) => {
+                        unreachable!("resolve() should never return Namespaced")
+                    }
                 };
 
                 // dep_node -> node (dependency must come before this node)
@@ -79,10 +83,14 @@ impl DependencyGraph {
             nodes.insert(node.clone());
 
             // Process dependencies
-            for dep in &task_config.dependencies {
-                let dep_node = match dep {
-                    Dependency::Service { service } => DependencyNode::Service(service.clone()),
-                    Dependency::Task { task } => DependencyNode::Task(task.clone()),
+            for dep in &task_config.depends_on {
+                // Resolve in case it's namespaced, otherwise use as-is
+                let dep_node = match dep.resolve() {
+                    Dependency::Service { service } => DependencyNode::Service(service),
+                    Dependency::Task { task } => DependencyNode::Task(task),
+                    Dependency::Namespaced(_) => {
+                        unreachable!("resolve() should never return Namespaced")
+                    }
                 };
 
                 // dep_node -> node (dependency must come before this node)
@@ -211,7 +219,7 @@ mod tests {
                         env: HashMap::new(),
                         working_dir: None,
                     },
-                    dependencies: vec![],
+                    depends_on: vec![],
                     health_check: None,
                 },
             },
@@ -232,7 +240,7 @@ mod tests {
                         ports: vec![8080],
                         volumes: vec![],
                     },
-                    dependencies: vec![],
+                    depends_on: vec![],
                     health_check: None,
                 },
             },
@@ -252,7 +260,7 @@ mod tests {
                         env: HashMap::new(),
                         working_dir: None,
                     },
-                    dependencies: vec![Dependency::Service {
+                    depends_on: vec![Dependency::Service {
                         service: "service-b".to_string(),
                     }],
                     health_check: None,
@@ -272,7 +280,7 @@ mod tests {
                     env: HashMap::new(),
                     working_dir: None,
                 },
-                dependencies: vec![Dependency::Service {
+                depends_on: vec![Dependency::Service {
                     service: "service-a".to_string(),
                 }],
                 config: HashMap::new(),
@@ -291,7 +299,7 @@ mod tests {
                     env: HashMap::new(),
                     working_dir: None,
                 },
-                dependencies: vec![
+                depends_on: vec![
                     Dependency::Service {
                         service: "service-c".to_string(),
                     },

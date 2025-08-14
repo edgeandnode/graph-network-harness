@@ -37,7 +37,7 @@ services:
         interval: 2
         timeout: 1
         retries: 10
-    dependencies: []
+    depends_on: []
 
   # PostgreSQL will be added later
   # postgres:

@@ -46,9 +46,9 @@ async fn test_full_graph_stack() -> Result<()> {
     let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
     // Register all services we want to test
-    builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
-    builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?;
-    builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+    builder.wire_service_type::<graph_test_daemon::services::PostgresService>()?;
+    builder.wire_service_type::<graph_test_daemon::services::IpfsService>()?;
+    builder.wire_service_type::<graph_test_daemon::services::AnvilService>()?;
 
     let daemon = GraphTestDaemon::from_builder(builder)
         .await
@@ -63,31 +63,31 @@ async fn test_full_graph_stack() -> Result<()> {
 
     // Launch the stack
     info!("Launching Graph Protocol stack...");
-    
+
     match daemon.launch_stack().await {
         Ok(_) => {
             info!("Stack launched successfully!");
-            
+
             // Give services a moment to stabilize and collect output
             async_io::Timer::after(Duration::from_secs(2)).await;
-            
+
             // TODO: Get service events once we have access to event streams
             // For now, just log that services have been launched
             info!("Services have been launched, but event streams are not yet accessible");
             info!("This will be fixed when launch_stack returns event receivers");
-            
+
             // Services should now be running
             info!("Verifying services are running...");
-            
+
             // Give services a moment to stabilize
             async_io::Timer::after(Duration::from_secs(3)).await;
-            
+
             // Query PostgreSQL directly
             info!("Checking PostgreSQL...");
             let pg_check = std::process::Command::new("pg_isready")
                 .args(["-h", "localhost", "-p", "5432"])
                 .output();
-            
+
             match pg_check {
                 Ok(output) if output.status.success() => {
                     info!("✓ PostgreSQL is accepting connections");
@@ -96,13 +96,13 @@ async fn test_full_graph_stack() -> Result<()> {
                     warn!("✗ PostgreSQL is not responding on port 5432");
                 }
             }
-            
+
             // Query IPFS
             info!("Checking IPFS...");
             let ipfs_check = std::process::Command::new("curl")
                 .args(["-s", "http://localhost:5001/api/v0/version"])
                 .output();
-            
+
             match ipfs_check {
                 Ok(output) if output.status.success() => {
                     let response = String::from_utf8_lossy(&output.stdout);
@@ -116,18 +116,22 @@ async fn test_full_graph_stack() -> Result<()> {
                     warn!("✗ IPFS is not responding on port 5001");
                 }
             }
-            
+
             // Query Anvil
             info!("Checking Anvil...");
             let anvil_check = std::process::Command::new("curl")
                 .args([
-                    "-s", "-X", "POST",
-                    "-H", "Content-Type: application/json",
-                    "--data", r#"{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}"#,
-                    "http://localhost:8545"
+                    "-s",
+                    "-X",
+                    "POST",
+                    "-H",
+                    "Content-Type: application/json",
+                    "--data",
+                    r#"{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}"#,
+                    "http://localhost:8545",
                 ])
                 .output();
-            
+
             match anvil_check {
                 Ok(output) if output.status.success() => {
                     let response = String::from_utf8_lossy(&output.stdout);
@@ -141,11 +145,11 @@ async fn test_full_graph_stack() -> Result<()> {
                     warn!("✗ Anvil is not responding on port 8545");
                 }
             }
-            
+
             // Let services run for a bit longer
             info!("Services are running, letting them stabilize...");
             async_io::Timer::after(Duration::from_secs(5)).await;
-            
+
             info!("All services have been queried successfully!");
         }
         Err(e) => {
@@ -176,7 +180,7 @@ async fn test_postgres_service() -> Result<()> {
     // Test just PostgreSQL service
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
     let manifest_path = PathBuf::from(&manifest_dir);
-    
+
     // Create a minimal config with just postgres
     let config_yaml = r#"
 name: postgres-test
@@ -212,7 +216,7 @@ services:
         interval: 2
         timeout: 1
         retries: 10
-    dependencies: []
+    depends_on: []
 "#;
 
     std::env::set_current_dir(&manifest_path)?;
@@ -221,7 +225,7 @@ services:
 
     let endpoint: SocketAddr = "127.0.0.1:9446".parse()?;
     let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
-    builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
+    builder.wire_service_type::<graph_test_daemon::services::PostgresService>()?;
 
     let daemon = GraphTestDaemon::from_builder(builder).await?;
     daemon.start().await?;
@@ -230,12 +234,12 @@ services:
     match daemon.launch_stack().await {
         Ok(_) => {
             info!("PostgreSQL started successfully");
-            
+
             // Wait for service to stabilize
             async_io::Timer::after(Duration::from_secs(5)).await;
-            
+
             info!("PostgreSQL should be running and accepting connections");
-            
+
             // TODO: Add actual health check once the API is available
         }
         Err(e) => {

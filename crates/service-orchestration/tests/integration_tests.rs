@@ -23,7 +23,7 @@ fn test_service_config_yaml_roundtrip() {
             ]),
             working_dir: Some("/tmp".to_string()),
         },
-        dependencies: vec![
+        depends_on: vec![
             service_orchestration::Dependency::Service {
                 service: "database".to_string(),
             },
@@ -45,7 +45,7 @@ fn test_service_config_yaml_roundtrip() {
     let deserialized: ServiceConfig = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
 
     assert_eq!(config.name, deserialized.name);
-    assert_eq!(config.dependencies, deserialized.dependencies);
+    assert_eq!(config.depends_on, deserialized.depends_on);
     assert!(matches!(deserialized.target, ServiceTarget::Process { .. }));
 }
 
@@ -61,7 +61,7 @@ fn test_docker_service_config() {
             ports: vec![80, 443],
             volumes: vec!["/data:/usr/share/nginx/html".to_string()],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: Some(HealthCheck {
             command: "curl".to_string(),
             args: vec!["-f".to_string(), "http://localhost/health".to_string()],
@@ -110,7 +110,7 @@ fn test_layered_ssh_service_config() {
             }),
             health_check: None,
         },
-        dependencies: vec![service_orchestration::Dependency::Service {
+        depends_on: vec![service_orchestration::Dependency::Service {
             service: "database".to_string(),
         }],
         health_check: None,
@@ -197,7 +197,7 @@ async fn test_service_manager_initialization() {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -211,7 +211,7 @@ async fn test_service_manager_initialization() {
             ports: vec![],
             volumes: vec![],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -264,7 +264,7 @@ fn test_executor_type_detection() {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -278,7 +278,7 @@ fn test_executor_type_detection() {
             ports: vec![],
             volumes: vec![],
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -307,7 +307,7 @@ fn test_executor_type_detection() {
             }),
             health_check: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -338,7 +338,7 @@ fn test_service_config_env_injection() {
             env: original_env.clone(),
             working_dir: None,
         },
-        dependencies: vec![service_orchestration::Dependency::Service {
+        depends_on: vec![service_orchestration::Dependency::Service {
             service: "db".to_string(),
         }],
         health_check: None,
@@ -358,5 +358,5 @@ fn test_service_config_env_injection() {
     // Updated config should have new environment
     assert_eq!(updated_config.target.env(), injected_env);
     assert_eq!(updated_config.name, config.name);
-    assert_eq!(updated_config.dependencies, config.dependencies);
+    assert_eq!(updated_config.depends_on, config.depends_on);
 }

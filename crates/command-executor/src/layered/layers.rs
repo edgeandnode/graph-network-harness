@@ -375,40 +375,40 @@ impl ExecutionLayer for WrapperLayer {
         _context: &ExecutionContext,
     ) -> Result<Command, Error> {
         let mut wrapper_cmd = Command::new(&self.command);
-        
+
         // Add wrapper arguments
         for arg in &self.args {
             wrapper_cmd.arg(arg);
         }
-        
+
         // Add separator if specified
         if let Some(sep) = &self.separator {
             wrapper_cmd.arg(sep);
         }
-        
+
         // Add the wrapped command and its arguments
         wrapper_cmd.arg(command.get_program());
         for arg in command.get_args() {
             wrapper_cmd.arg(arg);
         }
-        
+
         // Apply wrapper's own environment variables first
         for (key, value) in &self.env {
             wrapper_cmd.env(key, value);
         }
-        
+
         // Then apply environment variables from the wrapped command (these can override wrapper's env)
         for (key, value) in command.get_envs() {
             wrapper_cmd.env(key, value);
         }
-        
+
         // Use wrapper's working directory if specified, otherwise use wrapped command's
         if let Some(dir) = &self.working_dir {
             wrapper_cmd.current_dir(dir);
         } else if let Some(dir) = command.get_current_dir() {
             wrapper_cmd.current_dir(dir);
         }
-        
+
         Ok(wrapper_cmd)
     }
 
@@ -600,14 +600,18 @@ mod tests {
     #[test]
     fn test_wrapper_layer_basic() {
         let layer = WrapperLayer::new("nice").with_args(["-n", "10"]);
-        
+
         let mut cmd = Command::new("echo");
         cmd.arg("hello");
         let context = ExecutionContext::new();
         let result = layer.wrap_command(cmd, &context).unwrap();
-        
+
         assert_eq!(result.get_program(), "nice");
-        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        let args: Vec<_> = result
+            .get_args()
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
         assert_eq!(args, vec!["-n", "10", "echo", "hello"]);
     }
 
@@ -616,28 +620,36 @@ mod tests {
         let layer = WrapperLayer::new("sudo")
             .with_args(["-u", "appuser"])
             .with_separator("--");
-        
+
         let mut cmd = Command::new("service");
         cmd.arg("nginx").arg("restart");
         let context = ExecutionContext::new();
         let result = layer.wrap_command(cmd, &context).unwrap();
-        
+
         assert_eq!(result.get_program(), "sudo");
-        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
-        assert_eq!(args, vec!["-u", "appuser", "--", "service", "nginx", "restart"]);
+        let args: Vec<_> = result
+            .get_args()
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
+        assert_eq!(
+            args,
+            vec!["-u", "appuser", "--", "service", "nginx", "restart"]
+        );
     }
 
     #[test]
     fn test_wrapper_layer_preserves_env() {
         let layer = WrapperLayer::new("timeout").with_arg("30");
-        
+
         let mut cmd = Command::new("test");
         cmd.env("TEST_VAR", "value");
         let context = ExecutionContext::new();
         let result = layer.wrap_command(cmd, &context).unwrap();
-        
+
         // Check that environment variable is preserved
-        let envs: Vec<_> = result.get_envs()
+        let envs: Vec<_> = result
+            .get_envs()
             .iter()
             .filter(|(k, _)| k.to_str() == Some("TEST_VAR"))
             .collect();
@@ -649,20 +661,29 @@ mod tests {
         // Test stacking multiple wrapper layers
         let screen_layer = WrapperLayer::new("screen").with_args(["-dmS", "debug"]);
         let gdb_layer = WrapperLayer::new("gdb").with_arg("--args");
-        
+
         let mut cmd = Command::new("./my-app");
         cmd.arg("--port").arg("8080");
-        
+
         let context = ExecutionContext::new();
-        
+
         // First wrap with gdb
         let gdb_wrapped = gdb_layer.wrap_command(cmd, &context).unwrap();
         // Then wrap with screen
         let screen_wrapped = screen_layer.wrap_command(gdb_wrapped, &context).unwrap();
-        
+
         assert_eq!(screen_wrapped.get_program(), "screen");
-        let args: Vec<_> = screen_wrapped.get_args().iter().map(|s| s.to_str().unwrap()).collect();
-        assert_eq!(args, vec!["-dmS", "debug", "gdb", "--args", "./my-app", "--port", "8080"]);
+        let args: Vec<_> = screen_wrapped
+            .get_args()
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
+        assert_eq!(
+            args,
+            vec![
+                "-dmS", "debug", "gdb", "--args", "./my-app", "--port", "8080"
+            ]
+        );
     }
 
     #[test]
@@ -670,28 +691,39 @@ mod tests {
         let layer = WrapperLayer::new("/usr/local/bin/monitor")
             .with_args(["--metrics-port", "9090"])
             .with_separator("--exec");
-        
+
         let mut cmd = Command::new("./service");
         cmd.arg("start");
         let context = ExecutionContext::new();
         let result = layer.wrap_command(cmd, &context).unwrap();
-        
-        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
-        assert_eq!(args, vec!["--metrics-port", "9090", "--exec", "./service", "start"]);
+
+        let args: Vec<_> = result
+            .get_args()
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
+        assert_eq!(
+            args,
+            vec!["--metrics-port", "9090", "--exec", "./service", "start"]
+        );
     }
 
     #[test]
     fn test_wrapper_layer_no_separator() {
         let layer = WrapperLayer::new("strace")
             .with_args(["-f", "-o", "trace.log"])
-            .no_separator();  // Explicitly no separator
-        
+            .no_separator(); // Explicitly no separator
+
         let mut cmd = Command::new("ls");
         cmd.arg("-la");
         let context = ExecutionContext::new();
         let result = layer.wrap_command(cmd, &context).unwrap();
-        
-        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+
+        let args: Vec<_> = result
+            .get_args()
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
         assert_eq!(args, vec!["-f", "-o", "trace.log", "ls", "-la"]);
     }
 }

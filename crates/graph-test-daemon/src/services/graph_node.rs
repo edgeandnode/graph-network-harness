@@ -179,9 +179,7 @@ pub enum GraphNodeEvent {
 }
 
 impl Service for GraphNodeService {
-    fn service_type() -> &'static str {
-        "graph-node"
-    }
+    const SERVICE_TYPE: &'static str = "graph-node";
 
     fn name(&self) -> &str {
         "graph-node"

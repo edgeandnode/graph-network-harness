@@ -119,8 +119,9 @@ impl ServiceDiscovery {
         let mut config = HashMap::new();
 
         // For each dependency, discover endpoints and add to config
-        for dep in &service_config.dependencies {
-            match dep {
+        for dep in &service_config.depends_on {
+            let resolved = dep.resolve();
+            match resolved {
                 crate::config::Dependency::Service { service } => {
                     if let Some(dep_service) = self.discover_service(service).await? {
                         // Add all endpoints from the dependency to config
@@ -172,6 +173,9 @@ impl ServiceDiscovery {
                 }
                 crate::config::Dependency::Task { .. } => {
                     // Tasks don't have endpoints, skip
+                }
+                crate::config::Dependency::Namespaced(_) => {
+                    unreachable!("resolve() should never return Namespaced")
                 }
             }
         }
@@ -298,7 +302,7 @@ mod tests {
                 env: HashMap::new(),
                 working_dir: None,
             },
-            dependencies: vec![crate::config::Dependency::Service {
+            depends_on: vec![crate::config::Dependency::Service {
                 service: "postgres-1".to_string(),
             }],
             health_check: None,

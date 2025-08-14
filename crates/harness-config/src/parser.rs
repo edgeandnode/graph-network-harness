@@ -243,7 +243,7 @@ pub fn convert_to_orchestrator_with_context(
     Ok(ServiceConfig {
         name: service_name.to_string(),
         target,
-        dependencies: service
+        depends_on: service
             .dependencies
             .iter()
             .map(|dep| service_orchestration::Dependency::Service {

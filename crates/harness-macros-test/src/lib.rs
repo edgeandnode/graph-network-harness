@@ -68,9 +68,7 @@ impl TestService {
 }
 
 impl Service for TestService {
-    fn service_type() -> &'static str {
-        "test"
-    }
+    const SERVICE_TYPE: &'static str = "test";
 
     fn name(&self) -> &str {
         "test-service"

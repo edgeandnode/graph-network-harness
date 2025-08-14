@@ -28,14 +28,14 @@ fn test_parse_graph_stack_with_tasks_yaml() {
 
     // Verify task dependencies
     let graph_contracts_task = &config.tasks["deploy-graph-contracts"];
-    assert_eq!(graph_contracts_task.dependencies.len(), 1);
+    assert_eq!(graph_contracts_task.depends_on.len(), 1);
 
     let tap_contracts_task = &config.tasks["deploy-tap-contracts"];
-    assert_eq!(tap_contracts_task.dependencies.len(), 2);
+    assert_eq!(tap_contracts_task.depends_on.len(), 2);
 
     // Verify service dependencies
     let graph_node_service = &config.services["graph-node"];
-    assert_eq!(graph_node_service.orchestration.dependencies.len(), 4);
+    assert_eq!(graph_node_service.orchestration.depends_on.len(), 4);
 }
 
 #[test]

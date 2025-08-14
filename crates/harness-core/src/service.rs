@@ -25,9 +25,7 @@ use std::result::Result;
 pub trait Service: Send + Sync + 'static {
     /// The service type identifier that links this implementation to YAML service definitions.
     /// YAML services with matching `service_type` will use this implementation for actions.
-    fn service_type() -> &'static str
-    where
-        Self: Sized;
+    const SERVICE_TYPE: &'static str;
 
     /// Get the service name
     fn name(&self) -> &str;
@@ -386,7 +384,7 @@ impl JsonServiceRegistry {
         }
 
         // Track the service type
-        self.service_types.insert(S::service_type().to_string());
+        self.service_types.insert(S::SERVICE_TYPE.to_string());
 
         let adapter = JsonServiceAdapter::new(service)?;
         self.services.insert(instance_name, Box::new(adapter));
@@ -507,9 +505,7 @@ mod tests {
     }
 
     impl Service for TestService {
-        fn service_type() -> &'static str {
-            "test-service"
-        }
+        const SERVICE_TYPE: &'static str = "test-service";
 
         fn name(&self) -> &str {
             "test"

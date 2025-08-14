@@ -38,6 +38,15 @@ pub trait Daemon: Send + Sync {
     fn service_manager(&self) -> &ServiceManager;
 }
 
+/// Trait for daemons that can auto-wire their built-in types
+pub trait AutoWire {
+    /// Auto-wire all built-in service and task types for this daemon
+    ///
+    /// Implementations should attempt to wire all their known types.
+    /// Types that don't exist in the configuration will be silently skipped.
+    fn auto_wire_types(builder: &mut DaemonBuilder) -> Result<(), Error>;
+}
+
 /// Base daemon implementation that provides core functionality
 pub struct BaseDaemon {
     /// Service manager for orchestrating services
@@ -123,7 +132,7 @@ impl BaseDaemon {
                     let service_config = ServiceConfig {
                         name: name.clone(),
                         target: service_instance.orchestration.target.clone(),
-                        dependencies: service_instance.orchestration.dependencies.clone(),
+                        depends_on: service_instance.orchestration.depends_on.clone(),
                         health_check: service_instance.orchestration.health_check.clone(),
                     };
 
@@ -184,6 +193,14 @@ impl BaseDaemon {
 
         // Check if we have a registered task for this task_type
         if self.json_task_registry.get(task_name).is_some() {
+            // Check if task is already completed
+            let is_complete = self.json_task_registry.validate(task_name).await?;
+
+            if is_complete {
+                info!("Task {} is already complete, skipping execution", task_name);
+                return Ok(());
+            }
+
             // Execute the task using the JsonTaskRegistry which handles spawning
             info!("Executing registered task: {}", task_name);
 
@@ -401,7 +418,7 @@ impl DaemonBuilder {
     }
 
     /// Wire up all services of a given type from the stored configuration
-    pub fn wire_service<S>(&mut self, service_type: &str) -> Result<&mut Self, Error>
+    pub fn wire_service_type<S>(&mut self) -> Result<&mut Self, Error>
     where
         S: Service
             + ServiceFromConfig
@@ -415,7 +432,7 @@ impl DaemonBuilder {
         let matching_services: Vec<(String, service_orchestration::ServiceConfig)> = config
             .services
             .iter()
-            .filter(|(_, service_instance)| service_instance.service_type == service_type)
+            .filter(|(_, service_instance)| service_instance.service_type == S::SERVICE_TYPE)
             .map(|(name, service_instance)| {
                 let mut config = service_instance.orchestration.clone();
                 // Set the service name from the map key if not already set
@@ -427,10 +444,11 @@ impl DaemonBuilder {
             .collect();
 
         if matching_services.is_empty() {
-            return Err(Error::validation(format!(
+            tracing::debug!(
                 "No services of type '{}' found in configuration",
-                service_type
-            )));
+                S::SERVICE_TYPE
+            );
+            return Ok(self);
         }
 
         // Register each matching service
@@ -438,7 +456,7 @@ impl DaemonBuilder {
             tracing::info!(
                 "Wiring service '{}' of type '{}'",
                 instance_name,
-                service_type
+                S::SERVICE_TYPE
             );
 
             // Create the service from config
@@ -483,7 +501,7 @@ impl DaemonBuilder {
     }
 
     /// Wire up all tasks of a given type from the stored configuration
-    pub fn wire_task<T>(&mut self, task_type: &str) -> Result<&mut Self, Error>
+    pub fn wire_task_type<T>(&mut self) -> Result<&mut Self, Error>
     where
         T: DeploymentTask + TaskFromConfig + 'static,
         T::State: schemars::JsonSchema,
@@ -494,24 +512,28 @@ impl DaemonBuilder {
         let matching_tasks: Vec<(String, TaskConfig)> = config
             .tasks
             .iter()
-            .filter(|(_, task_config)| task_config.task_type == task_type)
+            .filter(|(_, task_config)| task_config.task_type == T::TASK_TYPE)
             .map(|(name, task_config)| (name.clone(), task_config.clone()))
             .collect();
 
         if matching_tasks.is_empty() {
-            return Err(Error::validation(format!(
-                "No tasks of type '{}' found in configuration",
-                task_type
-            )));
+            tracing::debug!("No tasks of type '{}' found in configuration", T::TASK_TYPE);
+            return Ok(self);
         }
 
         // Register each matching task
         for (task_name, task_config) in matching_tasks {
-            tracing::info!("Wiring task '{}' of type '{}'", task_name, task_type);
+            tracing::info!("Wiring task '{}' of type '{}'", task_name, T::TASK_TYPE);
 
             self.register_task_from_config::<T>(task_name, &task_config)?;
         }
 
+        Ok(self)
+    }
+
+    /// Auto-wire types for a specific daemon implementation
+    pub fn with_auto_wire<D: AutoWire>(&mut self) -> Result<&mut Self, Error> {
+        D::auto_wire_types(self)?;
         Ok(self)
     }
 
@@ -572,21 +594,25 @@ impl DaemonBuilder {
         );
         for (name, service_config) in &config.services {
             // Validate dependencies using the strongly-typed Dependency enum
-            for dep in &service_config.orchestration.dependencies {
-                match dep {
+            for dep in &service_config.orchestration.depends_on {
+                let resolved = dep.resolve();
+                match resolved {
                     service_orchestration::Dependency::Service { service } => {
-                        if !config.services.contains_key(service) {
+                        if !config.services.contains_key(&service) {
                             return Err(Error::validation(format!(
                                 "Service '{name}' depends on unknown service '{service}'"
                             )));
                         }
                     }
                     service_orchestration::Dependency::Task { task } => {
-                        if !config.tasks.contains_key(task) {
+                        if !config.tasks.contains_key(&task) {
                             return Err(Error::validation(format!(
                                 "Service '{name}' depends on unknown task '{task}'"
                             )));
                         }
+                    }
+                    service_orchestration::Dependency::Namespaced(_) => {
+                        unreachable!("resolve() should never return Namespaced")
                     }
                 }
             }
@@ -596,21 +622,25 @@ impl DaemonBuilder {
         info!("Validating {} task configurations", config.tasks.len());
         for (name, task_config) in &config.tasks {
             // Validate dependencies using the strongly-typed Dependency enum
-            for dep in &task_config.dependencies {
-                match dep {
+            for dep in &task_config.depends_on {
+                let resolved = dep.resolve();
+                match resolved {
                     service_orchestration::Dependency::Service { service } => {
-                        if !config.services.contains_key(service) {
+                        if !config.services.contains_key(&service) {
                             return Err(Error::validation(format!(
                                 "Task '{name}' depends on unknown service '{service}'"
                             )));
                         }
                     }
                     service_orchestration::Dependency::Task { task } => {
-                        if !config.tasks.contains_key(task) {
+                        if !config.tasks.contains_key(&task) {
                             return Err(Error::validation(format!(
                                 "Task '{name}' depends on unknown task '{task}'"
                             )));
                         }
+                    }
+                    service_orchestration::Dependency::Namespaced(_) => {
+                        unreachable!("resolve() should never return Namespaced")
                     }
                 }
             }
@@ -663,9 +693,7 @@ mod tests {
     }
 
     impl Service for TestService {
-        fn service_type() -> &'static str {
-            "test-service"
-        }
+        const SERVICE_TYPE: &'static str = "test-service";
 
         fn name(&self) -> &str {
             "test-service"
@@ -851,7 +879,7 @@ mod tests {
             "tasks": {
                 "test-task-instance": {
                     "task_type": "test-task",
-                    "dependencies": []
+                    "depends_on": []
                 }
             }
         });
@@ -888,11 +916,11 @@ mod tests {
             "services": {
                 "svc1": {
                     "service_type": "test-service",
-                    "dependencies": []
+                    "depends_on": []
                 },
                 "svc2": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "svc1" },
                         { "task": "task1" }
                     ]
@@ -901,7 +929,7 @@ mod tests {
             "tasks": {
                 "task1": {
                     "task_type": "test-task",
-                    "dependencies": []
+                    "depends_on": []
                 }
             }
         });
@@ -932,13 +960,13 @@ mod tests {
             "services": {
                 "test-svc": {
                     "service_type": "test-service",
-                    "dependencies": []
+                    "depends_on": []
                 }
             },
             "tasks": {
                 "task1": {
                     "task_type": "test-task",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "test-svc" }
                     ]
                 }
@@ -977,13 +1005,13 @@ mod tests {
             "services": {
                 "svc1": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "svc2" }
                     ]
                 },
                 "svc2": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "svc1" }
                     ]
                 }
@@ -1033,18 +1061,18 @@ mod tests {
             "services": {
                 "db": {
                     "service_type": "test-service",
-                    "dependencies": []
+                    "depends_on": []
                 },
                 "cache": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "db" },
                         { "task": "db-migrate" }
                     ]
                 },
                 "api": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "db" },
                         { "service": "cache" },
                         { "task": "cache-warm" }
@@ -1052,7 +1080,7 @@ mod tests {
                 },
                 "web": {
                     "service_type": "test-service",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "api" }
                     ]
                 }
@@ -1060,13 +1088,13 @@ mod tests {
             "tasks": {
                 "db-migrate": {
                     "task_type": "test-task",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "db" }
                     ]
                 },
                 "cache-warm": {
                     "task_type": "test-task",
-                    "dependencies": [
+                    "depends_on": [
                         { "service": "cache" }
                     ]
                 }
@@ -1100,11 +1128,11 @@ mod tests {
             "tasks": {
                 "task1": {
                     "task_type": "test-task",
-                    "dependencies": []
+                    "depends_on": []
                 },
                 "task2": {
                     "task_type": "test-task",
-                    "dependencies": [
+                    "depends_on": [
                         { "task": "task1" }
                     ]
                 }

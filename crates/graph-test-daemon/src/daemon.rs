@@ -4,6 +4,7 @@
 //! Graph Protocol specific services that can perform actions.
 
 use async_trait::async_trait;
+use harness_core::daemon::{AutoWire, DaemonBuilder};
 use harness_core::prelude::*;
 use harness_core::{Error, ServiceManager};
 use service_orchestration::StackConfig;
@@ -13,6 +14,7 @@ use tracing::info;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
 use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
+use harness_core::service_setup_task::{IpfsSetupTask, PostgresSetupTask, ServiceSetupTask};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -23,10 +25,36 @@ pub struct GraphTestDaemon {
     base: BaseDaemon,
 }
 
+impl AutoWire for GraphTestDaemon {
+    fn auto_wire_types(builder: &mut DaemonBuilder) -> Result<(), Error> {
+        // Wire all known service types
+        builder
+            .wire_service_type::<GraphNodeService>()?
+            .wire_service_type::<AnvilService>()?
+            .wire_service_type::<PostgresService>()?
+            .wire_service_type::<IpfsService>()?;
+
+        // Wire all known task types
+        builder
+            .wire_task_type::<GraphContractsTask>()?
+            .wire_task_type::<TapContractsTask>()?
+            .wire_task_type::<SubgraphDeployTask>()?
+            .wire_task_type::<PostgresSetupTask>()?
+            .wire_task_type::<IpfsSetupTask>()?
+            .wire_task_type::<ServiceSetupTask>()?;
+
+        Ok(())
+    }
+}
+
 impl GraphTestDaemon {
     /// Create a new Graph Test Daemon from a pre-configured builder
     /// This allows the caller to control exactly which services and tasks are registered
-    pub async fn from_builder(builder: harness_core::daemon::DaemonBuilder) -> Result<Self, Error> {
+    pub async fn from_builder(
+        mut builder: harness_core::daemon::DaemonBuilder,
+    ) -> Result<Self, Error> {
+        // Auto-wire all known types before building
+        Self::auto_wire_types(&mut builder)?;
         let base = builder.build().await?;
         Ok(Self { base })
     }
@@ -37,21 +65,10 @@ impl GraphTestDaemon {
         endpoint: SocketAddr,
         config: GraphStackConfig,
     ) -> Result<Self, Error> {
-        // Build the base daemon with Graph-specific services
+        // Build the base daemon with Graph-specific services and auto-wire
         let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
-        // Wire up services by type - each call validates that services of that type exist
-        builder
-            .wire_service::<GraphNodeService>("graph-node")?
-            .wire_service::<AnvilService>("anvil")?
-            .wire_service::<PostgresService>("postgres")?
-            .wire_service::<IpfsService>("ipfs")?;
-
-        // Wire up tasks by type - each call validates that tasks of that type exist
-        builder
-            .wire_task::<GraphContractsTask>("graph-contracts-deployment")?
-            .wire_task::<TapContractsTask>("tap-contracts-deployment")?
-            .wire_task::<SubgraphDeployTask>("subgraph-deployment")?;
+        builder.with_auto_wire::<Self>()?;
 
         let base = builder.build().await?;
 

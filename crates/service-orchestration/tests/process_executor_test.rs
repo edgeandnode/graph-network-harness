@@ -22,7 +22,7 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -61,7 +61,7 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -123,7 +123,7 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
             env,
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 

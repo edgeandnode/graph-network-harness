@@ -370,7 +370,7 @@ async fn test_layered_ssh_basic_command() -> Result<()> {
                 args: vec!["Hello from SSH test".to_string()],
             },
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -421,7 +421,7 @@ async fn test_layered_ssh_long_running_process() -> Result<()> {
                 args: vec!["10".to_string()],
             },
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -481,7 +481,7 @@ async fn test_layered_ssh_environment_forwarding() -> Result<()> {
                 ],
             },
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -547,7 +547,7 @@ async fn test_layered_ssh_concurrent_services() -> Result<()> {
                     ],
                 },
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
 
@@ -614,7 +614,7 @@ async fn test_layered_ssh_custom_port() -> Result<()> {
                 args: vec![],
             },
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -660,7 +660,7 @@ async fn test_layered_ssh_key_authentication() -> Result<()> {
                 args: vec![],
             },
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 

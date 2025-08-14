@@ -22,7 +22,7 @@
 //!         env: Default::default(),
 //!         working_dir: None,
 //!     },
-//!     dependencies: vec![],
+//!     depends_on: vec![],
 //!     health_check: None,
 //! };
 //!

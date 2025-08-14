@@ -152,9 +152,7 @@ pub enum IpfsEvent {
 }
 
 impl Service for IpfsService {
-    fn service_type() -> &'static str {
-        "ipfs"
-    }
+    const SERVICE_TYPE: &'static str = "ipfs";
 
     fn name(&self) -> &str {
         "ipfs"

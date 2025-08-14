@@ -29,6 +29,17 @@ pub trait DeploymentTask: Send + Sync + 'static {
     /// The task type identifier that links this implementation to YAML task definitions
     const TASK_TYPE: &'static str;
 
+    /// Validate whether the task has already been completed
+    ///
+    /// This method checks if the task's expected outcome is already present,
+    /// allowing for idempotent execution. Returns true if the task is already
+    /// complete and doesn't need to run again.
+    ///
+    /// Default implementation always returns false (task not complete).
+    async fn validate(&self) -> Result<bool, Error> {
+        Ok(false)
+    }
+
     /// Execute the task, returning a stream of state changes
     ///
     /// The task runs its internal state machine and emits state transitions
@@ -88,6 +99,9 @@ where
 /// Trait for tasks that work with JSON (used for dynamic dispatch)
 #[async_trait]
 pub trait JsonTask: Send + Sync {
+    /// Validate whether the task has already been completed
+    async fn validate(&self) -> Result<bool, Error>;
+
     /// Execute the task, returning a stream of JSON state updates and a converter future
     async fn execute_json(
         &self,
@@ -104,6 +118,10 @@ where
     T: DeploymentTask + 'static,
     T::State: JsonSchema,
 {
+    async fn validate(&self) -> Result<bool, Error> {
+        self.inner.validate().await
+    }
+
     async fn execute_json(
         &self,
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
@@ -172,6 +190,15 @@ impl JsonTaskRegistry {
     /// Get all task type identifiers
     pub fn list_types(&self) -> Vec<&str> {
         self.task_types.iter().map(|s| s.as_str()).collect()
+    }
+
+    /// Validate whether a task has already been completed
+    pub async fn validate(&self, instance_name: &str) -> Result<bool, Error> {
+        let task = self.get(instance_name).ok_or_else(|| {
+            Error::service_type(format!("Task instance '{instance_name}' not found"))
+        })?;
+
+        task.validate().await
     }
 
     /// Execute a task

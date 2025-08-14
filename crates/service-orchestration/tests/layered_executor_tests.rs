@@ -25,7 +25,7 @@ async fn test_layered_executor_local_only() {
             }),
             health_check: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -78,7 +78,7 @@ async fn test_layered_executor_docker_layer() {
             }),
             health_check: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -103,7 +103,7 @@ async fn test_layered_executor_rejects_non_layered() {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 
@@ -196,7 +196,7 @@ target:
   command:
     binary: node
     args: ["server.js", "--port", "8080"]
-dependencies: []
+depends_on: []
 "#;
 
     let config: ServiceConfig = serde_yaml::from_str(yaml).unwrap();

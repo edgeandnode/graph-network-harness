@@ -8,9 +8,9 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
-use command_executor::{Command, LayeredExecutor, LocalLayer, ProcessHandle};
 use command_executor::backends::LocalLauncher;
 use command_executor::event::ProcessEventType;
+use command_executor::{Command, LayeredExecutor, LocalLayer, ProcessHandle};
 use futures::StreamExt;
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -142,16 +142,15 @@ fn install_atexit_handler() {
 
 /// Check if Docker is available using command-executor
 pub async fn is_docker_available() -> Result<bool> {
-    let executor = LayeredExecutor::new(LocalLauncher)
-        .with_layer(LocalLayer::new());
-    
+    let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
+
     let mut command = Command::new("docker");
     command.arg("version");
-    
+
     match executor.execute_command(command).await {
         Ok((mut event_stream, handle)) => {
             let mut has_output = false;
-            
+
             // Collect events to check if docker command succeeded
             while let Some(event) = event_stream.next().await {
                 match event.event_type {
@@ -177,7 +176,7 @@ pub async fn is_docker_available() -> Result<bool> {
                     }
                 }
             }
-            
+
             // Wait for process to complete
             let mut handle = handle;
             let exit_result = handle.wait().await?;
@@ -218,16 +217,20 @@ pub async fn ensure_container_running() -> Result<()> {
     install_atexit_handler();
 
     // Check if container is already running using command-executor
-    println!("Checking if container {} is already running...", CONTAINER_NAME);
-    let executor = LayeredExecutor::new(LocalLauncher)
-        .with_layer(LocalLayer::new());
-    
+    println!(
+        "Checking if container {} is already running...",
+        CONTAINER_NAME
+    );
+    let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
+
     let mut check_cmd = Command::new("docker");
     check_cmd.args(["ps", "-q", "-f", &format!("name={}", CONTAINER_NAME)]);
-    
-    let (mut event_stream, mut handle) = executor.execute_command(check_cmd).await
+
+    let (mut event_stream, mut handle) = executor
+        .execute_command(check_cmd)
+        .await
         .context("Failed to check if container is running")?;
-    
+
     let mut container_running = false;
     while let Some(event) = event_stream.next().await {
         match event.event_type {
@@ -254,9 +257,9 @@ pub async fn ensure_container_running() -> Result<()> {
             }
         }
     }
-    
+
     handle.wait().await?;
-    
+
     if container_running {
         eprintln!("Container {} is already running", CONTAINER_NAME);
         return Ok(());
@@ -264,7 +267,7 @@ pub async fn ensure_container_running() -> Result<()> {
 
     // Clean up any existing container first using command-executor
     eprintln!("Cleaning up any existing container...");
-    
+
     // Stop container
     let mut stop_cmd = Command::new("docker");
     stop_cmd.args(["stop", CONTAINER_NAME]);
@@ -294,7 +297,7 @@ pub async fn ensure_container_running() -> Result<()> {
         }
         handle.wait().await.ok();
     }
-    
+
     // Remove container
     let mut rm_cmd = Command::new("docker");
     rm_cmd.args(["rm", "-f", CONTAINER_NAME]);
@@ -328,13 +331,15 @@ pub async fn ensure_container_running() -> Result<()> {
     // Check if the image exists using command-executor
     let image_name = "graph-test-daemon:test";
     println!("Checking if Docker image {} exists...", image_name);
-    
+
     let mut image_check_cmd = Command::new("docker");
     image_check_cmd.args(["images", "-q", image_name]);
-    
-    let (mut event_stream, mut handle) = executor.execute_command(image_check_cmd).await
+
+    let (mut event_stream, mut handle) = executor
+        .execute_command(image_check_cmd)
+        .await
         .context("Failed to check for Docker image")?;
-    
+
     let mut image_exists = false;
     while let Some(event) = event_stream.next().await {
         match event.event_type {
@@ -361,9 +366,9 @@ pub async fn ensure_container_running() -> Result<()> {
             }
         }
     }
-    
+
     handle.wait().await?;
-    
+
     if !image_exists {
         eprintln!("Docker image {} not found, building...", image_name);
 
@@ -374,13 +379,15 @@ pub async fn ensure_container_running() -> Result<()> {
         // Build the image using command-executor with streaming output
         let build_executor = LayeredExecutor::new(LocalLauncher)
             .with_layer(LocalLayer::new().with_working_dir(&docker_dir));
-        
+
         let mut build_cmd = Command::new("docker");
         build_cmd.args(["build", "-t", image_name, "."]);
-        
-        let (mut event_stream, mut handle) = build_executor.execute_command(build_cmd).await
+
+        let (mut event_stream, mut handle) = build_executor
+            .execute_command(build_cmd)
+            .await
             .context("Failed to start Docker build")?;
-        
+
         // Stream build output
         let mut build_success = false;
         while let Some(event) = event_stream.next().await {
@@ -406,7 +413,7 @@ pub async fn ensure_container_running() -> Result<()> {
                 }
             }
         }
-        
+
         let exit_result = handle.wait().await?;
         if !exit_result.success() || !build_success {
             anyhow::bail!("Docker build failed with exit code: {:?}", exit_result);
@@ -423,7 +430,7 @@ pub async fn ensure_container_running() -> Result<()> {
 
     // Start the container using command-executor with streaming output
     eprintln!("Starting container {}...", CONTAINER_NAME);
-    
+
     let mut run_cmd = Command::new("docker");
     run_cmd.args([
         "run",
@@ -459,10 +466,12 @@ pub async fn ensure_container_running() -> Result<()> {
         ),
         image_name,
     ]);
-    
-    let (mut event_stream, mut handle) = executor.execute_command(run_cmd).await
+
+    let (mut event_stream, mut handle) = executor
+        .execute_command(run_cmd)
+        .await
         .context("Failed to start container")?;
-    
+
     // Stream container start output
     let mut container_id = String::new();
     let mut start_success = false;
@@ -490,10 +499,13 @@ pub async fn ensure_container_running() -> Result<()> {
             }
         }
     }
-    
+
     let exit_result = handle.wait().await?;
     if !exit_result.success() || !start_success {
-        anyhow::bail!("Failed to start container with exit code: {:?}", exit_result);
+        anyhow::bail!(
+            "Failed to start container with exit code: {:?}",
+            exit_result
+        );
     }
 
     // Wait for SSH to be ready
@@ -549,9 +561,8 @@ pub async fn cleanup_test_container() {
         guard.cleanup();
     } else {
         // Even if guard doesn't exist, try to clean up the container using command-executor
-        let executor = LayeredExecutor::new(LocalLauncher)
-            .with_layer(LocalLayer::new());
-        
+        let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
+
         // Stop container
         let mut stop_cmd = Command::new("docker");
         stop_cmd.args(["stop", CONTAINER_NAME]);
@@ -573,7 +584,7 @@ pub async fn cleanup_test_container() {
             }
             handle.wait().await.ok();
         }
-        
+
         // Remove container
         let mut rm_cmd = Command::new("docker");
         rm_cmd.args(["rm", "-f", CONTAINER_NAME]);

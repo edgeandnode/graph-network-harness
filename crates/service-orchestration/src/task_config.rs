@@ -18,7 +18,7 @@ pub struct TaskConfig {
     pub target: ServiceTarget,
     /// Services and tasks this task depends on
     #[serde(default)]
-    pub dependencies: Vec<Dependency>,
+    pub depends_on: Vec<Dependency>,
     /// Task-specific configuration parameters
     #[serde(default)]
     pub config: HashMap<String, Value>,
@@ -30,14 +30,14 @@ impl TaskConfig {
         Self {
             task_type,
             target,
-            dependencies: Vec::new(),
+            depends_on: Vec::new(),
             config: HashMap::new(),
         }
     }
 
     /// Add a dependency
     pub fn with_dependency(mut self, dep: Dependency) -> Self {
-        self.dependencies.push(dep);
+        self.depends_on.push(dep);
         self
     }
 
@@ -92,7 +92,7 @@ mod tests {
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
                 working_dir: Some("./contracts".to_string()),
             },
-            dependencies: vec![Dependency::Service {
+            depends_on: vec![Dependency::Service {
                 service: "anvil".to_string(),
             }],
             config: HashMap::from([(

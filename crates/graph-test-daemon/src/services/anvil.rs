@@ -178,9 +178,7 @@ pub enum AnvilEvent {
 }
 
 impl Service for AnvilService {
-    fn service_type() -> &'static str {
-        "anvil"
-    }
+    const SERVICE_TYPE: &'static str = "anvil";
 
     fn name(&self) -> &str {
         "anvil"

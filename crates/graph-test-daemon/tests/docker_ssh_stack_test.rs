@@ -46,7 +46,7 @@ async fn test_graph_stack_via_ssh_docker() -> Result<()> {
     let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
     // Only register anvil service since that's all we have in the test config
-    builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+    builder.wire_service_type::<graph_test_daemon::services::AnvilService>()?;
 
     let daemon = GraphTestDaemon::from_builder(builder)
         .await

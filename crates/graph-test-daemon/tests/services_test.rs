@@ -35,19 +35,19 @@ fn test_service_metadata() {
     // Test that services can be created and have correct metadata
     let graph_node = GraphNodeService::new("localhost".to_string());
     assert_eq!(graph_node.name(), "graph-node");
-    assert_eq!(GraphNodeService::service_type(), "graph-node");
+    assert_eq!(GraphNodeService::SERVICE_TYPE, "graph-node");
 
     let anvil = AnvilService::new(31337, 8545);
     assert_eq!(anvil.name(), "anvil");
-    assert_eq!(AnvilService::service_type(), "anvil");
+    assert_eq!(AnvilService::SERVICE_TYPE, "anvil");
 
     let postgres = PostgresService::new("graph-node".to_string(), 5432);
     assert_eq!(postgres.name(), "postgres");
-    assert_eq!(PostgresService::service_type(), "postgres");
+    assert_eq!(PostgresService::SERVICE_TYPE, "postgres");
 
     let ipfs = IpfsService::new(5001, 8080);
     assert_eq!(ipfs.name(), "ipfs");
-    assert_eq!(IpfsService::service_type(), "ipfs");
+    assert_eq!(IpfsService::SERVICE_TYPE, "ipfs");
 }
 
 #[test]

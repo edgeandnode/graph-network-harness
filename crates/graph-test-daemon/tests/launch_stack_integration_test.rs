@@ -21,7 +21,7 @@ services:
       command_template: "echo Starting echo service"
       env: {}
     health_check: null
-    dependencies: []
+    depends_on: []
 
   sleep-service:
     service_type: anvil  # Using anvil type since it's registered
@@ -32,7 +32,7 @@ services:
       command_template: "sleep 1"
       env: {}
     health_check: null
-    dependencies:
+    depends_on:
       - service: echo-service
 
 tasks:
@@ -43,7 +43,7 @@ tasks:
       params: {}
       command_template: "echo Running test task"
       env: {}
-    dependencies:
+    depends_on:
       - service: echo-service
     config: {}
 "#;
@@ -123,7 +123,7 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
             env: HashMap::new(),
             working_dir: None,
         },
-        dependencies: vec![],
+        depends_on: vec![],
         health_check: None,
     };
 

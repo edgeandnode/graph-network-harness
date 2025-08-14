@@ -445,7 +445,7 @@ mod tests {
                 ports: vec![8080],
                 volumes: vec![],
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
 
@@ -460,7 +460,7 @@ mod tests {
                 env: HashMap::new(),
                 working_dir: None,
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
         };
 

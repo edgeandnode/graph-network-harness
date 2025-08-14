@@ -29,17 +29,16 @@ async fn test_daemon_creation() -> anyhow::Result<()> {
     for (_, service) in &config.services {
         match service.service_type.as_str() {
             "graph-node" => {
-                builder
-                    .wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?;
+                builder.wire_service_type::<graph_test_daemon::services::GraphNodeService>()?;
             }
             "anvil" => {
-                builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+                builder.wire_service_type::<graph_test_daemon::services::AnvilService>()?;
             }
             "postgres" => {
-                builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
+                builder.wire_service_type::<graph_test_daemon::services::PostgresService>()?;
             }
             "ipfs" => {
-                builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?;
+                builder.wire_service_type::<graph_test_daemon::services::IpfsService>()?;
             }
             _ => {} // Skip unknown service types
         }
@@ -86,17 +85,16 @@ async fn test_launch_stack_method_exists() -> anyhow::Result<()> {
     for (_, service) in &config.services {
         match service.service_type.as_str() {
             "graph-node" => {
-                builder
-                    .wire_service::<graph_test_daemon::services::GraphNodeService>("graph-node")?;
+                builder.wire_service_type::<graph_test_daemon::services::GraphNodeService>()?;
             }
             "anvil" => {
-                builder.wire_service::<graph_test_daemon::services::AnvilService>("anvil")?;
+                builder.wire_service_type::<graph_test_daemon::services::AnvilService>()?;
             }
             "postgres" => {
-                builder.wire_service::<graph_test_daemon::services::PostgresService>("postgres")?;
+                builder.wire_service_type::<graph_test_daemon::services::PostgresService>()?;
             }
             "ipfs" => {
-                builder.wire_service::<graph_test_daemon::services::IpfsService>("ipfs")?;
+                builder.wire_service_type::<graph_test_daemon::services::IpfsService>()?;
             }
             _ => {} // Skip unknown service types
         }

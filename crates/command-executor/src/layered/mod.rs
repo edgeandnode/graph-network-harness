@@ -29,7 +29,7 @@ mod integration_tests;
 mod layers;
 
 pub use executor::LayeredExecutor;
-pub use layers::{DockerLayer, ExecutionLayer, LocalLayer, SshLayer};
+pub use layers::{DockerLayer, ExecutionLayer, LocalLayer, SshLayer, WrapperLayer};
 
 /// Context passed through the execution pipeline
 #[derive(Debug, Clone, Default)]

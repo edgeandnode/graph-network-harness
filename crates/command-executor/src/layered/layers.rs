@@ -298,6 +298,129 @@ impl ExecutionLayer for DockerLayer {
     }
 }
 
+/// Generic wrapper layer that wraps commands with another command
+/// This enables wrapping with tools like screen, gdb, strace, valgrind, etc.
+#[derive(Debug, Clone)]
+pub struct WrapperLayer {
+    /// The wrapper command to use (e.g., "screen", "gdb", "strace")
+    pub command: String,
+    /// Arguments to pass to the wrapper command
+    pub args: Vec<String>,
+    /// Optional separator between wrapper args and wrapped command
+    /// Examples: Some("--") for sudo, None for nice, Some("--exec") for custom tools
+    pub separator: Option<String>,
+    /// Environment variables specific to the wrapper command
+    pub env: std::collections::HashMap<String, String>,
+    /// Working directory for the wrapper command (if different from wrapped command)
+    pub working_dir: Option<std::path::PathBuf>,
+}
+
+impl WrapperLayer {
+    /// Create a new wrapper layer with the specified command
+    pub fn new(command: impl Into<String>) -> Self {
+        Self {
+            command: command.into(),
+            args: Vec::new(),
+            separator: None,
+            env: std::collections::HashMap::new(),
+            working_dir: None,
+        }
+    }
+
+    /// Add an argument to the wrapper command
+    pub fn with_arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
+        self
+    }
+
+    /// Add multiple arguments to the wrapper command
+    pub fn with_args<I, S>(mut self, args: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.args.extend(args.into_iter().map(|s| s.into()));
+        self
+    }
+
+    /// Set the separator to use between wrapper args and the wrapped command
+    pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
+        self.separator = Some(separator.into());
+        self
+    }
+
+    /// Clear the separator (no separator will be used)
+    pub fn no_separator(mut self) -> Self {
+        self.separator = None;
+        self
+    }
+
+    /// Add an environment variable for the wrapper command
+    pub fn with_env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(key.into(), value.into());
+        self
+    }
+
+    /// Set the working directory for the wrapper command
+    pub fn with_working_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.working_dir = Some(dir.into());
+        self
+    }
+}
+
+impl ExecutionLayer for WrapperLayer {
+    fn wrap_command(
+        &self,
+        command: Command,
+        _context: &ExecutionContext,
+    ) -> Result<Command, Error> {
+        let mut wrapper_cmd = Command::new(&self.command);
+        
+        // Add wrapper arguments
+        for arg in &self.args {
+            wrapper_cmd.arg(arg);
+        }
+        
+        // Add separator if specified
+        if let Some(sep) = &self.separator {
+            wrapper_cmd.arg(sep);
+        }
+        
+        // Add the wrapped command and its arguments
+        wrapper_cmd.arg(command.get_program());
+        for arg in command.get_args() {
+            wrapper_cmd.arg(arg);
+        }
+        
+        // Apply wrapper's own environment variables first
+        for (key, value) in &self.env {
+            wrapper_cmd.env(key, value);
+        }
+        
+        // Then apply environment variables from the wrapped command (these can override wrapper's env)
+        for (key, value) in command.get_envs() {
+            wrapper_cmd.env(key, value);
+        }
+        
+        // Use wrapper's working directory if specified, otherwise use wrapped command's
+        if let Some(dir) = &self.working_dir {
+            wrapper_cmd.current_dir(dir);
+        } else if let Some(dir) = command.get_current_dir() {
+            wrapper_cmd.current_dir(dir);
+        }
+        
+        Ok(wrapper_cmd)
+    }
+
+    fn description(&self) -> String {
+        if self.args.is_empty() {
+            format!("Wrapper: {}", self.command)
+        } else {
+            format!("Wrapper: {} {}", self.command, self.args.join(" "))
+        }
+    }
+}
+
 /// Layer for local execution - essentially a pass-through layer
 #[derive(Debug, Clone)]
 pub struct LocalLayer {
@@ -466,9 +589,109 @@ mod tests {
         let ssh_layer = SshLayer::new("user@host");
         let docker_layer = DockerLayer::new("container");
         let local_layer = LocalLayer::new();
+        let wrapper_layer = WrapperLayer::new("screen").with_args(["-dmS", "test"]);
 
         assert_eq!(ssh_layer.description(), "SSH to user@host");
         assert_eq!(docker_layer.description(), "Docker exec in container");
         assert_eq!(local_layer.description(), "Local execution");
+        assert_eq!(wrapper_layer.description(), "Wrapper: screen -dmS test");
+    }
+
+    #[test]
+    fn test_wrapper_layer_basic() {
+        let layer = WrapperLayer::new("nice").with_args(["-n", "10"]);
+        
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello");
+        let context = ExecutionContext::new();
+        let result = layer.wrap_command(cmd, &context).unwrap();
+        
+        assert_eq!(result.get_program(), "nice");
+        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        assert_eq!(args, vec!["-n", "10", "echo", "hello"]);
+    }
+
+    #[test]
+    fn test_wrapper_layer_with_separator() {
+        let layer = WrapperLayer::new("sudo")
+            .with_args(["-u", "appuser"])
+            .with_separator("--");
+        
+        let mut cmd = Command::new("service");
+        cmd.arg("nginx").arg("restart");
+        let context = ExecutionContext::new();
+        let result = layer.wrap_command(cmd, &context).unwrap();
+        
+        assert_eq!(result.get_program(), "sudo");
+        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        assert_eq!(args, vec!["-u", "appuser", "--", "service", "nginx", "restart"]);
+    }
+
+    #[test]
+    fn test_wrapper_layer_preserves_env() {
+        let layer = WrapperLayer::new("timeout").with_arg("30");
+        
+        let mut cmd = Command::new("test");
+        cmd.env("TEST_VAR", "value");
+        let context = ExecutionContext::new();
+        let result = layer.wrap_command(cmd, &context).unwrap();
+        
+        // Check that environment variable is preserved
+        let envs: Vec<_> = result.get_envs()
+            .iter()
+            .filter(|(k, _)| k.to_str() == Some("TEST_VAR"))
+            .collect();
+        assert_eq!(envs.len(), 1);
+    }
+
+    #[test]
+    fn test_wrapper_layer_composition() {
+        // Test stacking multiple wrapper layers
+        let screen_layer = WrapperLayer::new("screen").with_args(["-dmS", "debug"]);
+        let gdb_layer = WrapperLayer::new("gdb").with_arg("--args");
+        
+        let mut cmd = Command::new("./my-app");
+        cmd.arg("--port").arg("8080");
+        
+        let context = ExecutionContext::new();
+        
+        // First wrap with gdb
+        let gdb_wrapped = gdb_layer.wrap_command(cmd, &context).unwrap();
+        // Then wrap with screen
+        let screen_wrapped = screen_layer.wrap_command(gdb_wrapped, &context).unwrap();
+        
+        assert_eq!(screen_wrapped.get_program(), "screen");
+        let args: Vec<_> = screen_wrapped.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        assert_eq!(args, vec!["-dmS", "debug", "gdb", "--args", "./my-app", "--port", "8080"]);
+    }
+
+    #[test]
+    fn test_wrapper_layer_custom_separator() {
+        let layer = WrapperLayer::new("/usr/local/bin/monitor")
+            .with_args(["--metrics-port", "9090"])
+            .with_separator("--exec");
+        
+        let mut cmd = Command::new("./service");
+        cmd.arg("start");
+        let context = ExecutionContext::new();
+        let result = layer.wrap_command(cmd, &context).unwrap();
+        
+        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        assert_eq!(args, vec!["--metrics-port", "9090", "--exec", "./service", "start"]);
+    }
+
+    #[test]
+    fn test_wrapper_layer_no_separator() {
+        let layer = WrapperLayer::new("strace")
+            .with_args(["-f", "-o", "trace.log"])
+            .no_separator();  // Explicitly no separator
+        
+        let mut cmd = Command::new("ls");
+        cmd.arg("-la");
+        let context = ExecutionContext::new();
+        let result = layer.wrap_command(cmd, &context).unwrap();
+        
+        let args: Vec<_> = result.get_args().iter().map(|s| s.to_str().unwrap()).collect();
+        assert_eq!(args, vec!["-f", "-o", "trace.log", "ls", "-la"]);
     }
 }

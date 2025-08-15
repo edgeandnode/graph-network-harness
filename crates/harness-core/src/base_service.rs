@@ -25,7 +25,10 @@ pub enum BaseServiceState {
     /// Service is shutting down
     Stopping,
     /// Service failed to start or crashed
-    Failed { reason: String },
+    Failed {
+        /// The reason for the failure
+        reason: String,
+    },
 }
 
 /// Commands that can be sent to control the service

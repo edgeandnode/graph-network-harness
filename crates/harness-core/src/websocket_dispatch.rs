@@ -68,22 +68,39 @@ pub enum WebSocketMessage {
     /// List available services
     ListServices,
     /// Response to ListServices
-    Services { services: Vec<ServiceInfo> },
+    Services {
+        /// List of available services
+        services: Vec<ServiceInfo>,
+    },
     /// List available actions for a service
-    ListActions { service: String },
+    ListActions {
+        /// Name of the service to list actions for
+        service: String,
+    },
     /// Response to ListActions
     Actions {
+        /// Name of the service
         service: String,
+        /// List of available actions for the service
         actions: Vec<ActionInfo>,
     },
     /// Validate if setup is complete for a service
-    ValidateSetup { service: String },
+    ValidateSetup {
+        /// Name of the service to validate
+        service: String,
+    },
     /// Perform setup for a service
-    PerformSetup { service: String },
+    PerformSetup {
+        /// Name of the service to set up
+        service: String,
+    },
     /// Response to setup operations
     SetupStatus {
+        /// Name of the service
         service: String,
+        /// Whether the setup is valid
         valid: bool,
+        /// Error message if setup failed
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },

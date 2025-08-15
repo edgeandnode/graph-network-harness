@@ -101,6 +101,7 @@ pub fn json_actions(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // Generate action struct
             action_structs.push(quote! {
                 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+                #[allow(missing_docs)]
                 pub struct #struct_name {
                     #(#param_fields),*
                 }

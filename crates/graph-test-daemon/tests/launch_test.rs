@@ -26,7 +26,7 @@ async fn test_daemon_creation() -> anyhow::Result<()> {
     let mut builder = BaseDaemon::builder(config.clone()).with_endpoint(endpoint);
 
     // Register services that exist in the config
-    for (_, service) in &config.services {
+    for service in config.services.values() {
         match service.service_type.as_str() {
             "graph-node" => {
                 builder.wire_service_type::<graph_test_daemon::services::GraphNodeService>()?;
@@ -82,7 +82,7 @@ async fn test_launch_stack_method_exists() -> anyhow::Result<()> {
     let mut builder = BaseDaemon::builder(config.clone()).with_endpoint(endpoint);
 
     // Register services that exist in the config
-    for (_, service) in &config.services {
+    for service in config.services.values() {
         match service.service_type.as_str() {
             "graph-node" => {
                 builder.wire_service_type::<graph_test_daemon::services::GraphNodeService>()?;

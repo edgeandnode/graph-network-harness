@@ -5,7 +5,6 @@
 
 use async_runtime_compat::{AsyncSpawner, Task, prelude::*};
 use async_trait::async_trait;
-use serde_json::Value;
 use service_orchestration::{
     DependencyGraph, DependencyNode, ServiceConfig, ServiceStatus, StackConfig,
 };
@@ -107,7 +106,7 @@ impl BaseDaemon {
 
     /// Get the JSON service registry
     pub fn json_service_registry(&self) -> &JsonServiceRegistry {
-        &*self.json_service_registry
+        &self.json_service_registry
     }
 
     /// Get the JSON task registry

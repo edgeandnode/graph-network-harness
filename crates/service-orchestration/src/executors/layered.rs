@@ -77,6 +77,7 @@ pub enum LayerConfig {
 struct LayeredProcessInfo {
     handle: Box<dyn ProcessHandle>,
     event_receiver: Receiver<ProcessEvent>,
+    #[allow(dead_code)]
     layers: Vec<LayerConfig>,
 }
 

@@ -107,7 +107,7 @@ impl BaseService {
                     .manager
                     .launch_service(&self.name, self.config.clone(), &spawner)
                     .await
-                    .map_err(|e| Error::service_orchestration(e))?;
+                    .map_err(Error::service_orchestration)?;
 
                 self.running = running;
                 self.events = events;
@@ -120,7 +120,7 @@ impl BaseService {
                 self.manager
                     .stop_service(&self.name, &spawner)
                     .await
-                    .map_err(|e| Error::service_orchestration(e))?;
+                    .map_err(Error::service_orchestration)?;
 
                 self.state = BaseServiceState::Stopping;
                 Ok(())
@@ -132,7 +132,7 @@ impl BaseService {
                 self.manager
                     .stop_service(&self.name, &spawner)
                     .await
-                    .map_err(|e| Error::service_orchestration(e))?;
+                    .map_err(Error::service_orchestration)?;
 
                 self.state = BaseServiceState::Stopping;
                 // Note: Will need to wait for stop to complete before starting again
@@ -149,7 +149,7 @@ impl BaseService {
                     .manager
                     .launch_service(&self.name, self.config.clone(), &spawner)
                     .await
-                    .map_err(|e| Error::service_orchestration(e))?;
+                    .map_err(Error::service_orchestration)?;
 
                 self.running = running;
                 self.events = events;

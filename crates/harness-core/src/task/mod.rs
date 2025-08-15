@@ -344,7 +344,7 @@ mod tests {
 
         // Execute the task
         let spawner = SmolSpawner;
-        let mut rx = stack.execute("test-1", &spawner).await.unwrap();
+        let rx = stack.execute("test-1", &spawner).await.unwrap();
 
         // First state should be Running
         let state = rx.recv().await.unwrap();

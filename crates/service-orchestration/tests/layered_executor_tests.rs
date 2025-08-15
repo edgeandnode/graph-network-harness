@@ -104,6 +104,7 @@ async fn test_layered_executor_rejects_non_layered() {
             },
             env: HashMap::new(),
             working_dir: None,
+            validation: None,
         },
         depends_on: vec![],
         health_check: None,

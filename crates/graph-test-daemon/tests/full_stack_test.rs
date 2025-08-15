@@ -13,7 +13,7 @@ use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[smol_potat::test]
 async fn test_full_graph_stack() -> Result<()> {

@@ -4,7 +4,6 @@
 //! It routes incoming JSON action requests to the appropriate services
 //! and streams back responses.
 
-use async_channel::Receiver;
 use async_net::{TcpListener, TcpStream};
 use async_trait::async_trait;
 use async_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
@@ -397,7 +396,7 @@ impl WebSocketServer {
                             let tls_config = self.tls_config.clone();
 
                             // Spawn a task to handle this connection
-                            let _ = smol::spawn(async move {
+                            smol::spawn(async move {
                                 if let Err(e) = handle_connection(stream, dispatcher, tls_config).await {
                                     error!("Error handling WebSocket connection from {}: {}", addr, e);
                                 }
@@ -426,7 +425,7 @@ async fn handle_connection(
     tls_config: Option<TlsServerConfig>,
 ) -> Result<(), Error> {
     // Handle TLS if configured
-    use futures::{SinkExt, stream::SplitSink, stream::SplitStream};
+    use futures::SinkExt;
 
     enum WsStream {
         Plain(WebSocketStream<TcpStream>),
@@ -548,7 +547,6 @@ async fn handle_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::JsonServiceRegistry;
 
     #[test]
     fn test_message_serialization() {

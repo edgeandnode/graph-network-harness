@@ -122,6 +122,7 @@ async fn test_service_manager_with_process() -> anyhow::Result<()> {
             },
             env: HashMap::new(),
             working_dir: None,
+            validation: None,
         },
         depends_on: vec![],
         health_check: None,

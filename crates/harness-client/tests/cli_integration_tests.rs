@@ -5,10 +5,9 @@
 
 use anyhow::Result;
 use std::process::Command;
-use std::time::Duration;
 
 mod common;
-use common::{CliOutput, CliTestContext, find_available_port};
+use common::{CliTestContext, find_available_port};
 
 // ============================================================================
 // Actual Integration Tests
@@ -187,7 +186,7 @@ async fn test_cli_environment_variables() -> Result<()> {
         std::env::set_var("HARNESS_DAEMON_PORT", ctx.daemon_port.to_string());
     }
     let output = Command::new(&ctx.harness_binary)
-        .args(&["daemon", "status"])
+        .args(["daemon", "status"])
         .output()?;
 
     assert!(output.status.success());
@@ -212,7 +211,7 @@ async fn test_cli_concurrent_operations() -> Result<()> {
         let handle = tokio::spawn(async move {
             Command::new(&harness_binary)
                 .env("HARNESS_DAEMON_PORT", daemon_port.to_string())
-                .args(&["start", "-f", config_path.to_str().unwrap(), "echo-service"])
+                .args(["start", "-f", config_path.to_str().unwrap(), "echo-service"])
                 .output()
         });
         handles.push(handle);
@@ -248,7 +247,7 @@ async fn test_cli_daemon_connection_retry() -> Result<()> {
     // Try to connect to non-existent daemon
     let output = Command::new(&harness_binary)
         .env("HARNESS_DAEMON_PORT", port.to_string())
-        .args(&["status"])
+        .args(["status"])
         .output()?;
 
     assert!(!output.status.success());

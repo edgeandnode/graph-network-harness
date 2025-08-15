@@ -254,7 +254,7 @@ async fn test_daemon_state_persistence() -> Result<()> {
     let state_path = state_dir.path().to_path_buf();
 
     // Start daemon with specific state directory
-    let mut ctx =
+    let ctx =
         CliTestContext::with_daemon_args(&["--state-dir", state_path.to_str().unwrap()]).await?;
 
     // Start a service

@@ -13,13 +13,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::Error;
-use crate::action::ServiceJsonActions;
 use crate::service::Service;
-use crate::service::{
-    ActionDescriptor, HasDispatchJson, JsonService, JsonServiceAdapter, ServiceState,
-};
+use crate::service::{ActionDescriptor, JsonService, ServiceState};
 use crate::task::DeploymentTask;
-use crate::task::{JsonTask, JsonTaskAdapter};
+use crate::task::JsonTask;
 use async_trait::async_trait;
 use std::result::Result;
 use std::time::Duration;

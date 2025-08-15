@@ -29,6 +29,7 @@ struct AttachedServiceInfo {
     /// Service configuration
     config: ServiceConfig,
     /// Additional metadata
+    #[allow(dead_code)]
     metadata: HashMap<String, String>,
 }
 
@@ -156,11 +157,9 @@ impl LayeredAttachedExecutor {
         } else if let Some(pid) = env.get("PID") {
             // Process by PID
             Some(Command::new("kill").arg("-0").arg(pid).clone())
-        } else if let Some(process_name) = env.get("PROCESS_NAME") {
-            // Process by name
-            Some(Command::new("pgrep").arg("-f").arg(process_name).clone())
         } else {
-            None
+            env.get("PROCESS_NAME")
+                .map(|process_name| Command::new("pgrep").arg("-f").arg(process_name).clone())
         }
     }
 
@@ -351,7 +350,7 @@ impl AttachedService for LayeredAttachedExecutor {
         info!("Detaching from service: {}", service.name);
 
         let mut attached = self.attached_services.lock().await;
-        if let Some(mut info) = attached.remove(&service.name) {
+        if let Some(info) = attached.remove(&service.name) {
             // Stop any observation process if it exists
             if let Some(mut handle) = info.observation_handle {
                 debug!("Terminating observation process for {}", service.name);

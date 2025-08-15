@@ -8,7 +8,7 @@ use harness_core::action::JsonAction;
 use harness_core::config_traits::ServiceFromConfig;
 use harness_core::{
     Error,
-    service::{Service, ServiceEvents, ServiceSetup},
+    service::{Service, ServiceSetup},
 };
 use harness_macros::{json_action, json_actions};
 use schemars::JsonSchema;

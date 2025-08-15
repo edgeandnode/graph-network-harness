@@ -462,7 +462,7 @@ fn extract_address(line: &str) -> Option<String> {
 fn extract_contract_name(line: &str) -> Option<&str> {
     // This is a simple heuristic, might need adjustment based on actual output
     line.split_whitespace()
-        .find(|word| word.chars().next().map_or(false, |c| c.is_uppercase()))
+        .find(|word| word.chars().next().is_some_and(|c| c.is_uppercase()))
 }
 
 /// Extract deployment info from a marker file

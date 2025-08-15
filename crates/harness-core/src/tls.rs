@@ -4,11 +4,11 @@
 //! adapted from the service-registry implementation.
 
 use crate::Error;
+use futures::AsyncReadExt;
 use std::path::Path;
 use std::result::Result;
 use std::sync::Arc;
 
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::{ClientConfig, ServerConfig};
 
 /// TLS configuration for server
@@ -94,8 +94,8 @@ impl TlsServerConfig {
         let cert_der = cert.cert.der().to_vec();
         let key_der = cert.key_pair.serialize_der();
 
-        let certs = vec![CertificateDer::from(cert_der)];
-        let key = PrivateKeyDer::Pkcs8(key_der.into());
+        let certs = vec![rustls::pki_types::CertificateDer::from(cert_der)];
+        let key = rustls::pki_types::PrivateKeyDer::Pkcs8(key_der.into());
 
         let config = ServerConfig::builder()
             .with_no_client_auth()
@@ -138,8 +138,8 @@ impl TlsClientConfig {
         impl ServerCertVerifier for DangerousAcceptAnyVerifier {
             fn verify_server_cert(
                 &self,
-                _end_entity: &CertificateDer<'_>,
-                _intermediates: &[CertificateDer<'_>],
+                _end_entity: &rustls::pki_types::CertificateDer<'_>,
+                _intermediates: &[rustls::pki_types::CertificateDer<'_>],
                 _server_name: &ServerName<'_>,
                 _ocsp_response: &[u8],
                 _now: UnixTime,
@@ -150,7 +150,7 @@ impl TlsClientConfig {
             fn verify_tls12_signature(
                 &self,
                 _message: &[u8],
-                _cert: &CertificateDer<'_>,
+                _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &DigitallySignedStruct,
             ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
                 Ok(HandshakeSignatureValid::assertion())
@@ -159,7 +159,7 @@ impl TlsClientConfig {
             fn verify_tls13_signature(
                 &self,
                 _message: &[u8],
-                _cert: &CertificateDer<'_>,
+                _cert: &rustls::pki_types::CertificateDer<'_>,
                 _dss: &DigitallySignedStruct,
             ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
                 Ok(HandshakeSignatureValid::assertion())

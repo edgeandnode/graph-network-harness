@@ -88,7 +88,7 @@ fn display_basic_table(
     table.set_header(vec!["SERVICE", "STATUS", "HEALTH"]);
 
     // Get status for each service
-    for (service_name, service_config) in &config.services {
+    for (service_name, _service_config) in &config.services {
         let status = services_status
             .get(service_name)
             .cloned()
@@ -143,7 +143,7 @@ fn display_detailed_table(
                 ServiceStatus::Starting => ("starting", Color::Yellow),
                 ServiceStatus::Running => ("running", Color::Green),
                 ServiceStatus::Unhealthy => ("unhealthy", Color::Red),
-                ServiceStatus::Failed(ref msg) => ("failed", Color::Red),
+                ServiceStatus::Failed(ref _msg) => ("failed", Color::Red),
             }
         } else {
             ("unknown", Color::DarkGrey)

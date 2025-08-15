@@ -270,7 +270,7 @@ services:
     let service = config.services.get("redis").unwrap();
 
     assert!(service.health_check.is_some());
-    let hc = service.health_check.as_ref().unwrap();
+    let _hc = service.health_check.as_ref().unwrap();
 
     // Verify TCP check is converted to nc command
     let orchestrator_config = parser::convert_to_orchestrator(&config, "redis").unwrap();

@@ -491,7 +491,7 @@ mod tests {
         let state_manager = StateManager::new();
 
         // Start deployment
-        let deployment_id = state_manager.start_deployment("test-stack".to_string());
+        let _deployment_id = state_manager.start_deployment("test-stack".to_string());
         assert!(state_manager.get_current_deployment().is_some());
 
         // Update service state

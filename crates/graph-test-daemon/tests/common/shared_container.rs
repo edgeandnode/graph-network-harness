@@ -503,8 +503,9 @@ pub async fn ensure_container_running() -> Result<()> {
     let exit_result = handle.wait().await?;
     if !exit_result.success() || !start_success {
         anyhow::bail!(
-            "Failed to start container with exit code: {:?}",
-            exit_result
+            "Failed to start container {} with exit code: {:?}",
+            container_id,
+            exit_result,
         );
     }
 

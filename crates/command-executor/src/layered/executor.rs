@@ -180,13 +180,13 @@ mod tests {
 
         // This should work for basic commands
         match executor.execute_command(command).await {
-            Ok((mut event_stream, handle)) => {
+            Ok((mut event_stream, _handle)) => {
                 // Basic verification that we got results
                 use futures::StreamExt;
 
                 // Try to get at least one event
                 // TODO: Implement proper timeout logic for waiting on events
-                if let Some(event) = event_stream.next().await {
+                if let Some(_event) = event_stream.next().await {
                     // Got an event, test passes
                     // Real process management would use handle.wait() etc.
                 }

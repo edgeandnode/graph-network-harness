@@ -96,32 +96,3 @@ async fn test_stdin_forwarding_with_env_layers() {
     assert!(output.contains("env test input"));
     assert!(output.contains("TEST_VAR=test_value"));
 }
-
-// Test that stdin forwarding works with SSH layer
-#[smol_potat::test]
-async fn test_stdin_forwarding_with_ssh_layer() {
-    use command_executor::layered::SshLayer;
-
-    // Note: This test doesn't actually SSH anywhere, it just verifies
-    // that the stdin channel is preserved through SSH command wrapping
-    let executor = LayeredExecutor::new(LocalLauncher).with_layer(SshLayer::new("localhost"));
-
-    // Use a command that would work if SSH to localhost was set up
-    let mut command = Command::new("echo");
-    command.arg("ssh layer test");
-
-    // Set up stdin channel (though echo doesn't use it)
-    let (tx, rx) = async_channel::bounded(10);
-    command.stdin_channel(rx);
-
-    // We can't actually execute SSH commands in tests without setup,
-    // but we can verify the command structure is preserved
-    let has_channel = command.has_stdin_channel();
-    assert!(
-        has_channel,
-        "Command should have stdin channel before transformation"
-    );
-
-    // For now, just verify the basic functionality works with local layer
-    // Real SSH stdin forwarding would require SSH server setup
-}

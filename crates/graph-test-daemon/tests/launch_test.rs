@@ -100,7 +100,7 @@ async fn test_launch_stack_method_exists() -> anyhow::Result<()> {
         }
     }
 
-    let daemon = GraphTestDaemon::from_builder(builder).await?;
+    let _daemon = GraphTestDaemon::from_builder(builder).await?;
 
     // The method should exist and be callable
     // In a real test environment with Docker available, this would launch services

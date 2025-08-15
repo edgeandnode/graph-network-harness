@@ -242,7 +242,8 @@ impl ServiceManager {
     ) -> Result<ServiceStatus, OrchestrationError> {
         // Check if service is in active services
         let active = self.active_services.read().unwrap();
-        let Some(service) = active.get(name) else {
+        // TODO was this meant to be an is_some()?
+        let Some(_service) = active.get(name) else {
             return Ok(ServiceStatus::Stopped);
         };
 
@@ -250,7 +251,8 @@ impl ServiceManager {
         if let Some(monitor) = self.health_monitors.read().unwrap().get(name) {
             match monitor.current_status() {
                 HealthStatus::Healthy => Ok(ServiceStatus::Running),
-                HealthStatus::Unhealthy(msg) => Ok(ServiceStatus::Unhealthy),
+                // TODO log unhealthy? why ignore msg here?
+                HealthStatus::Unhealthy(_msg) => Ok(ServiceStatus::Unhealthy),
                 HealthStatus::Unknown => Ok(ServiceStatus::Running), // Assume running if unknown
             }
         } else {

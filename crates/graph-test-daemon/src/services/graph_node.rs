@@ -43,7 +43,7 @@ impl GraphNodeService {
         &self,
         name: String,
         ipfs_hash: String,
-        version_label: Option<String>,
+        _version_label: Option<String>,
     ) -> Result<DeploymentResult, Error> {
         info!("Deploying subgraph {} from IPFS hash {}", name, ipfs_hash);
 

@@ -244,21 +244,6 @@ pub enum ServiceType {
         #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
     },
-
-    /// Package deployment service
-    #[serde(rename = "package")]
-    Package {
-        /// Target host (can be node name or IP)
-        host: String,
-        /// Package file path
-        package: String,
-        /// Package version
-        #[serde(skip_serializing_if = "Option::is_none")]
-        version: Option<String>,
-        /// Install path override
-        #[serde(skip_serializing_if = "Option::is_none")]
-        install_path: Option<String>,
-    },
 }
 
 /// Port mapping for Docker containers

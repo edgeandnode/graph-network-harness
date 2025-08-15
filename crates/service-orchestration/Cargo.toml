@@ -8,7 +8,7 @@ repository = { workspace = true }
 description = "Heterogeneous service orchestration implementing ADR-007"
 
 [features]
-default = []
+default = ["smol"]
 ssh-tests = ["command-executor/ssh-tests"]
 docker-tests = ["command-executor/docker-tests"]
 test-utils = []

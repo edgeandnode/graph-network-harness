@@ -191,7 +191,7 @@ async fn test_service_manager_initialization() {
     let manager = ServiceManager::new().await.unwrap();
 
     // Test that all executors are registered
-    let process_config = ServiceConfig {
+    let _process_config = ServiceConfig {
         name: "test-process".to_string(),
         target: ServiceTarget::Process {
             command: ProcessCommand::Legacy {
@@ -205,7 +205,7 @@ async fn test_service_manager_initialization() {
         health_check: None,
     };
 
-    let docker_config = ServiceConfig {
+    let _docker_config = ServiceConfig {
         name: "test-docker".to_string(),
         target: ServiceTarget::Docker {
             params: HashMap::new(),

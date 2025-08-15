@@ -3,41 +3,9 @@
 use command_executor::{
     Command, ProcessHandle, Target,
     backends::LocalLauncher,
-    layered::{DockerLayer, LayeredExecutor, LocalLayer},
+    layered::{LayeredExecutor, LocalLayer},
 };
 use futures::StreamExt;
-
-/// Test stdin forwarding with docker layer
-/// Note: This test requires docker to be available but doesn't require a specific container
-#[smol_potat::test]
-async fn test_stdin_forwarding_with_docker_interactive() {
-    // Skip if docker is not available
-    let check = std::process::Command::new("docker").arg("version").output();
-
-    if check.is_err() || !check.unwrap().status.success() {
-        eprintln!("Skipping docker test - docker not available");
-        return;
-    }
-
-    // Use a docker layer with interactive mode enabled
-    let executor = LayeredExecutor::new(LocalLauncher)
-        .with_layer(DockerLayer::new("alpine").with_interactive(true));
-
-    // The docker layer will wrap commands in "docker exec -i alpine sh -c 'command'"
-    // Since we don't have an alpine container running, this will fail at execution
-    // but we can verify the command structure is correct
-
-    let mut command = Command::new("cat");
-
-    // Set up stdin channel
-    let (tx, rx) = async_channel::bounded(10);
-    command.stdin_channel(rx);
-
-    // Just verify we can create the command with stdin channel
-    assert!(command.has_stdin_channel());
-
-    // Can't actually execute without a running container, but the structure is validated
-}
 
 /// Test that complex layer stacks preserve stdin capability
 #[smol_potat::test]

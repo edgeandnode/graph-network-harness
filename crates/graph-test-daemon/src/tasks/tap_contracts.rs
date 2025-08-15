@@ -497,6 +497,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Initial idle state
     #[state]
     async fn idle(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Idle {:?}", event);
         let context = &mut self.context;
         match event {
             TapContractsEvent::Start => {
@@ -510,6 +511,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Checking prerequisites state
     #[state]
     async fn checking_prerequisites(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Checking prerequisites {:?}", event);
         let context = &mut self.context;
         context.set_progress(10, "Checking prerequisites");
 
@@ -539,6 +541,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Waiting for Graph contracts state
     #[state]
     async fn waiting_for_graph_contracts(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Waiting for graph contracts {:?}", event);
         let context = &mut self.context;
         match event {
             TapContractsEvent::GraphContractsReady => {
@@ -558,6 +561,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Preparing environment state
     #[state]
     async fn preparing(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Preparing {:?}", event);
         let context = &mut self.context;
         context.set_progress(20, "Preparing environment");
 
@@ -573,6 +577,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Deploying contracts state
     #[state]
     async fn deploying_contracts(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Deploying contracts {:?}", event);
         let context = &mut self.context;
         context.set_progress(30, "Deploying TAP contracts");
 
@@ -596,6 +601,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Deploying subgraph state
     #[state]
     async fn deploying_subgraph(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Deploying subgraph {:?}", event);
         let context = &mut self.context;
         context.set_progress(70, "Deploying TAP subgraph");
 
@@ -619,6 +625,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Verifying deployment state
     #[state]
     async fn verifying(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Verifying {:?}", event);
         let context = &mut self.context;
         context.set_progress(95, "Verifying TAP deployment");
 
@@ -642,6 +649,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Completed state
     #[state]
     async fn completed(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Completed {:?}", event);
         info!("TAP contracts deployment completed successfully");
         Super
     }
@@ -649,6 +657,7 @@ impl TapContractsDeployTaskStateMachine {
     /// Failed state
     #[state]
     async fn failed(&mut self, event: &TapContractsEvent) -> Response<State> {
+        info!("Failed {:?}", event);
         let context = &mut self.context;
         match event {
             TapContractsEvent::Retry => {

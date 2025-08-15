@@ -325,6 +325,7 @@ impl GraphContractsDeployTaskStateMachine {
     /// Initial idle state
     #[state]
     async fn idle(&mut self, event: &GraphContractsEvent) -> Response<State> {
+        info!("Idle {:?}", event);
         let context = &mut self.context;
         match event {
             GraphContractsEvent::Start => {
@@ -338,6 +339,7 @@ impl GraphContractsDeployTaskStateMachine {
     /// Checking prerequisites state
     #[state]
     async fn checking_prerequisites(&mut self, event: &GraphContractsEvent) -> Response<State> {
+        info!("Checking prerequisites {:?}", event);
         let context = &mut self.context;
         context.set_progress(10, "Checking prerequisites");
 
@@ -360,6 +362,7 @@ impl GraphContractsDeployTaskStateMachine {
     /// Preparing deployment state
     #[state]
     async fn preparing(&mut self, event: &GraphContractsEvent) -> Response<State> {
+        info!("Preparing {:?}", event);
         let context = &mut self.context;
         context.set_progress(20, "Preparing deployment environment");
 
@@ -373,6 +376,7 @@ impl GraphContractsDeployTaskStateMachine {
     /// Deploying contracts state
     #[state]
     async fn deploying_contracts(&mut self, event: &GraphContractsEvent) -> Response<State> {
+        info!("Deploying contracts {:?}", event);
         let context = &mut self.context;
         context.set_progress(30, "Deploying contracts");
 
@@ -396,6 +400,7 @@ impl GraphContractsDeployTaskStateMachine {
     /// Verifying deployment state
     #[state]
     async fn verifying(&mut self, event: &GraphContractsEvent) -> Response<State> {
+        info!("Verifying {:?}", event);
         let context = &mut self.context;
         context.set_progress(90, "Verifying deployment");
 
@@ -420,7 +425,10 @@ impl GraphContractsDeployTaskStateMachine {
     #[state]
     async fn completed(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &self.context;
-        info!("Graph contracts deployment completed successfully");
+        info!(
+            "Graph contracts deployment completed successfully {:?}",
+            event
+        );
         for (name, address) in &context.deployed_addresses {
             info!("  {} deployed at: {}", name, address);
         }
@@ -431,6 +439,7 @@ impl GraphContractsDeployTaskStateMachine {
     #[state]
     async fn failed(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &mut self.context;
+        info!("Failed {:?}", event);
         match event {
             GraphContractsEvent::Retry => {
                 if context.can_retry() {
@@ -466,6 +475,7 @@ fn extract_contract_name(line: &str) -> Option<&str> {
 }
 
 /// Extract deployment info from a marker file
+#[allow(dead_code)]
 fn extract_deployment_info(line: &str) -> HashMap<String, String> {
     // Try to extract JSON from the line
     if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {

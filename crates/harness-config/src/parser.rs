@@ -211,28 +211,14 @@ pub fn convert_to_orchestrator_with_context(
             host,
             binary,
             args,
-            working_dir,
+            working_dir: _, // TODO: wire up
         } => {
             ServiceTarget::Remote {
                 host: host.clone(),
-                user: "root".to_string(), // Default for MVP
+                user: "root".to_string(), // TODO: Default for MVP
                 mode: service_orchestration::RemoteMode::Process {
                     binary: binary.clone(),
                     args: args.clone(),
-                },
-                env: std::collections::HashMap::new(),
-            }
-        }
-
-        ServiceType::Package { host, package, .. } => {
-            // Package management has been removed - convert to remote process
-            // Users should deploy packages manually
-            ServiceTarget::Remote {
-                host: host.clone(),
-                user: "root".to_string(), // Default for MVP
-                mode: service_orchestration::RemoteMode::Process {
-                    binary: package.clone(), // Assume package name is the binary
-                    args: vec![],
                 },
                 env: std::collections::HashMap::new(),
             }

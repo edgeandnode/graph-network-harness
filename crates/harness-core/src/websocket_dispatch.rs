@@ -7,7 +7,7 @@
 use async_net::{TcpListener, TcpStream};
 use async_trait::async_trait;
 use async_tungstenite::{WebSocketStream, accept_async, tungstenite::Message};
-use futures::{FutureExt, SinkExt, StreamExt};
+use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;

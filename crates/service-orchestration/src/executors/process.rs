@@ -64,7 +64,8 @@ impl ServiceExecutor for ProcessExecutor {
     ) -> Result<RunningService, Error> {
         let ServiceTarget::Process {
             command,
-            env,
+            // TODO: why is env ignored
+            env: _,
             working_dir,
             validation: _,
         } = &config.target
@@ -398,7 +399,6 @@ mod tests {
     async fn test_concurrent_process_tracking() {
         use async_runtime_compat::AsyncSpawner;
         let spawner = AsyncSpawner::new();
-        use futures::future::join_all;
 
         let executor = Arc::new(ProcessExecutor::new());
         let mut handles = vec![];
@@ -406,7 +406,7 @@ mod tests {
         // Start multiple processes concurrently
         for i in 0..5 {
             let executor_clone = executor.clone();
-            let handle = smol::spawn(async move {
+            let handle = spawner.spawn_with_handle(Box::pin(async move {
                 let config = ServiceConfig {
                     name: format!("concurrent-test-{i}"),
                     target: ServiceTarget::Process {
@@ -423,14 +423,15 @@ mod tests {
 
                 let spawner = AsyncSpawner::new();
                 executor_clone.start(config, &spawner).await
-            });
+            }));
             handles.push(handle);
         }
 
         // Wait for all to complete
-        let services: Vec<_> = join_all(handles)
+        let services: Vec<RunningService> = futures::future::join_all(handles)
             .await
             .into_iter()
+            .map(|opt| opt.expect("Task was cancelled"))
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 

@@ -82,6 +82,7 @@ impl CliTestContext {
     }
 
     /// Run a CLI command with custom environment variables
+    #[allow(dead_code)]
     pub fn run_cli_command_with_env(
         &self,
         args: &[&str],
@@ -105,6 +106,7 @@ impl CliTestContext {
     }
 
     /// Create a test service configuration file
+    #[allow(dead_code)]
     pub fn create_test_config(&self, name: &str) -> Result<PathBuf> {
         let config_path = self.test_dir.path().join(format!("{name}.yaml"));
         let config_content = format!(
@@ -123,15 +125,11 @@ services:
     }
 
     /// Create a custom configuration file
+    #[allow(dead_code)]
     pub fn create_config(&self, filename: &str, content: &str) -> Result<PathBuf> {
         let config_path = self.test_dir.path().join(filename);
         std::fs::write(&config_path, content)?;
         Ok(config_path)
-    }
-
-    /// Get the test directory path
-    pub fn test_dir(&self) -> &std::path::Path {
-        self.test_dir.path()
     }
 }
 
@@ -164,6 +162,7 @@ pub struct CliOutput {
 }
 
 impl CliOutput {
+    #[allow(dead_code)]
     pub fn assert_success(&self) -> &Self {
         if !self.success {
             panic!(
@@ -174,16 +173,29 @@ impl CliOutput {
         self
     }
 
+    #[allow(dead_code)]
     pub fn assert_failure(&self) -> &Self {
         if self.success {
             panic!(
-                "Command succeeded but was expected to fail\nSTDOUT:\n{}\nSTDERR:\n{}",
+                "Command unexpectedly succeeded\nSTDOUT:\n{}\nSTDERR:\n{}",
                 self.stdout, self.stderr
             );
         }
         self
     }
 
+    #[allow(dead_code)]
+    pub fn assert_exit_code(&self, expected: i32) -> &Self {
+        if self.exit_code != Some(expected) {
+            panic!(
+                "Expected exit code {} but got {:?}\nSTDOUT:\n{}\nSTDERR:\n{}",
+                expected, self.exit_code, self.stdout, self.stderr
+            );
+        }
+        self
+    }
+
+    #[allow(dead_code)]
     pub fn assert_contains(&self, text: &str) -> &Self {
         if !self.stdout.contains(text) && !self.stderr.contains(text) {
             panic!(
@@ -192,50 +204,6 @@ impl CliOutput {
             );
         }
         self
-    }
-
-    pub fn assert_not_contains(&self, text: &str) -> &Self {
-        if self.stdout.contains(text) || self.stderr.contains(text) {
-            panic!(
-                "Output contains '{}' but should not\nSTDOUT:\n{}\nSTDERR:\n{}",
-                text, self.stdout, self.stderr
-            );
-        }
-        self
-    }
-
-    pub fn assert_stdout_contains(&self, text: &str) -> &Self {
-        if !self.stdout.contains(text) {
-            panic!(
-                "STDOUT does not contain '{}'\nSTDOUT:\n{}",
-                text, self.stdout
-            );
-        }
-        self
-    }
-
-    pub fn assert_stderr_contains(&self, text: &str) -> &Self {
-        if !self.stderr.contains(text) {
-            panic!(
-                "STDERR does not contain '{}'\nSTDERR:\n{}",
-                text, self.stderr
-            );
-        }
-        self
-    }
-
-    pub fn assert_exit_code(&self, expected: i32) -> &Self {
-        match self.exit_code {
-            Some(code) if code == expected => self,
-            Some(code) => panic!(
-                "Expected exit code {} but got {}\nSTDOUT:\n{}\nSTDERR:\n{}",
-                expected, code, self.stdout, self.stderr
-            ),
-            None => panic!(
-                "Expected exit code {} but process was terminated\nSTDOUT:\n{}\nSTDERR:\n{}",
-                expected, self.stdout, self.stderr
-            ),
-        }
     }
 }
 
@@ -270,21 +238,4 @@ fn find_harness_binary() -> Result<PathBuf> {
             anyhow::bail!("Harness binary not found at {:?}", harness_path)
         }
     }
-}
-
-/// Helper to wait for a condition with timeout
-pub async fn wait_for<F>(condition: F, timeout: Duration, check_interval: Duration) -> Result<()>
-where
-    F: Fn() -> bool,
-{
-    let start = tokio::time::Instant::now();
-
-    while !condition() {
-        if start.elapsed() > timeout {
-            anyhow::bail!("Timeout waiting for condition");
-        }
-        tokio::time::sleep(check_interval).await;
-    }
-
-    Ok(())
 }

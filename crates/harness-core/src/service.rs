@@ -205,7 +205,9 @@ pub trait JsonService: Send + Sync {
     }
 
     /// Wait for the service to reach a target state with timeout
+    // TODO: actually time out here?
     async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
+        let _ = timeout; // Will be used when timeout is implemented
         let current = self.get_state().await?;
         if current == target {
             Ok(())

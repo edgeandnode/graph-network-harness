@@ -225,7 +225,8 @@ impl BaseDaemon {
             .ok_or_else(|| Error::daemon("No stack configuration provided"))?;
 
         // Get the task config
-        let task_config = config
+        // TODO: work out what was to be done here.
+        let _task_config = config
             .tasks
             .get(task_name)
             .ok_or_else(|| Error::daemon(format!("Task {task_name} not found in config")))?;
@@ -753,7 +754,6 @@ mod tests {
     use crate::task::DeploymentTask;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
-    use serde_json::json;
 
     // Test types for validation
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -952,24 +952,6 @@ mod tests {
             .register_json_service("svc2".to_string(), Box::new(TestService::default()))
             .unwrap();
 
-        // Service depends on itself indirectly through another service
-        let config = json!({
-            "services": {
-                "svc1": {
-                    "service_type": "test-service",
-                    "depends_on": [
-                        { "service": "svc2" }
-                    ]
-                },
-                "svc2": {
-                    "service_type": "test-service",
-                    "depends_on": [
-                        { "service": "svc1" }
-                    ]
-                }
-            }
-        });
-
         // This should pass validation as we don't detect circular dependencies here
         // That would be done at execution time by topological sort
         let daemon = builder.with_test_mode().build().await.unwrap();
@@ -1009,50 +991,6 @@ mod tests {
             .register_task("cache-warm".to_string(), TestTask::new())
             .unwrap();
 
-        let config = json!({
-            "services": {
-                "db": {
-                    "service_type": "test-service",
-                    "depends_on": []
-                },
-                "cache": {
-                    "service_type": "test-service",
-                    "depends_on": [
-                        { "service": "db" },
-                        { "task": "db-migrate" }
-                    ]
-                },
-                "api": {
-                    "service_type": "test-service",
-                    "depends_on": [
-                        { "service": "db" },
-                        { "service": "cache" },
-                        { "task": "cache-warm" }
-                    ]
-                },
-                "web": {
-                    "service_type": "test-service",
-                    "depends_on": [
-                        { "service": "api" }
-                    ]
-                }
-            },
-            "tasks": {
-                "db-migrate": {
-                    "task_type": "test-task",
-                    "depends_on": [
-                        { "service": "db" }
-                    ]
-                },
-                "cache-warm": {
-                    "task_type": "test-task",
-                    "depends_on": [
-                        { "service": "cache" }
-                    ]
-                }
-            }
-        });
-
         let daemon = builder.with_test_mode().build().await.unwrap();
 
         assert!(daemon.json_service_registry().get("db").is_some());
@@ -1075,21 +1013,6 @@ mod tests {
         builder
             .register_task("task2".to_string(), TestTask::new())
             .unwrap();
-
-        let config = json!({
-            "tasks": {
-                "task1": {
-                    "task_type": "test-task",
-                    "depends_on": []
-                },
-                "task2": {
-                    "task_type": "test-task",
-                    "depends_on": [
-                        { "task": "task1" }
-                    ]
-                }
-            }
-        });
 
         let daemon = builder.with_test_mode().build().await.unwrap();
 

@@ -203,7 +203,7 @@ async fn test_cli_concurrent_operations() -> Result<()> {
 
     // Start multiple services concurrently
     let mut handles = vec![];
-    for i in 0..3 {
+    for _ in 0..3 {
         let harness_binary = ctx.harness_binary.clone();
         let daemon_port = ctx.daemon_port;
         let config_path = config_path.clone();

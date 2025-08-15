@@ -37,7 +37,7 @@ impl DaemonClient {
     }
 
     /// Connect with TLS
-    pub async fn connect_tls(port: u16, verify_cert: bool) -> Result<Self> {
+    pub async fn connect_tls(port: u16) -> Result<Self> {
         let addr: SocketAddr = format!("127.0.0.1:{port}").parse()?;
         let url = format!("wss://{addr}/");
 

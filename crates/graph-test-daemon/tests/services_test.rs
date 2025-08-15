@@ -1,7 +1,6 @@
 //! Tests for the new service implementations
 
 use graph_test_daemon::services::*;
-use graph_test_daemon::*;
 use harness_core::service::{JsonServiceRegistry, Service};
 
 #[smol_potat::test]

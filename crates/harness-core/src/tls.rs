@@ -4,7 +4,6 @@
 //! adapted from the service-registry implementation.
 
 use crate::Error;
-use futures::AsyncReadExt;
 use std::path::Path;
 use std::result::Result;
 use std::sync::Arc;

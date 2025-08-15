@@ -529,6 +529,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Initial idle state
     #[state]
     async fn idle(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Idle {:?}", event);
         let context = &mut self.context;
         match event {
             SubgraphEvent::Start => {
@@ -542,6 +543,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Checking prerequisites state
     #[state]
     async fn checking_prerequisites(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Checking prerequisites {:?}", event);
         let context = &mut self.context;
         context.set_progress(10, "Checking prerequisites");
 
@@ -564,6 +566,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Building subgraph state
     #[state]
     async fn building(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Building {:?}", event);
         let context = &mut self.context;
         context.set_progress(20, "Building subgraph");
 
@@ -587,6 +590,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Creating subgraph state
     #[state]
     async fn creating(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Creating {:?}", event);
         let context = &mut self.context;
         context.set_progress(50, "Creating subgraph in Graph Node");
 
@@ -602,6 +606,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Deploying state
     #[state]
     async fn deploying(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Deploying {:?}", event);
         let context = &mut self.context;
         context.set_progress(60, "Deploying subgraph");
 
@@ -625,6 +630,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Verifying deployment state
     #[state]
     async fn verifying(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Verifying {:?}", event);
         let context = &mut self.context;
         context.set_progress(95, "Verifying deployment");
 
@@ -648,6 +654,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Completed state
     #[state]
     async fn completed(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Completed {:?}", event);
         let context = &self.context;
         info!(
             "Subgraph '{}' deployment completed successfully",
@@ -665,6 +672,7 @@ impl SubgraphDeployTaskStateMachine {
     /// Failed state
     #[state]
     async fn failed(&mut self, event: &SubgraphEvent) -> Response<State> {
+        info!("Failed {:?}", event);
         let context = &mut self.context;
         match event {
             SubgraphEvent::Retry => {

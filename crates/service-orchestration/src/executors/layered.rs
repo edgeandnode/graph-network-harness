@@ -266,7 +266,9 @@ impl ServiceExecutor for LayeredServiceExecutor {
         let executor = Self::build_executor(layers, &env);
 
         // Build command from template or legacy command
+        // TODO: this isn't building from the template at all - impl and test
         let cmd = if let Some(template) = command_template {
+            let _ = template; // Will be used when template building is implemented
             let cmd_parts = config.target.build_command().unwrap_or_default();
             if cmd_parts.is_empty() {
                 return Err(Error::Config("No command built from template".to_string()));

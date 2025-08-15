@@ -10,7 +10,7 @@ pub async fn connect_to_daemon() -> Result<DaemonClient> {
     let port = DEFAULT_DAEMON_PORT;
 
     // Use TLS by default
-    match DaemonClient::connect_tls(port, true).await {
+    match DaemonClient::connect_tls(port).await {
         Ok(client) => Ok(client),
         Err(e) => {
             if e.to_string().contains("Connection refused")

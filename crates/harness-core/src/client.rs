@@ -135,6 +135,7 @@ impl TestClient {
         )))
     }
 
+    // TODO: actually implement this
     /// Wait for a service to be in a specific state
     pub async fn wait_for_service_state(
         &self,
@@ -144,8 +145,9 @@ impl TestClient {
     ) -> Result<(), Error> {
         self.wait_for(
             || async {
-                // TODO: Query service status
+                // TODO: Query service status for service_name and check if it matches expected_state
                 // For now, just return false to simulate waiting
+                let _ = (service_name, expected_state); // Will be used when implementation is complete
                 false
             },
             timeout_ms,

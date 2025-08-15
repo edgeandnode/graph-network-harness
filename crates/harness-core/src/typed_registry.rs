@@ -221,6 +221,7 @@ impl Default for TypedTaskRegistry {
 /// from the concrete types stored in the TypedServiceRegistry.
 pub struct JsonAdapterFactory;
 
+// TODO: this is just a stub and needs implemented
 impl JsonAdapterFactory {
     /// Try to create a JSON service wrapper from an Any reference
     ///
@@ -232,6 +233,7 @@ impl JsonAdapterFactory {
     ) -> Result<Box<dyn JsonService>, Error> {
         // This would need to be implemented with a type registry or macro-generated code
         // For now, return an error indicating the type is not registered
+        let _ = service_any; // Will be used when type registry is implemented
         Err(Error::service_type(format!(
             "No JSON adapter factory registered for service type '{}'",
             service_type
@@ -245,6 +247,7 @@ impl JsonAdapterFactory {
     ) -> Result<Box<dyn JsonTask>, Error> {
         // This would need to be implemented with a type registry or macro-generated code
         // For now, return an error indicating the type is not registered
+        let _ = task_any; // Will be used when type registry is implemented
         Err(Error::service_type(format!(
             "No JSON adapter factory registered for task type '{}'",
             task_type
@@ -309,7 +312,9 @@ impl JsonService for DynamicJsonService {
         Ok(ServiceState::Running)
     }
 
+    // TODO: actually implement timeout
     async fn wait_for_state(&self, target: ServiceState, timeout: Duration) -> Result<(), Error> {
+        let _ = timeout; // Will be used when timeout is implemented
         let current = self.get_state().await?;
         if current == target {
             Ok(())

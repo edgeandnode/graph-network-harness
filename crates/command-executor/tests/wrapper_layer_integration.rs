@@ -167,6 +167,7 @@ async fn test_wrapper_with_separator() {
 
             let exit_status = handle.wait().await.expect("Failed to wait");
             assert!(exit_status.success(), "Command should succeed");
+            assert!(got_output);
             // Note: This test might behave differently on different systems
         }
         Err(e) => {

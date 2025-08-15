@@ -218,6 +218,7 @@ services:
     println!("✓ Stopped frontend for debugging");
 
     let output = ctx.run_cli_command(&["logs", "database", "--tail", "50"])?;
+    output.assert_success();
     // In real implementation, this would show actual logs
     println!("✓ Checked database logs");
 
@@ -266,8 +267,8 @@ services:
 
     // Try to start all services
     let output = ctx.run_cli_command(&["start", "-f", config_path.to_str().unwrap(), "--all"])?;
-
-    // Should partially succeed
+    // Should partially succeed - don't assert success since some services are expected to fail
+    output.assert_exit_code(0); // But should not crash
     println!("✓ Attempted to start all services");
 
     // Check status to see what's wrong
@@ -283,6 +284,8 @@ services:
 
     // Try to get more info about the failure
     let output = ctx.run_cli_command(&["logs", "flaky-service"])?;
+    // Don't assert success since the service failed, but logs command should work
+    output.assert_exit_code(0);
     println!("✓ Checked logs for failed service");
 
     // Fix the issue (update config)

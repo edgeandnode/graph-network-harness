@@ -25,3 +25,4 @@ crates/service-orchestration/crates/command-executor/tests/systemd-container/ssh
 crates/graph-test-daemon/tests/docker-test-env/ssh-keys/test_ed25519
 crates/graph-test-daemon/tests/docker-test-env/ssh-keys/test_ed25519.pub
 crates/graph-test-daemon/tests/docker-test-env/ssh-keys/authorized_keys
+.env

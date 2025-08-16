@@ -38,6 +38,12 @@ async-fs = { workspace = true }
 statig = { version = "0.3", features = ["async"] }
 regex = { workspace = true }
 
+# Binary dependencies
+smol-potat = { workspace = true }
+async-io = "2.3"
+ctrlc = "3.4"
+dotenvy = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 smol-potat = { workspace = true }
@@ -50,3 +56,7 @@ async-io = "2.3"
 [[bin]]
 name = "graph-test-daemon"
 path = "src/main.rs"
+
+[[bin]]
+name = "full_stack_demo"
+path = "src/bin/full_stack_demo.rs"

@@ -10,11 +10,10 @@ tasks:
       type: process
       # Check if binary exists and is newer than source
       validation: |
-        test -f ./target/release/graph-node && \
-        [ ./target/release/graph-node -nt ./src ] || false
+        test -f "${GRAPH_NODE_SRC}/target/release/graph-node" && \
+        [ "${GRAPH_NODE_SRC}/target/release/graph-node" -nt "${GRAPH_NODE_SRC}/src" ] || false
       command: |
-        cargo build --release --bin graph-node
-      working_dir: "../../../graph-node"
+        cd "${GRAPH_NODE_SRC}" && cargo build --release --bin graph-node
       env:
         CARGO_TARGET_DIR: "./target"
     depends_on: []
@@ -33,7 +32,7 @@ tasks:
         -o StrictHostKeyChecking=no "mkdir -p /home/testuser/bin" && \
         scp -P 2222 -i tests/docker-test-env/ssh-keys/test_ed25519 \
         -o StrictHostKeyChecking=no \
-        ../../../graph-node/target/release/graph-node \
+        "${GRAPH_NODE_SRC}/target/release/graph-node" \
         testuser@localhost:/home/testuser/bin/graph-node
     depends_on:
       - task: build-graph-node

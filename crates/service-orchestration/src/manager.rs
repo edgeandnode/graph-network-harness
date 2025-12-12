@@ -18,7 +18,8 @@ use command_executor::event::ProcessEvent;
 use std::collections::HashMap;
 use std::result::Result;
 use std::sync::{Arc, RwLock};
-use tracing::{debug, info, warn};
+use std::time::Duration;
+use tracing::{debug, warn};
 
 /// Central service orchestrator
 pub struct ServiceManager {
@@ -33,7 +34,7 @@ pub struct ServiceManager {
 impl ServiceManager {
     /// Create a new service manager
     pub async fn new() -> Result<Self, OrchestrationError> {
-        info!("Initializing ServiceManager");
+        debug!("Initializing ServiceManager");
 
         // Create harness directory if it doesn't exist
         let state_dir = dirs::data_local_dir()
@@ -48,7 +49,7 @@ impl ServiceManager {
         state_dir: impl Into<std::path::PathBuf>,
     ) -> Result<Self, OrchestrationError> {
         let state_dir = state_dir.into();
-        info!(
+        debug!(
             "Initializing ServiceManager with state dir: {:?}",
             state_dir
         );
@@ -90,7 +91,7 @@ impl ServiceManager {
         config: ServiceConfig,
         spawner: &dyn Spawner,
     ) -> Result<(Receiver<ProcessEvent>, RunningService), OrchestrationError> {
-        info!("Launching service: {}", name);
+        debug!("Launching service: {}", name);
 
         // Check if service is already running
         {
@@ -127,7 +128,7 @@ impl ServiceManager {
             .unwrap()
             .insert(name.to_string(), running_service.clone());
 
-        info!("Successfully launched service: {}", name);
+        debug!("Successfully launched service: {}", name);
         Ok((rx, running_service))
     }
 
@@ -138,7 +139,7 @@ impl ServiceManager {
         config: ServiceConfig,
         spawner: &dyn Spawner,
     ) -> Result<(Receiver<ProcessEvent>, RunningService), OrchestrationError> {
-        info!("Attaching to service: {}", name);
+        debug!("Attaching to service: {}", name);
 
         // Check if service is already managed
         {
@@ -201,7 +202,7 @@ impl ServiceManager {
             .unwrap()
             .insert(name.to_string(), running_service.clone());
 
-        info!("Successfully attached to service: {}", name);
+        debug!("Successfully attached to service: {}", name);
         Ok((rx, running_service))
     }
 
@@ -211,7 +212,7 @@ impl ServiceManager {
         name: &str,
         spawner: &dyn Spawner,
     ) -> Result<(), OrchestrationError> {
-        info!("Stopping service: {}", name);
+        debug!("Stopping service: {}", name);
 
         let service = {
             let mut active = self.active_services.write().unwrap();
@@ -231,8 +232,40 @@ impl ServiceManager {
 
         // Service has been removed from active_services, nothing more to do
 
-        info!("Successfully stopped service: {}", name);
+        debug!("Successfully stopped service: {}", name);
         Ok(())
+    }
+
+    /// Wait for a service to become healthy
+    pub async fn wait_for_health(
+        &self,
+        name: &str,
+        timeout: Duration,
+    ) -> Result<(), OrchestrationError> {
+        let start = std::time::Instant::now();
+        
+        while start.elapsed() < timeout {
+            match self.get_service_status(name).await? {
+                ServiceStatus::Running => {
+                    debug!("Service {} is healthy", name);
+                    return Ok(());
+                }
+                ServiceStatus::Failed(reason) => {
+                    return Err(OrchestrationError::Config(format!(
+                        "Service {} failed: {}", name, reason
+                    )));
+                }
+                _ => {
+                    // Still starting or in another transitional state
+                    async_runtime_compat::prelude::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+        
+        Err(OrchestrationError::Config(format!(
+            "Service {} failed to become healthy within {:?}", 
+            name, timeout
+        )))
     }
 
     /// Get the status of a service

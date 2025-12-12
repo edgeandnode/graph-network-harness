@@ -24,7 +24,7 @@ pub use error::Error;
 pub mod prelude {
     pub use crate::base_service::{BaseService, BaseServiceState, ServiceCommand};
     pub use crate::client::TestClient;
-    pub use crate::daemon::{BaseDaemon, Daemon};
+    pub use crate::daemon::{BaseDaemon, Daemon, DaemonEvent};
     pub use crate::error::Error;
     pub use crate::service::{
         ActionDescriptor, JsonService, JsonServiceRegistry, Service, ServiceSetup, ServiceState,

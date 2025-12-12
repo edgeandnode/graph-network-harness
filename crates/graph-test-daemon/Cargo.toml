@@ -43,6 +43,8 @@ smol-potat = { workspace = true }
 async-io = "2.3"
 ctrlc = "3.4"
 dotenvy = { workspace = true }
+indicatif = "0.17"
+console = "0.15"
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -58,5 +60,5 @@ name = "graph-test-daemon"
 path = "src/main.rs"
 
 [[bin]]
-name = "full_stack_demo"
-path = "src/bin/full_stack_demo.rs"
+name = "graph_stack_runner"
+path = "src/bin/graph_stack_runner.rs"

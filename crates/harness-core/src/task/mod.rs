@@ -17,12 +17,13 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::Value;
+use service_orchestration::{OrchestrationError, TypedTaskProvider};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
+use std::result::Result;
 
 use crate::Error;
-use std::result::Result;
 
 /// Simplified trait for deployment tasks using state machines
 ///
@@ -227,6 +228,45 @@ impl JsonTaskRegistry {
 impl Default for JsonTaskRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Implementation of TypedTaskProvider for JsonTaskRegistry
+///
+/// This allows JsonTaskRegistry to be used as the typed task provider
+/// for TaskManager, enabling typed tasks to be executed during launch_stack().
+#[async_trait]
+impl TypedTaskProvider for JsonTaskRegistry {
+    fn has_task(&self, name: &str) -> bool {
+        self.tasks.contains_key(name)
+    }
+
+    async fn validate(&self, name: &str) -> Result<bool, OrchestrationError> {
+        let task = self.get(name).ok_or_else(|| {
+            OrchestrationError::Config(format!("Task instance '{}' not found", name))
+        })?;
+
+        task.validate()
+            .await
+            .map_err(|e| OrchestrationError::Other(e.to_string()))
+    }
+
+    async fn execute(
+        &self,
+        name: &str,
+        spawner: &dyn Spawner,
+    ) -> Result<Receiver<Value>, OrchestrationError> {
+        let task = self.get(name).ok_or_else(|| {
+            OrchestrationError::Config(format!("Task instance '{}' not found", name))
+        })?;
+
+        let (rx, converter) = task
+            .execute_json()
+            .await
+            .map_err(|e| OrchestrationError::Other(e.to_string()))?;
+
+        spawner.spawn(converter);
+        Ok(rx)
     }
 }
 

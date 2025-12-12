@@ -1,4 +1,10 @@
 # Basic multi-process container for Graph Protocol testing
+#
+# TODO: Update versions before next rebuild:
+#   - PostgreSQL: 14 -> 17 (match local-network)
+#   - Node.js: 18 -> 24 (18 is deprecated)
+#   - Ubuntu: Consider 24.04 for newer packages
+#
 FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -40,10 +46,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install Foundry (includes anvil for local Ethereum)
+# Install Foundry (includes anvil for local Ethereum) - install system-wide
 RUN curl -L https://foundry.paradigm.xyz | bash && \
-    /root/.foundry/bin/foundryup
-ENV PATH="/root/.foundry/bin:${PATH}"
+    /root/.foundry/bin/foundryup && \
+    cp /root/.foundry/bin/* /usr/local/bin/
+ENV PATH="/usr/local/bin:${PATH}"
 
 # Install IPFS
 RUN wget https://dist.ipfs.tech/kubo/v0.24.0/kubo_v0.24.0_linux-amd64.tar.gz && \
@@ -51,6 +58,11 @@ RUN wget https://dist.ipfs.tech/kubo/v0.24.0/kubo_v0.24.0_linux-amd64.tar.gz && 
     cd kubo && \
     bash install.sh && \
     rm -rf /kubo_v0.24.0_linux-amd64.tar.gz /kubo
+
+# Install Redpanda (Kafka-compatible message broker)
+RUN curl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | bash && \
+    apt-get install -y redpanda && \
+    apt-get clean
 
 # Create test user with sudo
 RUN useradd -m -s /bin/bash testuser && \
@@ -63,6 +75,11 @@ RUN mkdir -p /home/testuser/.ssh && \
     chown testuser:testuser /home/testuser/.ssh && \
     chmod 700 /home/testuser/.ssh && \
     mkdir -p /var/run/sshd
+
+# Copy SSH authorized keys for testuser
+COPY ssh-keys/authorized_keys /home/testuser/.ssh/authorized_keys
+RUN chown testuser:testuser /home/testuser/.ssh/authorized_keys && \
+    chmod 600 /home/testuser/.ssh/authorized_keys
 
 # Configure SSH to allow password and key auth
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config && \
@@ -107,7 +124,10 @@ RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
     /lib/systemd/system/systemd-update-utmp*
 
 # Expose ports
-EXPOSE 22 5432 5001 8080 8545 8000 8001 8020 8040
+# 22: SSH, 5432: PostgreSQL, 5001: IPFS API, 8080: IPFS Gateway
+# 8545: Anvil RPC, 8000: Graph Node GraphQL, 8001: Graph Node WS, 8020: Graph Node Admin, 8040: Graph Node Metrics
+# 9092: Redpanda Kafka, 8081: Redpanda Schema Registry, 8082: Redpanda HTTP Proxy, 9644: Redpanda Admin
+EXPOSE 22 5432 5001 8080 8545 8000 8001 8020 8040 9092 8081 8082 9644
 
 WORKDIR /workspace
 

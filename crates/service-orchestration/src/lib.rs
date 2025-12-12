@@ -44,6 +44,8 @@ mod health;
 mod manager;
 mod state;
 mod task_config;
+mod task_executors;
+mod task_manager;
 
 pub use config::{
     CommandSpec, Dependency, HealthCheck, ParamValue, ProcessCommand, RemoteMode, ServiceConfig,
@@ -65,6 +67,8 @@ pub use state::{
     ServiceStateFilter, StateManager, TaskExecutionState, TaskState, TaskStateFilter,
 };
 pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
+pub use task_executors::{ProcessTaskExecutor, LayeredTaskExecutor};
+pub use task_manager::{TaskManager, TaskStatus, TaskExecution, TaskExecutor, TypedTaskProvider};
 
 // Re-export with the old name for backwards compatibility during transition
 #[deprecated(note = "Use OrchestrationError instead")]

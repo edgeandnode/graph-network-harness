@@ -72,7 +72,7 @@ impl GraphTestDaemon {
     }
 
     /// Launch all services in the stack in dependency order
-    pub async fn launch_stack(&self) -> Result<(), Error> {
+    pub async fn launch_stack(&self) -> Result<Receiver<DaemonEvent>, Error> {
         // Delegate to the base daemon's launch_stack implementation
         self.base.launch_stack().await
     }
@@ -80,6 +80,8 @@ impl GraphTestDaemon {
 
 #[async_trait]
 impl Daemon for GraphTestDaemon {
+
+    // TODO: customize for graph-test-daemon
     async fn start(&self) -> Result<(), Error> {
         info!("Starting Graph Test Daemon");
 

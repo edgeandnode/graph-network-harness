@@ -13,7 +13,7 @@ use command_executor::{
 use futures::StreamExt;
 use harness_core::{Error, config_traits::TaskFromConfig, task::DeploymentTask};
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use service_orchestration::{ServiceTarget, TaskConfig};
 use statig::prelude::*;
 use std::collections::HashMap;
@@ -85,12 +85,22 @@ impl DeploymentTask for GraphContractsTask {
 
             // Run the deployment using the state machine
             match deploy_graph_contracts(ethereum_url, working_dir).await {
-                Ok(()) => {
-                    let _ = tx.send(GraphContractsDeployTaskState::Completed).await;
+                Ok(addresses) => {
+                    info!(
+                        "Graph contracts deployed, complete={}",
+                        addresses.is_complete()
+                    );
+                    let _ = tx
+                        .send(GraphContractsDeployTaskState::Completed { outputs: addresses })
+                        .await;
                 }
                 Err(e) => {
                     error!("Deployment failed: {}", e);
-                    let _ = tx.send(GraphContractsDeployTaskState::Failed).await;
+                    let _ = tx
+                        .send(GraphContractsDeployTaskState::Failed {
+                            error: e.to_string(),
+                        })
+                        .await;
                 }
             }
         })
@@ -100,8 +110,111 @@ impl DeploymentTask for GraphContractsTask {
     }
 }
 
+/// Deployed Graph Protocol contract addresses
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct GraphContractAddresses {
+    /// Controller contract - manages protocol parameters
+    #[serde(rename = "Controller")]
+    pub controller: Option<String>,
+    /// EpochManager contract - manages epochs for rewards
+    #[serde(rename = "EpochManager")]
+    pub epoch_manager: Option<String>,
+    /// GraphToken (GRT) contract
+    #[serde(rename = "GraphToken")]
+    pub graph_token: Option<String>,
+    /// Staking contract (L1Staking on mainnet)
+    #[serde(rename = "L1Staking")]
+    pub staking: Option<String>,
+    /// Staking extension contract
+    #[serde(rename = "StakingExtension")]
+    pub staking_extension: Option<String>,
+    /// Curation contract - manages signal on subgraphs
+    #[serde(rename = "Curation")]
+    pub curation: Option<String>,
+    /// DisputeManager contract
+    #[serde(rename = "DisputeManager")]
+    pub dispute_manager: Option<String>,
+    /// RewardsManager contract
+    #[serde(rename = "RewardsManager")]
+    pub rewards_manager: Option<String>,
+    /// ServiceRegistry contract
+    #[serde(rename = "ServiceRegistry")]
+    pub service_registry: Option<String>,
+    /// GNS (Graph Name Service) contract
+    #[serde(rename = "L1GNS")]
+    pub gns: Option<String>,
+    /// SubgraphNFT contract
+    #[serde(rename = "SubgraphNFT")]
+    pub subgraph_nft: Option<String>,
+    /// GraphTokenGateway contract (for L1/L2 bridging)
+    #[serde(rename = "L1GraphTokenGateway")]
+    pub graph_token_gateway: Option<String>,
+}
+
+impl GraphContractAddresses {
+    /// Set a contract address by name (for parsing deployment output)
+    pub fn set(&mut self, name: &str, address: String) {
+        match name {
+            "Controller" => self.controller = Some(address),
+            "EpochManager" => self.epoch_manager = Some(address),
+            "GraphToken" => self.graph_token = Some(address),
+            "L1Staking" | "Staking" => self.staking = Some(address),
+            "StakingExtension" => self.staking_extension = Some(address),
+            "Curation" => self.curation = Some(address),
+            "DisputeManager" => self.dispute_manager = Some(address),
+            "RewardsManager" => self.rewards_manager = Some(address),
+            "ServiceRegistry" => self.service_registry = Some(address),
+            "L1GNS" | "GNS" => self.gns = Some(address),
+            "SubgraphNFT" => self.subgraph_nft = Some(address),
+            "L1GraphTokenGateway" => self.graph_token_gateway = Some(address),
+            _ => {
+                debug!("Unknown contract: {} at {}", name, address);
+            }
+        }
+    }
+
+    /// Check if the essential contracts are deployed
+    pub fn is_complete(&self) -> bool {
+        self.graph_token.is_some()
+            && self.staking.is_some()
+            && self.epoch_manager.is_some()
+            && self.gns.is_some()
+    }
+
+    /// Count how many addresses are set
+    pub fn count(&self) -> usize {
+        [
+            &self.controller,
+            &self.epoch_manager,
+            &self.graph_token,
+            &self.staking,
+            &self.staking_extension,
+            &self.curation,
+            &self.dispute_manager,
+            &self.rewards_manager,
+            &self.service_registry,
+            &self.gns,
+            &self.subgraph_nft,
+            &self.graph_token_gateway,
+        ]
+        .iter()
+        .filter(|a| a.is_some())
+        .count()
+    }
+
+    /// Create from a HashMap (for deserializing from JSON files)
+    pub fn from_map(map: &HashMap<String, String>) -> Self {
+        let mut addresses = Self::default();
+        for (name, address) in map {
+            addresses.set(name, address.clone());
+        }
+        addresses
+    }
+}
+
 /// States for the Graph contracts deployment state machine
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[serde(tag = "status", rename_all = "lowercase")]
 pub enum GraphContractsDeployTaskState {
     /// Initial state - not started
     Idle,
@@ -113,10 +226,17 @@ pub enum GraphContractsDeployTaskState {
     DeployingContracts,
     /// Verifying deployment
     Verifying,
-    /// Successfully completed
-    Completed,
+    /// Successfully completed with contract addresses
+    Completed {
+        /// Deployed contract addresses
+        outputs: GraphContractAddresses,
+    },
     /// Failed with error
-    Failed,
+    Failed {
+        /// Error message
+        #[serde(default)]
+        error: String,
+    },
 }
 
 /// Events that trigger state transitions
@@ -149,7 +269,7 @@ pub struct GraphContractsContext {
     /// Command executor
     pub executor: Executor<LocalLauncher>,
     /// Deployed contract addresses
-    pub deployed_addresses: HashMap<String, String>,
+    pub deployed_addresses: GraphContractAddresses,
     /// Current progress (0-100)
     pub progress: u8,
     /// Status message
@@ -167,7 +287,7 @@ impl GraphContractsContext {
             ethereum_url,
             working_dir,
             executor: Executor::new("graph-contracts".to_string(), LocalLauncher),
-            deployed_addresses: HashMap::new(),
+            deployed_addresses: GraphContractAddresses::default(),
             progress: 0,
             status_message: "Not started".to_string(),
             retry_count: 0,
@@ -251,9 +371,7 @@ impl GraphContractsDeployTaskStateMachine {
                     if data.contains("deployed at") {
                         if let Some(address) = extract_address(data) {
                             let contract_name = extract_contract_name(data).unwrap_or("Unknown");
-                            context
-                                .deployed_addresses
-                                .insert(contract_name.to_string(), address);
+                            context.deployed_addresses.set(contract_name, address);
                         }
                     }
 
@@ -297,14 +415,21 @@ impl GraphContractsDeployTaskStateMachine {
     /// Verify contracts were deployed correctly
     fn verify_deployment(context: &GraphContractsContext) -> Result<(), Error> {
         // Check that we have some deployed addresses
-        if context.deployed_addresses.is_empty() {
+        if context.deployed_addresses.count() == 0 {
             return Err(Error::daemon("No contracts were deployed"));
         }
 
-        // Could add additional verification here (e.g., call a view function)
+        // Check essential contracts are present
+        if !context.deployed_addresses.is_complete() {
+            warn!(
+                "Deployment incomplete - only {} contracts deployed",
+                context.deployed_addresses.count()
+            );
+        }
+
         info!(
             "Verified {} contracts deployed",
-            context.deployed_addresses.len()
+            context.deployed_addresses.count()
         );
         Ok(())
     }
@@ -426,12 +551,11 @@ impl GraphContractsDeployTaskStateMachine {
     async fn completed(&mut self, event: &GraphContractsEvent) -> Response<State> {
         let context = &self.context;
         info!(
-            "Graph contracts deployment completed successfully {:?}",
+            "Graph contracts deployment completed successfully ({} contracts) {:?}",
+            context.deployed_addresses.count(),
             event
         );
-        for (name, address) in &context.deployed_addresses {
-            info!("  {} deployed at: {}", name, address);
-        }
+        debug!(addresses = ?context.deployed_addresses, "Deployed addresses");
         Super
     }
 
@@ -490,22 +614,40 @@ fn extract_deployment_info(line: &str) -> HashMap<String, String> {
 }
 
 /// Run the Graph contracts deployment
+///
+/// Returns the deployed contract addresses on success.
 pub async fn deploy_graph_contracts(
     ethereum_url: String,
     working_dir: PathBuf,
-) -> Result<(), Error> {
-    let context = GraphContractsContext::new(ethereum_url, working_dir);
+) -> Result<GraphContractAddresses, Error> {
+    let context = GraphContractsContext::new(ethereum_url, working_dir.clone());
     let state_machine = GraphContractsDeployTaskStateMachine::new(context);
     let mut machine = state_machine.state_machine();
 
     // Start the deployment
     machine.handle(&GraphContractsEvent::Start).await;
 
-    // Check final state
+    // Check final state and return addresses
     match machine.state() {
         State::Completed {} => {
             info!("Graph contracts deployment completed successfully");
-            Ok(())
+            // Read deployed addresses from the marker file
+            let deployment_marker = working_dir.join(".graph-network-deployed");
+            if deployment_marker.exists() {
+                let contents = async_fs::read_to_string(&deployment_marker)
+                    .await
+                    .map_err(|e| Error::daemon(format!("Failed to read deployment info: {e}")))?;
+                let json: serde_json::Value = serde_json::from_str(&contents)
+                    .map_err(|e| Error::daemon(format!("Failed to parse deployment info: {e}")))?;
+                if let Some(addresses) = json.get("addresses").and_then(|v| v.as_object()) {
+                    let map: HashMap<String, String> = addresses
+                        .iter()
+                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                        .collect();
+                    return Ok(GraphContractAddresses::from_map(&map));
+                }
+            }
+            Ok(GraphContractAddresses::default())
         }
         State::Failed {} => Err(Error::daemon("Graph contracts deployment failed")),
         _ => Err(Error::daemon(

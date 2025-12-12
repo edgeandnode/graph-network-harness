@@ -3,15 +3,21 @@
 //! This module provides the `Daemon` trait and `BaseDaemon` implementation
 //! that serves as the foundation for domain-specific daemons.
 
-use async_runtime_compat::{AsyncSpawner, Task, prelude::*};
-use async_trait::async_trait;
-use service_orchestration::{
-    DependencyGraph, DependencyNode, ServiceConfig, ServiceStatus, StackConfig,
-};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn};
+use std::result::Result;
+
+use async_channel::Receiver;
+use async_runtime_compat::{AsyncSpawner, Task, prelude::*};
+use async_trait::async_trait;
+use tracing::{debug, info};
+
+use command_executor::ProcessEvent;
+use service_orchestration::{ RunningService, TaskConfig };
+use service_orchestration::{
+    DependencyGraph, DependencyNode, ServiceConfig, StackConfig,
+};
 
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
 use crate::service::{JsonService, JsonServiceRegistry, Service};
@@ -20,8 +26,7 @@ use crate::task::{DeploymentTask, JsonTaskRegistry};
 use crate::typed_registry::{TypedServiceRegistry, TypedTaskRegistry};
 use crate::websocket_dispatch::WebSocketServer;
 use crate::{Error, ServiceManager};
-use service_orchestration::TaskConfig;
-use std::result::Result;
+use service_orchestration::{TaskManager, TaskStatus, ProcessTaskExecutor, LayeredTaskExecutor};
 
 /// Core daemon trait that all harness daemons must implement
 #[async_trait]
@@ -39,6 +44,91 @@ pub trait Daemon: Send + Sync {
     fn service_manager(&self) -> &ServiceManager;
 }
 
+
+/// Lifecycle state for a service or task
+#[derive(Debug)]
+pub enum State {
+    /// Initial state when starting
+    Start,
+    /// Failed to start or execute
+    Failed,
+    /// Successfully running (for services)
+    Running {
+        /// Event stream from the running process
+        events_receiver: Receiver<ProcessEvent>,
+        /// Handle to the running service
+        running_service: RunningService,
+    },
+    /// Successfully completed (for tasks)
+    Completed,
+}
+
+/// Associates a name with its current state
+#[derive(Debug)]
+pub struct NameAndState {
+    /// Name of the service or task
+    pub name: String,
+    /// Current lifecycle state
+    pub state: State,
+}
+
+impl NameAndState {
+    fn start(name: &str) -> NameAndState {
+        NameAndState { name: name.to_string(), state: State::Start }
+    }
+
+    fn fail(name: &str) -> Self {
+        NameAndState { name: name.to_string(), state: State::Failed }
+    }
+
+    fn running(name: &str,
+        events_receiver: Receiver<ProcessEvent>, running_service: RunningService) -> Self {
+        Self { name: name.to_string(), state: State::Running {
+            events_receiver, running_service
+        }}
+    }
+
+    fn completed(name: &str) -> Self {
+        Self { name: name.to_string(), state: State::Completed }
+    }
+}
+
+/// Events emitted during daemon stack launch
+#[derive(Debug)]
+pub enum DaemonEvent {
+    /// Service lifecycle event
+    Service(NameAndState),
+    /// Task lifecycle event
+    Task(NameAndState),
+}
+
+impl DaemonEvent {
+    fn service_start(name: &str) -> Self {
+        Self::Service(NameAndState::start(name))
+    }
+    
+    fn service_fail(name: &str) -> Self {
+        Self::Service(NameAndState::fail(name))
+    }
+
+    fn service_running(name: &str,
+        events_receiver: Receiver<ProcessEvent>, running_service: RunningService) -> Self {
+        Self::Service(NameAndState::running(name, events_receiver, running_service))
+    }
+
+    fn task_start(name: &str) -> Self {
+        Self::Task(NameAndState::start(name))
+    }
+
+    fn task_fail(name: &str) -> Self {
+        Self::Task(NameAndState::fail(name))
+    }
+
+    fn task_completed(name: &str) -> Self {
+        Self::Task(NameAndState::completed(name))
+    }
+}
+
 /// Trait for daemons that can auto-wire their built-in types
 pub trait AutoWire {
     /// Auto-wire all built-in service and task types for this daemon
@@ -51,13 +141,16 @@ pub trait AutoWire {
 /// Base daemon implementation that provides core functionality
 pub struct BaseDaemon {
     /// Service manager for orchestrating services
-    service_manager: ServiceManager,
+    service_manager: Arc<ServiceManager>,
+    
+    /// Task manager for orchestrating tasks
+    task_manager: Arc<TaskManager>,
 
     /// Registry of JSON-wrapped services (for WebSocket boundary)
     json_service_registry: Arc<JsonServiceRegistry>,
 
     /// Registry of JSON-wrapped tasks (for WebSocket boundary)
-    json_task_registry: JsonTaskRegistry,
+    json_task_registry: Arc<JsonTaskRegistry>,
 
     /// Type-safe registry of concrete services
     typed_service_registry: Arc<TypedServiceRegistry>,
@@ -80,8 +173,10 @@ pub struct BaseDaemon {
 }
 
 impl AutoWire for BaseDaemon {
+    /// Wire generic task types that are available in harness-core
     fn auto_wire_types(builder: &mut DaemonBuilder) -> Result<(), Error> {
-        // Wire generic task types that are available in harness-core
+        
+        // built-in yaml defined task
         builder.wire_task_type::<YamlTask>()?;
 
         Ok(())
@@ -142,193 +237,165 @@ impl BaseDaemon {
     }
 
     /// Launch all services in the stack in dependency order
-    pub async fn launch_stack(&self) -> Result<(), Error> {
+    pub async fn launch_stack(&self) -> Result<Receiver<DaemonEvent>, Error> {
         let config = self
             .stack_config
             .as_ref()
-            .ok_or_else(|| Error::daemon("No stack configuration provided"))?;
+            .ok_or_else(|| Error::daemon("No stack configuration provided"))?
+            .clone();
 
-        info!("Launching stack: {}", config.name);
+        debug!("Launching stack: {}", config.name);
 
         // Build dependency graph from config
-        let graph = DependencyGraph::from_stack_config(config);
+        let graph = DependencyGraph::from_stack_config(&config);
 
         // Get topological sort for startup order
         let start_order = graph
             .topological_sort()
             .map_err(|e| Error::daemon(format!("Failed to resolve dependencies: {e}")))?;
 
-        info!("Starting services in dependency order: {:?}", start_order);
+        debug!("Starting services in dependency order: {:?}", start_order);
 
-        // Start each service in order
-        for node in start_order {
-            match node {
-                DependencyNode::Service(name) => {
-                    // Get the service config
-                    let service_instance = config.services.get(&name).ok_or_else(|| {
-                        Error::daemon(format!("Service {name} not found in config"))
-                    })?;
+        let (sender, receiver) = async_channel::unbounded();
 
-                    info!("Starting service: {}", name);
+        // Clone what we need for the spawned task
+        let service_manager = self.service_manager.clone();
+        let task_manager = self.task_manager.clone();
+        
+        let spawner = AsyncSpawner::new();
 
-                    // Convert to ServiceConfig for ServiceManager
-                    let service_config = ServiceConfig {
-                        name: name.clone(),
-                        target: service_instance.orchestration.target.clone(),
-                        depends_on: service_instance.orchestration.depends_on.clone(),
-                        health_check: service_instance.orchestration.health_check.clone(),
-                    };
+        spawner.spawn_detached(Box::pin(async move {
+            let result: Result<(), async_channel::SendError<DaemonEvent>> = async {
+                for node in start_order {
+                    match node {
+                        DependencyNode::Service(name) => {
+                            // Send start event
+                            sender.send(DaemonEvent::service_start(&name)).await?;
+                            debug!("Starting service: {}", name);
 
-                    // Start the service via ServiceManager
-                    let (_event_receiver, _running_service) = self
-                        .service_manager
-                        .launch_service(&name, service_config, &AsyncSpawner::new())
-                        .await
-                        .map_err(|e| {
-                            Error::daemon(format!("Failed to start service {name}: {e}"))
-                        })?;
+                            // Get the service config
+                            let service_instance = match config.services.get(&name) {
+                                Some(s) => s,
+                                None => {
+                                    sender.send(DaemonEvent::service_fail(&name)).await?;
+                                    tracing::error!("Service {} not found in config", name);
+                                    continue;
+                                }
+                            };
 
-                    // Wait for health check if configured
-                    if let Some(health_check) = &service_instance.orchestration.health_check {
-                        let timeout = Duration::from_secs(health_check.timeout);
-                        self.wait_for_service_health(&name, timeout).await?;
+                        // Use the service's orchestration config directly
+                        let mut service_config = service_instance.orchestration.clone();
+                        // Ensure name is set (in case it wasn't in the YAML)
+                        if service_config.name.is_empty() {
+                            service_config.name = name.clone();
+                        }
+
+                        // Start the service via ServiceManager
+                        let (event_receiver, running_service) = match service_manager
+                            .launch_service(&name, service_config, &AsyncSpawner::new())
+                            .await
+                        {
+                            Ok(result) => result,
+                            Err(e) => {
+                                sender.send(DaemonEvent::service_fail(&name)).await?;
+                                tracing::error!("Failed to start service {}: {}", name, e);
+                                continue;
+                            }
+                        };
+
+                        // Wait for health check if configured
+                        if let Some(health_check) = &service_instance.orchestration.health_check {
+                            let timeout = Duration::from_secs(health_check.timeout);
+                            
+                            if let Err(e) = service_manager.wait_for_health(&name, timeout).await {
+                                let _ = sender.send(DaemonEvent::service_fail(&name)).await;
+                                tracing::error!("Service {} failed health check: {}", name, e);
+
+                                // TODO what do we do in the case where a service fails to start?
+                                // TODO: should we continue starting or no
+                                // TODO: should the config have something to say?
+                                continue;
+                            }
+                        }
+
+                        // Send success event
+                        sender.send(DaemonEvent::service_running(&name, event_receiver, running_service)).await?;
+                        debug!("Service {} started successfully", name);
                     }
+                    DependencyNode::Task(name) => {
+                        sender.send(DaemonEvent::task_start(&name)).await?;
+                        debug!("Processing task: {}", name);
 
-                    info!("Service {} started successfully", name);
-                }
-                DependencyNode::Task(name) => {
-                    info!("Processing task: {}", name);
-
-                    // Execute the task
-                    self.execute_task(&name).await.map_err(|e| {
-                        Error::daemon(format!("Failed to execute task {name}: {e}"))
-                    })?;
-
-                    info!("Task {} executed successfully", name);
+                        // Verify task exists in config
+                        if !config.tasks.contains_key(&name) {
+                            sender.send(DaemonEvent::task_fail(&name)).await?;
+                            tracing::error!("Task {} not found in config", name);
+                            continue;
+                        }
+                        
+                        // Execute the task using TaskManager
+                        let task_spawner = AsyncSpawner::new();
+                        let execution = match task_manager.execute_task(&name, &task_spawner).await {
+                            Ok(exec) => exec,
+                            Err(e) => {
+                                sender.send(DaemonEvent::task_fail(&name)).await?;
+                                tracing::error!("Failed to execute task {}: {}", name, e);
+                                continue;
+                            }
+                        };
+                        
+                        // Check if task was already completed
+                        //
+                        // TODO: well could we know if wait_for_completion would return
+                        // Completed/Running/Failed if those have already happened? no need to
+                        // match and then match again then
+                        match execution.status {
+                            TaskStatus::Completed => {
+                                debug!("Task {} was already completed", name);
+                                sender.send(DaemonEvent::task_completed(&name)).await?;
+                            }
+                            TaskStatus::Running => {
+                                // Wait for task to complete
+                                match task_manager.wait_for_completion(&name).await {
+                                    Ok(TaskStatus::Completed) => {
+                                        debug!("Task {} completed successfully", name);
+                                        sender.send(DaemonEvent::task_completed(&name)).await?;
+                                    }
+                                    Ok(TaskStatus::Failed(reason)) => {
+                                        sender.send(DaemonEvent::task_fail(&name)).await?;
+                                        tracing::error!("Task {} failed: {}", name, reason);
+                                    }
+                                    Ok(status) => {
+                                        tracing::warn!("Task {} ended with unexpected status: {:?}", name, status);
+                                    }
+                                    Err(e) => {
+                                        sender.send(DaemonEvent::task_fail(&name)).await?;
+                                        tracing::error!("Error waiting for task {} completion: {}", name, e);
+                                    }
+                                }
+                            }
+                            TaskStatus::Failed(reason) => {
+                                sender.send(DaemonEvent::task_fail(&name)).await?;
+                                tracing::error!("Task {} failed: {}", name, reason);
+                            }
+                            _ => {
+                                tracing::warn!("Task {} in unexpected state: {:?}", name, execution.status);
+                            }
+                        }
+                    }
                 }
             }
+            Ok(())
+        }.await;
+            
+        if let Err(e) = result {
+            tracing::error!("Error sending events during stack launch: {}", e);
         }
+        
+        debug!("Stack launch sequence completed");
+    }));
 
-        info!("All services launched successfully");
-        Ok(())
-    }
-
-    /// Execute a task
-    async fn execute_task(&self, task_name: &str) -> Result<(), Error> {
-        // Use the runtime-agnostic spawner
-
-        info!("Executing task: {}", task_name);
-
-        let config = self
-            .stack_config
-            .as_ref()
-            .ok_or_else(|| Error::daemon("No stack configuration provided"))?;
-
-        // Get the task config
-        // TODO: work out what was to be done here.
-        let _task_config = config
-            .tasks
-            .get(task_name)
-            .ok_or_else(|| Error::daemon(format!("Task {task_name} not found in config")))?;
-
-        // Check if task is already completed by examining its state
-        // Tasks define their own completion states (e.g., Completed, Failed)
-        // We can't generically check this without knowing the specific state type
-
-        // Check if we have a registered task for this task_type
-        if self.json_task_registry.get(task_name).is_some() {
-            // Check if task is already completed
-            let is_complete = self.json_task_registry.validate(task_name).await?;
-
-            if is_complete {
-                info!("Task {} is already complete, skipping execution", task_name);
-                return Ok(());
-            }
-
-            // Execute the task using the JsonTaskRegistry which handles spawning
-            info!("Executing registered task: {}", task_name);
-
-            // Execute using JsonTaskRegistry's execute method which handles spawning
-            let spawner = AsyncSpawner::new();
-            let state_rx = self.json_task_registry.execute(task_name, &spawner).await?;
-
-            // Wait for task to complete by consuming all state updates
-            let mut last_state = None;
-            while let Ok(state) = state_rx.recv().await {
-                info!("Task {} state: {:?}", task_name, state);
-                last_state = Some(state);
-            }
-
-            // Check if the task failed by examining the last state
-            if let Some(final_state) = last_state {
-                // Check if the state indicates failure
-                // We check the state as a JSON value since we don't know the concrete type
-                if let serde_json::Value::String(state_str) = &final_state {
-                    if state_str == "Failed" {
-                        return Err(Error::action(format!("Task {} failed", task_name)));
-                    }
-                }
-            }
-
-            info!("Task {} completed successfully", task_name);
-        } else {
-            // No registered task implementation, execute directly via command-executor
-            info!(
-                "Executing task {} via command executor (no registered implementation)",
-                task_name
-            );
-
-            // For now, we'll just log that we would execute it
-            // In a real implementation, we'd use command-executor to run the target
-            warn!(
-                "Direct task execution not yet implemented for task: {}",
-                task_name
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Wait for a service to become healthy
-    async fn wait_for_service_health(
-        &self,
-        service_name: &str,
-        timeout: Duration,
-    ) -> Result<(), Error> {
-        info!(
-            "Waiting for service {} to become healthy (timeout: {:?})",
-            service_name, timeout
-        );
-
-        let start = std::time::Instant::now();
-
-        loop {
-            // Check service status
-            match self.service_manager.get_service_status(service_name).await {
-                Ok(ServiceStatus::Running) => {
-                    info!("Service {} is running and healthy", service_name);
-                    return Ok(());
-                }
-                Ok(status) => {
-                    if start.elapsed() > timeout {
-                        return Err(Error::daemon(format!(
-                            "Service {service_name} failed to become healthy within timeout. Current status: {status:?}"
-                        )));
-                    }
-                    // Continue waiting
-                    sleep(Duration::from_secs(1)).await;
-                }
-                Err(e) => {
-                    warn!("Error checking health for service {}: {}", service_name, e);
-                    if start.elapsed() > timeout {
-                        return Err(Error::daemon(format!(
-                            "Service {service_name} health check timed out: {e}"
-                        )));
-                    }
-                    sleep(Duration::from_secs(1)).await;
-                }
-            }
-        }
+        Ok(receiver)
     }
 }
 
@@ -663,10 +730,28 @@ impl DaemonBuilder {
                 .map_err(Error::ServiceOrchestration)?
         };
 
+        // Initialize task executors
+        let mut task_manager = TaskManager::new();
+        task_manager.register_executor("process".to_string(), Arc::new(ProcessTaskExecutor::new()));
+        task_manager.register_executor("layered".to_string(), Arc::new(LayeredTaskExecutor::new()));
+
+        // Register task configurations from stack config
+        for (name, config) in &self.stack_config.tasks {
+            task_manager.register_task(name.clone(), config.clone());
+        }
+
+        // Wrap json_task_registry in Arc and set as typed task provider
+        // This allows typed tasks (Rust state machines) to be executed during launch_stack()
+        let json_task_registry = Arc::new(self.json_task_registry);
+        task_manager.set_typed_task_provider(json_task_registry.clone());
+
+        let task_manager = Arc::new(task_manager);
+        
         Ok(BaseDaemon {
-            service_manager,
+            service_manager: Arc::new(service_manager),
+            task_manager,
             json_service_registry: Arc::new(self.json_service_registry),
-            json_task_registry: self.json_task_registry,
+            json_task_registry,
             typed_service_registry: Arc::new(self.typed_service_registry),
             typed_task_registry: Arc::new(self.typed_task_registry),
             endpoint: self.endpoint,

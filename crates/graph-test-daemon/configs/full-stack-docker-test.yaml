@@ -58,16 +58,16 @@ services:
             POSTGRES_USER: postgres
             POSTGRES_DB: graph-node
       command_template: "{binary} -D {data_dir} -h {host} -p {port}"
-      health_check:
-        command: pg_isready
-        args:
-          - "-h"
-          - "localhost"
-          - "-p"
-          - "5432"
-        interval: 2
-        timeout: 1
-        retries: 10
+    health_check:
+      command: pg_isready
+      args:
+        - "-h"
+        - "localhost"
+        - "-p"
+        - "5432"
+      interval: 2
+      timeout: 1
+      retries: 10
     depends_on: []
 
   # IPFS - Content storage
@@ -86,13 +86,13 @@ services:
           env:
             IPFS_PATH: /home/testuser/.ipfs
       command_template: "{binary} daemon"
-      health_check:
-        command: ipfs
-        args:
-          - "id"
-        interval: 2
-        timeout: 1
-        retries: 10
+    health_check:
+      command: ipfs
+      args:
+        - "id"
+      interval: 2
+      timeout: 1
+      retries: 10
     depends_on: []
 
   # Anvil - Local Ethereum node
@@ -101,10 +101,10 @@ services:
     target:
       type: layered
       params:
-        binary: /root/.foundry/bin/anvil
+        binary: /usr/local/bin/anvil
         host: "0.0.0.0"
         port: 8545
-        chain_id: 31337
+        chain_id: 1337
         block_time: 1
       layers:
         - type: ssh
@@ -115,20 +115,51 @@ services:
           env:
             RUST_LOG: info
       command_template: "{binary} --host {host} --port {port} --chain-id {chain_id} --block-time {block_time}"
-      health_check:
-        command: curl
-        args:
-          - "-s"
-          - "-X"
-          - "POST"
-          - "-H"
-          - "Content-Type: application/json"
-          - "--data"
-          - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-          - "http://localhost:8545"
-        interval: 2
-        timeout: 1
-        retries: 10
+    health_check:
+      command: curl
+      args:
+        - "-s"
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+        - "http://localhost:8545"
+      interval: 2
+      timeout: 1
+      retries: 10
+    depends_on: []
+
+  # Redpanda - Kafka-compatible message broker (for gateway, tap-escrow-manager)
+  redpanda:
+    service_type: redpanda
+    target:
+      type: layered
+      params:
+        binary: /usr/bin/rpk
+        kafka_port: 9092
+        schema_registry_port: 8081
+        proxy_port: 8082
+        admin_port: 9644
+      layers:
+        - type: ssh
+          host: localhost
+          user: testuser
+          port: 2222
+          identity_file: tests/docker-test-env/ssh-keys/test_ed25519
+          env:
+            REDPANDA_MODE: dev-container
+      command_template: "{binary} redpanda start --smp 1 --memory 1G --mode dev-container --default-log-level info --kafka-addr 0.0.0.0:{kafka_port} --advertise-kafka-addr localhost:{kafka_port} --pandaproxy-addr 0.0.0.0:{proxy_port} --schema-registry-addr 0.0.0.0:{schema_registry_port}"
+    health_check:
+      command: rpk
+      args:
+        - "topic"
+        - "list"
+        - "--brokers=localhost:9092"
+      interval: 2
+      timeout: 1
+      retries: 30
     depends_on: []
 
   # Graph Node - The main indexing service
@@ -152,14 +183,14 @@ services:
             RUST_LOG: info
             GRAPH_LOG: info
       command_template: "{binary} --postgres-url {postgres_url} --ipfs {ipfs_url} --ethereum-rpc {ethereum_url}"
-      health_check:
-        command: curl
-        args:
-          - "-s"
-          - "http://localhost:8000"
-        interval: 3
-        timeout: 2
-        retries: 20
+    health_check:
+      command: curl
+      args:
+        - "-s"
+        - "http://localhost:8000"
+      interval: 3
+      timeout: 2
+      retries: 20
     depends_on:
       - service: postgres
       - service: ipfs

@@ -109,7 +109,6 @@ fn test_layered_ssh_service_config() {
                 binary: "./api-server".to_string(),
                 args: vec!["--port".to_string(), "3000".to_string()],
             }),
-            health_check: None,
             validation: None,
         },
         depends_on: vec![service_orchestration::Dependency::Service {
@@ -310,7 +309,6 @@ fn test_executor_type_detection() {
                 binary: "test".to_string(),
                 args: vec![],
             }),
-            health_check: None,
             validation: None,
         },
         depends_on: vec![],

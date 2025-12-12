@@ -4,7 +4,7 @@ use super::{RunningService, ServiceExecutor};
 use crate::{
     Error,
     config::{ServiceConfig, ServiceTarget},
-    health::{HealthChecker, HealthStatus},
+    health::HealthStatus,
 };
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
@@ -86,7 +86,6 @@ struct LayeredProcessInfo {
 /// This executor allows arbitrary composition of execution layers,
 /// enabling complex scenarios like SSH + Docker, multi-hop SSH, etc.
 pub struct LayeredServiceExecutor {
-    health_checker: HealthChecker,
     running_processes: Arc<Mutex<HashMap<String, LayeredProcessInfo>>>,
 }
 
@@ -94,7 +93,6 @@ impl LayeredServiceExecutor {
     /// Create a new layered service executor
     pub fn new() -> Self {
         Self {
-            health_checker: HealthChecker::new(),
             running_processes: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -240,7 +238,6 @@ impl ServiceExecutor for LayeredServiceExecutor {
             command,
             command_template,
             params,
-            health_check: _,
             ..
         } = &config.target
         else {
@@ -249,7 +246,7 @@ impl ServiceExecutor for LayeredServiceExecutor {
             ));
         };
 
-        info!(
+        debug!(
             "Starting layered service: {} with {} layers",
             config.name,
             layers.len()
@@ -301,7 +298,7 @@ impl ServiceExecutor for LayeredServiceExecutor {
         // Get process PID (may not be available for remote processes)
         let pid = handle.pid();
 
-        info!(
+        debug!(
             "Started layered service '{}' with PID: {:?}",
             config.name, pid
         );
@@ -397,111 +394,96 @@ impl ServiceExecutor for LayeredServiceExecutor {
         let processes = self.running_processes.lock().await;
 
         if let Some(_process_info) = processes.get(&service.id.to_string()) {
-            // Get health check from target or fall back to service config
-            let health_check_config = match &service.config.target {
-                ServiceTarget::Layered {
-                    health_check,
-                    layers,
-                    ..
-                } => {
-                    // Prefer health check from layered target
-                    if let Some(hc) = health_check {
-                        // Run health check through the same layers
-                        let env = std::collections::HashMap::new();
-                        let executor = Self::build_executor(layers, &env);
-
-                        let mut cmd = Command::new(&hc.command);
-                        for arg in &hc.args {
-                            cmd.arg(arg);
-                        }
-
-                        debug!(
-                            "Running layered health check: {} {}",
-                            hc.command,
-                            hc.args.join(" ")
-                        );
-
-                        // Execute the health check through the layers with timeout
-                        let timeout = std::time::Duration::from_secs(hc.timeout);
-                        let (mut event_stream, mut handle) =
-                            match executor.execute_command(cmd).await {
-                                Ok(result) => result,
-                                Err(e) => {
-                                    debug!("Health check launch error: {}", e);
-                                    return Ok(HealthStatus::Unhealthy(format!(
-                                        "Health check launch error: {}",
-                                        e
-                                    )));
-                                }
-                            };
-
-                        // Wait for the command to complete or timeout
-                        let result = async {
-                            use futures::StreamExt;
-                            let mut exit_code = None;
-
-                            while let Some(event) = event_stream.next().await {
-                                if let command_executor::event::ProcessEventType::Exited {
-                                    code,
-                                    ..
-                                } = event.event_type
-                                {
-                                    exit_code = code;
-                                    break;
-                                }
-                            }
-
-                            exit_code
-                        };
-
-                        // Race between timeout and completion
-                        use async_runtime_compat::runtime_utils::timeout as async_timeout;
-                        match async_timeout(timeout, result).await {
-                            Ok(Some(0)) => {
-                                debug!("Health check passed");
-                                return Ok(HealthStatus::Healthy);
-                            }
-                            Ok(Some(code)) => {
-                                debug!("Health check failed with exit code: {}", code);
-                                return Ok(HealthStatus::Unhealthy(format!(
-                                    "Health check failed with exit code: {}",
-                                    code
-                                )));
-                            }
-                            Ok(None) => {
-                                debug!("Health check completed without exit code");
-                                return Ok(HealthStatus::Unhealthy(
-                                    "Health check completed without exit code".to_string(),
-                                ));
-                            }
-                            Err(_) => {
-                                // Timeout - kill the health check command (not the service)
-                                let _ = handle.kill().await;
-                                debug!("Health check command timed out after {}s", hc.timeout);
-                                return Ok(HealthStatus::Unhealthy(format!(
-                                    "Health check timed out after {}s",
-                                    hc.timeout
-                                )));
-                            }
-                        }
-                    } else {
-                        // Fall back to service config health check
-                        service.config.health_check.as_ref()
-                    }
-                }
-                _ => {
-                    return Err(Error::Config(
-                        "LayeredServiceExecutor requires Layered target".to_string(),
-                    ));
-                }
+            // Get health check from service config
+            let Some(hc) = &service.config.health_check else {
+                // No health check configured, assume healthy
+                return Ok(HealthStatus::Healthy);
             };
 
-            // Use legacy health check from service config if available
-            if let Some(health_check) = health_check_config {
-                return self.health_checker.check_health(health_check).await;
-            } else {
-                // Default: assume healthy if we can reach this point
-                return Ok(HealthStatus::Healthy);
+            // Get layers from target to run health check through
+            let ServiceTarget::Layered { layers, .. } = &service.config.target else {
+                return Err(Error::Config(
+                    "LayeredServiceExecutor requires Layered target".to_string(),
+                ));
+            };
+
+            // Run health check through the same layers as the service
+            let env = std::collections::HashMap::new();
+            let executor = Self::build_executor(layers, &env);
+
+            let mut cmd = Command::new(&hc.command);
+            for arg in &hc.args {
+                cmd.arg(arg);
+            }
+
+            debug!(
+                "Running layered health check: {} {}",
+                hc.command,
+                hc.args.join(" ")
+            );
+
+            // Execute the health check through the layers with timeout
+            let timeout = std::time::Duration::from_secs(hc.timeout);
+            let (mut event_stream, mut handle) =
+                match executor.execute_command(cmd).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        debug!("Health check launch error: {}", e);
+                        return Ok(HealthStatus::Unhealthy(format!(
+                            "Health check launch error: {}",
+                            e
+                        )));
+                    }
+                };
+
+            // Wait for the command to complete or timeout
+            let result = async {
+                use futures::StreamExt;
+                let mut exit_code = None;
+
+                while let Some(event) = event_stream.next().await {
+                    if let command_executor::event::ProcessEventType::Exited {
+                        code,
+                        ..
+                    } = event.event_type
+                    {
+                        exit_code = code;
+                        break;
+                    }
+                }
+
+                exit_code
+            };
+
+            // Race between timeout and completion
+            use async_runtime_compat::runtime_utils::timeout as async_timeout;
+            match async_timeout(timeout, result).await {
+                Ok(Some(0)) => {
+                    debug!("Health check passed");
+                    Ok(HealthStatus::Healthy)
+                }
+                Ok(Some(code)) => {
+                    debug!("Health check failed with exit code: {}", code);
+                    Ok(HealthStatus::Unhealthy(format!(
+                        "Health check failed with exit code: {}",
+                        code
+                    )))
+                }
+                Ok(None) => {
+                    debug!("Health check completed without exit code");
+                    Ok(HealthStatus::Unhealthy(
+                        "Health check completed without exit code".to_string(),
+                    ))
+                }
+                Err(_) => {
+                    // Timeout - kill the health check command (not the service)
+                    let _ = handle.kill().await;
+                    debug!("Health check command timed out after {}s", hc.timeout);
+                    Ok(HealthStatus::Unhealthy(format!(
+                        "Health check timed out after {}s",
+                        hc.timeout
+                    )))
+                }
             }
         } else {
             Ok(HealthStatus::Unhealthy(
@@ -562,7 +544,6 @@ mod tests {
                     binary: "echo".to_string(),
                     args: vec!["hello".to_string()],
                 }),
-                health_check: None,
                 validation: None,
             },
             depends_on: vec![],

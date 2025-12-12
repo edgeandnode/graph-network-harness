@@ -76,6 +76,22 @@ pub struct StackConfig {
     pub tasks: HashMap<String, TaskConfig>,
 }
 
+impl StackConfig {
+    /// Load configuration from a file
+    pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        serde_yaml::from_str(&content)
+            .map_err(|e| format!("Failed to parse config YAML: {}", e))
+    }
+    
+    /// Load configuration from a reader
+    pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self, String> {
+        serde_yaml::from_reader(reader)
+            .map_err(|e| format!("Failed to parse config YAML: {}", e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -23,7 +23,6 @@ async fn test_layered_executor_local_only() {
                 binary: "echo".to_string(),
                 args: vec!["hello layered".to_string()],
             }),
-            health_check: None,
             validation: None,
         },
         depends_on: vec![],

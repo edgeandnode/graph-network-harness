@@ -274,9 +274,6 @@ pub enum ServiceTarget {
         /// Command to execute through the layers (deprecated - use command_template)
         #[serde(skip_serializing_if = "Option::is_none")]
         command: Option<CommandSpec>,
-        /// Optional health check to run through the same layers
-        #[serde(skip_serializing_if = "Option::is_none")]
-        health_check: Option<HealthCheck>,
         /// Validation command for idempotent tasks (optional)
         #[serde(skip_serializing_if = "Option::is_none")]
         validation: Option<String>,
@@ -505,14 +502,12 @@ impl ServiceTarget {
                 layers,
                 command_template,
                 command,
-                health_check,
                 validation,
             } => ServiceTarget::Layered {
                 params: params.clone(),
                 layers: layers.clone(),
                 command_template: command_template.clone(),
                 command: command.clone(),
-                health_check: health_check.clone(),
                 validation: validation.clone(),
             },
         }

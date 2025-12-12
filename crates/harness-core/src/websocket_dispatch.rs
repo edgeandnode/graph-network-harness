@@ -11,7 +11,7 @@ use futures::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::Error;
 use crate::service::JsonServiceRegistry;
@@ -401,14 +401,14 @@ impl WebSocketServer {
             .await
             .map_err(|e| Error::service_type(format!("Failed to bind WebSocket server: {}", e)))?;
 
-        info!("WebSocket server listening on {}", self.address);
+        debug!("WebSocket server listening on {}", self.address);
 
         loop {
             futures::select! {
                 result = listener.accept().fuse() => {
                     match result {
                         Ok((stream, addr)) => {
-                            info!("New WebSocket connection from {}", addr);
+                            debug!("New WebSocket connection from {}", addr);
                             let dispatcher = self.dispatcher.clone();
                             let tls_config = self.tls_config.clone();
 
@@ -425,7 +425,7 @@ impl WebSocketServer {
                     }
                 }
                 _ = self.shutdown_rx.recv().fuse() => {
-                    info!("WebSocket server shutting down");
+                    debug!("WebSocket server shutting down");
                     break;
                 }
             }
@@ -541,7 +541,7 @@ async fn handle_connection(
                 }
             }
             Ok(Message::Close(_)) => {
-                info!("WebSocket connection closed");
+                debug!("WebSocket connection closed");
                 break;
             }
             Ok(_) => {

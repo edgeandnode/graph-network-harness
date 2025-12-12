@@ -5,14 +5,12 @@
 
 pub mod attached;
 pub mod docker;
-pub mod layered;
 pub mod process;
 pub mod registry;
 pub mod traits;
 
-pub use attached::LayeredAttachedExecutor;
+pub use attached::AttachedExecutor;
 pub use docker::DockerExecutor;
-pub use layered::LayeredServiceExecutor;
 pub use process::ProcessExecutor;
 pub use registry::ExecutorRegistry;
 pub use traits::{AttachedService, EventStreamable, ManagedService};

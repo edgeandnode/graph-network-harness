@@ -10,7 +10,7 @@
 use anyhow::{Context, Result};
 use command_executor::backends::LocalLauncher;
 use command_executor::event::ProcessEventType;
-use command_executor::{Command, LayeredExecutor, LocalLayer, ProcessHandle};
+use command_executor::{Command, Executor, ProcessHandle, Target};
 use futures::StreamExt;
 use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -142,45 +142,15 @@ fn install_atexit_handler() {
 
 /// Check if Docker is available using command-executor
 pub async fn is_docker_available() -> Result<bool> {
-    let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
+    let executor = Executor::new("docker-check".to_string(), LocalLauncher);
 
     let mut command = Command::new("docker");
     command.arg("version");
 
-    match executor.execute_command(command).await {
-        Ok((mut event_stream, handle)) => {
-            let mut has_output = false;
-
-            // Collect events to check if docker command succeeded
-            while let Some(event) = event_stream.next().await {
-                match event.event_type {
-                    ProcessEventType::Stdout => {
-                        if let Some(data) = event.data {
-                            println!("Docker version: {}", data);
-                            has_output = true;
-                        }
-                    }
-                    ProcessEventType::Stderr => {
-                        if let Some(data) = event.data {
-                            eprintln!("Docker version stderr: {}", data);
-                        }
-                    }
-                    ProcessEventType::Exited { code, .. } => {
-                        if let Some(code) = code {
-                            println!("Docker version check exited with code: {}", code);
-                            return Ok(code == 0 && has_output);
-                        }
-                    }
-                    ProcessEventType::Started { pid } => {
-                        println!("Docker version check started with PID: {}", pid);
-                    }
-                }
-            }
-
-            // Wait for process to complete
-            let mut handle = handle;
-            let exit_result = handle.wait().await?;
-            Ok(exit_result.success() && has_output)
+    match executor.execute(&Target::Command, command).await {
+        Ok(exit_result) => {
+            println!("Docker version check: success={}", exit_result.success());
+            Ok(exit_result.success())
         }
         Err(e) => {
             eprintln!("ERROR: Docker not available: {}", e);
@@ -216,18 +186,22 @@ pub async fn ensure_container_running() -> Result<()> {
     // Install atexit handler for cleanup on normal exit
     install_atexit_handler();
 
-    // Check if container is already running using command-executor
+    let executor = Executor::new("container-setup".to_string(), LocalLauncher);
+
+    // Check if container is already running
     println!(
         "Checking if container {} is already running...",
         CONTAINER_NAME
     );
-    let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
 
     let mut check_cmd = Command::new("docker");
     check_cmd.args(["ps", "-q", "-f", &format!("name={}", CONTAINER_NAME)]);
 
+    let target = command_executor::target::Target::ManagedProcess(
+        command_executor::target::ManagedProcess::new(),
+    );
     let (mut event_stream, mut handle) = executor
-        .execute_command(check_cmd)
+        .launch(&target, check_cmd)
         .await
         .context("Failed to check if container is running")?;
 
@@ -265,103 +239,41 @@ pub async fn ensure_container_running() -> Result<()> {
         return Ok(());
     }
 
-    // Clean up any existing container first using command-executor
+    // Clean up any existing container first
     eprintln!("Cleaning up any existing container...");
 
     // Stop container
     let mut stop_cmd = Command::new("docker");
     stop_cmd.args(["stop", CONTAINER_NAME]);
-    if let Ok((mut event_stream, mut handle)) = executor.execute_command(stop_cmd).await {
-        while let Some(event) = event_stream.next().await {
-            match event.event_type {
-                ProcessEventType::Stdout => {
-                    if let Some(data) = event.data {
-                        println!("Docker stop: {}", data);
-                    }
-                }
-                ProcessEventType::Stderr => {
-                    if let Some(data) = event.data {
-                        // Log but don't fail - container might not exist
-                        eprintln!("Docker stop stderr: {}", data);
-                    }
-                }
-                ProcessEventType::Started { pid } => {
-                    println!("Docker stop started with PID: {}", pid);
-                }
-                ProcessEventType::Exited { code, .. } => {
-                    if let Some(code) = code {
-                        println!("Docker stop exited with code: {}", code);
-                    }
-                }
-            }
-        }
-        handle.wait().await.ok();
-    }
+    let _ = executor.execute(&Target::Command, stop_cmd).await;
 
     // Remove container
     let mut rm_cmd = Command::new("docker");
     rm_cmd.args(["rm", "-f", CONTAINER_NAME]);
-    if let Ok((mut event_stream, mut handle)) = executor.execute_command(rm_cmd).await {
-        while let Some(event) = event_stream.next().await {
-            match event.event_type {
-                ProcessEventType::Stdout => {
-                    if let Some(data) = event.data {
-                        println!("Docker rm: {}", data);
-                    }
-                }
-                ProcessEventType::Stderr => {
-                    if let Some(data) = event.data {
-                        // Log but don't fail - container might not exist
-                        eprintln!("Docker rm stderr: {}", data);
-                    }
-                }
-                ProcessEventType::Started { pid } => {
-                    println!("Docker rm started with PID: {}", pid);
-                }
-                ProcessEventType::Exited { code, .. } => {
-                    if let Some(code) = code {
-                        println!("Docker rm exited with code: {}", code);
-                    }
-                }
-            }
-        }
-        handle.wait().await.ok();
-    }
+    let _ = executor.execute(&Target::Command, rm_cmd).await;
 
-    // Check if the image exists using command-executor
+    // Check if the image exists
     let image_name = "graph-test-daemon:test";
     println!("Checking if Docker image {} exists...", image_name);
 
     let mut image_check_cmd = Command::new("docker");
     image_check_cmd.args(["images", "-q", image_name]);
 
+    let target = command_executor::target::Target::ManagedProcess(
+        command_executor::target::ManagedProcess::new(),
+    );
     let (mut event_stream, mut handle) = executor
-        .execute_command(image_check_cmd)
+        .launch(&target, image_check_cmd)
         .await
         .context("Failed to check for Docker image")?;
 
     let mut image_exists = false;
     while let Some(event) = event_stream.next().await {
-        match event.event_type {
-            ProcessEventType::Stdout => {
-                if let Some(data) = event.data {
-                    if !data.trim().is_empty() {
-                        image_exists = true;
-                        println!("Found existing image ID: {}", data.trim());
-                    }
-                }
-            }
-            ProcessEventType::Stderr => {
-                if let Some(data) = event.data {
-                    eprintln!("Docker images stderr: {}", data);
-                }
-            }
-            ProcessEventType::Started { pid } => {
-                println!("Docker images check started with PID: {}", pid);
-            }
-            ProcessEventType::Exited { code, .. } => {
-                if let Some(code) = code {
-                    println!("Docker images check exited with code: {}", code);
+        if let ProcessEventType::Stdout = event.event_type {
+            if let Some(data) = event.data {
+                if !data.trim().is_empty() {
+                    image_exists = true;
+                    println!("Found existing image ID: {}", data.trim());
                 }
             }
         }
@@ -376,47 +288,19 @@ pub async fn ensure_container_running() -> Result<()> {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
         let docker_dir = std::path::PathBuf::from(manifest_dir).join("tests/docker-test-env");
 
-        // Build the image using command-executor with streaming output
-        let build_executor = LayeredExecutor::new(LocalLauncher)
-            .with_layer(LocalLayer::new().with_working_dir(&docker_dir));
+        // Build the image using std::process::Command for simplicity (working_dir support)
+        let output = std::process::Command::new("docker")
+            .args(["build", "-t", image_name, "."])
+            .current_dir(&docker_dir)
+            .output()
+            .context("Failed to build Docker image")?;
 
-        let mut build_cmd = Command::new("docker");
-        build_cmd.args(["build", "-t", image_name, "."]);
-
-        let (mut event_stream, mut handle) = build_executor
-            .execute_command(build_cmd)
-            .await
-            .context("Failed to start Docker build")?;
-
-        // Stream build output
-        let mut build_success = false;
-        while let Some(event) = event_stream.next().await {
-            match event.event_type {
-                ProcessEventType::Stdout => {
-                    if let Some(data) = event.data {
-                        println!("Docker build: {}", data);
-                    }
-                }
-                ProcessEventType::Stderr => {
-                    if let Some(data) = event.data {
-                        eprintln!("Docker build stderr: {}", data);
-                    }
-                }
-                ProcessEventType::Started { pid } => {
-                    println!("Docker build started with PID: {}", pid);
-                }
-                ProcessEventType::Exited { code, .. } => {
-                    if let Some(code) = code {
-                        println!("Docker build exited with code: {}", code);
-                        build_success = code == 0;
-                    }
-                }
-            }
-        }
-
-        let exit_result = handle.wait().await?;
-        if !exit_result.success() || !build_success {
-            anyhow::bail!("Docker build failed with exit code: {:?}", exit_result);
+        if !output.status.success() {
+            eprintln!(
+                "Docker build failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            anyhow::bail!("Docker build failed");
         }
         eprintln!("Docker image built successfully");
     } else {
@@ -428,7 +312,7 @@ pub async fn ensure_container_running() -> Result<()> {
     let ssh_keys_dir =
         std::path::PathBuf::from(manifest_dir).join("tests/docker-test-env/ssh-keys");
 
-    // Start the container using command-executor with streaming output
+    // Start the container
     eprintln!("Starting container {}...", CONTAINER_NAME);
 
     let mut run_cmd = Command::new("docker");
@@ -467,8 +351,11 @@ pub async fn ensure_container_running() -> Result<()> {
         image_name,
     ]);
 
+    let target = command_executor::target::Target::ManagedProcess(
+        command_executor::target::ManagedProcess::new(),
+    );
     let (mut event_stream, mut handle) = executor
-        .execute_command(run_cmd)
+        .launch(&target, run_cmd)
         .await
         .context("Failed to start container")?;
 
@@ -561,52 +448,15 @@ pub async fn cleanup_test_container() {
     if let Some(guard) = CONTAINER_GUARD.get() {
         guard.cleanup();
     } else {
-        // Even if guard doesn't exist, try to clean up the container using command-executor
-        let executor = LayeredExecutor::new(LocalLauncher).with_layer(LocalLayer::new());
-
-        // Stop container
-        let mut stop_cmd = Command::new("docker");
-        stop_cmd.args(["stop", CONTAINER_NAME]);
-        if let Ok((mut event_stream, mut handle)) = executor.execute_command(stop_cmd).await {
-            while let Some(event) = event_stream.next().await {
-                match event.event_type {
-                    ProcessEventType::Stdout => {
-                        if let Some(data) = event.data {
-                            println!("Docker stop: {}", data);
-                        }
-                    }
-                    ProcessEventType::Stderr => {
-                        if let Some(data) = event.data {
-                            eprintln!("Docker stop stderr: {}", data);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            handle.wait().await.ok();
-        }
-
-        // Remove container
-        let mut rm_cmd = Command::new("docker");
-        rm_cmd.args(["rm", "-f", CONTAINER_NAME]);
-        if let Ok((mut event_stream, mut handle)) = executor.execute_command(rm_cmd).await {
-            while let Some(event) = event_stream.next().await {
-                match event.event_type {
-                    ProcessEventType::Stdout => {
-                        if let Some(data) = event.data {
-                            println!("Docker rm: {}", data);
-                        }
-                    }
-                    ProcessEventType::Stderr => {
-                        if let Some(data) = event.data {
-                            eprintln!("Docker rm stderr: {}", data);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            handle.wait().await.ok();
-        }
+        // Even if guard doesn't exist, try to clean up the container
+        std::process::Command::new("docker")
+            .args(["stop", CONTAINER_NAME])
+            .output()
+            .ok();
+        std::process::Command::new("docker")
+            .args(["rm", "-f", CONTAINER_NAME])
+            .output()
+            .ok();
     }
 }
 

@@ -144,10 +144,14 @@ impl TapContractAddresses {
 
     /// Count how many addresses are set
     pub fn count(&self) -> usize {
-        [&self.tap_verifier, &self.escrow, &self.allocation_id_tracker]
-            .iter()
-            .filter(|a| a.is_some())
-            .count()
+        [
+            &self.tap_verifier,
+            &self.escrow,
+            &self.allocation_id_tracker,
+        ]
+        .iter()
+        .filter(|a| a.is_some())
+        .count()
     }
 
     /// Create from a HashMap (for deserializing from JSON files)

@@ -1,0 +1,34 @@
+# Graph Protocol Test Stack
+name: graph-stack
+description: Graph Protocol test environment
+
+services:
+  anvil:
+    service_type: anvil
+    name: anvil
+    target:
+      type: process
+      params:
+        host: 0.0.0.0
+        chain_id: 1337
+        block_time: 1
+      ports:
+        rpc: auto
+      resources:
+        memory: 512M
+        cpu: 100%
+      command_template: "anvil --host {host} --port {port.rpc} --chain-id {chain_id} --block-time {block_time}"
+    health_check:
+      command: curl
+      args:
+        - "-sf"
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+        - "http://localhost:{port.rpc}"
+      interval: 1
+      timeout: 1
+      retries: 5

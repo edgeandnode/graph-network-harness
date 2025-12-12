@@ -1,14 +1,14 @@
 //! Process-based task executor
 
-use crate::{OrchestrationError, TaskConfig, TaskExecutor, ServiceTarget};
+use crate::{OrchestrationError, ServiceTarget, TaskConfig, TaskExecutor};
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use async_trait::async_trait;
-use command_executor::{Command, ProcessEventType, Launcher, Target, ProcessHandle};
+use command_executor::{Command, Launcher, ProcessEventType, ProcessHandle, Target};
 use futures::StreamExt;
 use serde_json::Value as JsonValue;
 use std::result::Result;
-use tracing::{debug, info, error};
+use tracing::{debug, error, info};
 
 /// Task executor for process-based tasks
 pub struct ProcessTaskExecutor {}
@@ -18,26 +18,32 @@ impl ProcessTaskExecutor {
     pub fn new() -> Self {
         Self {}
     }
-    
+
     /// Run a validation command to check if task is already complete
     async fn run_validation(&self, config: &TaskConfig) -> Result<bool, OrchestrationError> {
-        if let ServiceTarget::Process { validation: Some(validation), env, working_dir, .. } = &config.target {
+        if let ServiceTarget::Process {
+            validation: Some(validation),
+            env,
+            working_dir,
+            ..
+        } = &config.target
+        {
             debug!("Running validation command: {}", validation);
-            
+
             // Create the validation command
             let mut cmd = Command::new("sh");
             cmd.arg("-c").arg(validation);
-            
+
             // Add environment variables
             for (key, value) in env {
                 cmd.env(key, value);
             }
-            
+
             // Set working directory if specified
             if let Some(dir) = working_dir {
                 cmd.current_dir(dir);
             }
-            
+
             // Execute and check result
             let launcher = command_executor::backends::LocalLauncher;
             let target = Target::Command;
@@ -67,12 +73,16 @@ impl TaskExecutor for ProcessTaskExecutor {
     fn can_handle(&self, config: &TaskConfig) -> bool {
         matches!(config.target, ServiceTarget::Process { .. })
     }
-    
-    async fn is_complete(&self, _name: &str, config: &TaskConfig) -> Result<bool, OrchestrationError> {
+
+    async fn is_complete(
+        &self,
+        _name: &str,
+        config: &TaskConfig,
+    ) -> Result<bool, OrchestrationError> {
         // Check if there's a validation command in the config
         self.run_validation(config).await
     }
-    
+
     async fn execute(
         &self,
         name: &str,
@@ -80,49 +90,56 @@ impl TaskExecutor for ProcessTaskExecutor {
         spawner: &dyn Spawner,
     ) -> Result<Receiver<JsonValue>, OrchestrationError> {
         info!("Executing process task: {}", name);
-        
+
         // Extract command from config
         let (command_str, env, working_dir) = match &config.target {
-            ServiceTarget::Process { command, env, working_dir, .. } => {
+            ServiceTarget::Process {
+                command,
+                env,
+                working_dir,
+                ..
+            } => {
                 let cmd_str = match command {
                     crate::config::ProcessCommand::Legacy { command } => command.clone(),
-                    crate::config::ProcessCommand::Template { command_template, .. } => command_template.clone(),
+                    crate::config::ProcessCommand::Template {
+                        command_template, ..
+                    } => command_template.clone(),
                 };
                 (cmd_str, env.clone(), working_dir.clone())
             }
             _ => {
-                return Err(OrchestrationError::Config(
-                    format!("ProcessTaskExecutor cannot handle non-process target")
-                ));
+                return Err(OrchestrationError::Config(format!(
+                    "ProcessTaskExecutor cannot handle non-process target"
+                )));
             }
         };
-        
+
         // Create channel for state updates
         let (tx, rx) = async_channel::unbounded();
-        
+
         // Clone what we need for the spawned task
         let task_name = name.to_string();
         let tx_clone = tx.clone();
-        
+
         // Spawn the task execution
         spawner.spawn_detached(Box::pin(async move {
             // Send initial state
             let _ = tx_clone.send(serde_json::json!("Running")).await;
-            
+
             // Create and execute the command
             let mut cmd = Command::new("sh");
             cmd.arg("-c").arg(&command_str);
-            
+
             // Add environment variables
             for (key, value) in &env {
                 cmd.env(key, value);
             }
-            
+
             // Set working directory if specified
             if let Some(dir) = &working_dir {
                 cmd.current_dir(dir);
             }
-            
+
             // Execute the command
             let launcher = command_executor::backends::LocalLauncher;
             let target = Target::Command;
@@ -161,7 +178,7 @@ impl TaskExecutor for ProcessTaskExecutor {
                 }
             }
         }));
-        
+
         Ok(rx)
     }
 }

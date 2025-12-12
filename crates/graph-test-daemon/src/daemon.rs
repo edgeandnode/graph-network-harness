@@ -80,7 +80,6 @@ impl GraphTestDaemon {
 
 #[async_trait]
 impl Daemon for GraphTestDaemon {
-
     // TODO: customize for graph-test-daemon
     async fn start(&self) -> Result<(), Error> {
         info!("Starting Graph Test Daemon");

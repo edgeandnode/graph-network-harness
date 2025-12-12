@@ -2,7 +2,7 @@
 //!
 //! Maps service targets to appropriate executor implementations
 
-use super::{DockerExecutor, LayeredServiceExecutor, ProcessExecutor, ServiceExecutor};
+use super::{DockerExecutor, ProcessExecutor, ServiceExecutor};
 use crate::{Error, config::ServiceConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,7 +23,6 @@ impl ExecutorRegistry {
         // Register default executors
         registry.register("process", Arc::new(ProcessExecutor::new()));
         registry.register("docker", Arc::new(DockerExecutor::new()));
-        registry.register("layered", Arc::new(LayeredServiceExecutor::new()));
 
         registry
     }
@@ -89,6 +88,8 @@ mod tests {
                     command: "test".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },

@@ -111,12 +111,12 @@ impl DockerExecutor {
         &self,
         container_id: &str,
     ) -> std::result::Result<NetworkInfo, Error> {
-        // Get container IP address
+        // Get container IP address (use range to handle network namespaces)
         let mut inspect_cmd = Command::new("docker");
         inspect_cmd.args([
             "inspect",
             "--format",
-            "{{.NetworkSettings.IPAddress}}",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
             container_id,
         ]);
 
@@ -458,6 +458,8 @@ mod tests {
                     command: "echo".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },

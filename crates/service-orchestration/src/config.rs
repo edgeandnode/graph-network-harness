@@ -3,6 +3,8 @@
 //! This module defines the configuration model for services that matches
 //! the ADR-007 specification for heterogeneous service orchestration.
 
+use crate::ports::PortConfig;
+use crate::resources::ResourceLimits;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -200,6 +202,12 @@ pub enum ServiceTarget {
         /// Environment variables (supports {param} substitution with template)
         #[serde(default)]
         env: HashMap<String, String>,
+        /// Named port configuration (e.g., http: auto, ws: 8001)
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        ports: PortConfig,
+        /// Resource limits (memory, CPU) for systemd-run cgroups
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resources: Option<ResourceLimits>,
         /// Working directory (optional)
         #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
@@ -260,23 +268,20 @@ pub enum ServiceTarget {
         env: HashMap<String, String>,
     },
 
-    /// Layered execution with composed execution contexts
-    #[serde(rename = "layered")]
-    Layered {
-        /// Service parameters for substitution
+    /// Remote attach via SSH
+    #[serde(rename = "remote-attach")]
+    RemoteAttach {
+        /// Remote host address
+        host: String,
+        /// SSH username
+        user: String,
+        /// Process ID to attach to
+        pid: Option<u32>,
+        /// Process name to search for
+        process_name: Option<String>,
+        /// Environment variables
         #[serde(default)]
-        params: HashMap<String, ParamValue>,
-        /// Execution layers to apply (in order)
-        layers: Vec<crate::executors::layered::LayerConfig>,
-        /// Command template with {param} substitution
-        #[serde(skip_serializing_if = "Option::is_none")]
-        command_template: Option<String>,
-        /// Command to execute through the layers (deprecated - use command_template)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        command: Option<CommandSpec>,
-        /// Validation command for idempotent tasks (optional)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        validation: Option<String>,
+        env: HashMap<String, String>,
     },
 }
 
@@ -354,7 +359,6 @@ impl ServiceTarget {
                 ..
             } => params,
             ServiceTarget::Docker { params, .. } => params,
-            ServiceTarget::Layered { params, .. } => params,
             _ => return None,
         };
 
@@ -397,7 +401,7 @@ impl ServiceTarget {
     pub fn substitute_params(&self, template: &str) -> String {
         match self {
             ServiceTarget::Process { command, .. } => command.substitute_params(template),
-            ServiceTarget::Docker { params, .. } | ServiceTarget::Layered { params, .. } => {
+            ServiceTarget::Docker { params, .. } => {
                 let mut result = template.to_string();
                 for (key, value) in params {
                     let placeholder = format!("{{{}}}", key);
@@ -414,10 +418,6 @@ impl ServiceTarget {
         match self {
             ServiceTarget::Process { command, .. } => Some(command.build_command()),
             ServiceTarget::Docker {
-                command_template: Some(template),
-                ..
-            }
-            | ServiceTarget::Layered {
                 command_template: Some(template),
                 ..
             } => {
@@ -445,7 +445,7 @@ impl ServiceTarget {
             ServiceTarget::DockerAttach { env, .. } => env.clone(),
             ServiceTarget::ProcessAttach { env, .. } => env.clone(),
             ServiceTarget::Remote { env, .. } => env.clone(),
-            ServiceTarget::Layered { .. } => HashMap::new(), // Layers have their own env
+            ServiceTarget::RemoteAttach { env, .. } => env.clone(),
         }
     }
 
@@ -454,12 +454,16 @@ impl ServiceTarget {
         match self {
             ServiceTarget::Process {
                 command,
+                ports,
+                resources,
                 working_dir,
                 validation,
                 ..
             } => ServiceTarget::Process {
                 command: command.clone(),
                 env: new_env,
+                ports: ports.clone(),
+                resources: resources.clone(),
                 working_dir: working_dir.clone(),
                 validation: validation.clone(),
             },
@@ -497,19 +501,87 @@ impl ServiceTarget {
                 mode: mode.clone(),
                 env: new_env,
             },
-            ServiceTarget::Layered {
-                params,
-                layers,
-                command_template,
-                command,
-                validation,
-            } => ServiceTarget::Layered {
-                params: params.clone(),
-                layers: layers.clone(),
-                command_template: command_template.clone(),
-                command: command.clone(),
-                validation: validation.clone(),
+            ServiceTarget::RemoteAttach {
+                host,
+                user,
+                pid,
+                process_name,
+                ..
+            } => ServiceTarget::RemoteAttach {
+                host: host.clone(),
+                user: user.clone(),
+                pid: *pid,
+                process_name: process_name.clone(),
+                env: new_env,
             },
+        }
+    }
+
+    /// Inject additional parameters into this target
+    ///
+    /// Runtime params are merged with existing params (runtime takes precedence).
+    /// Use `{param_name}` syntax in templates.
+    pub fn inject_params(&mut self, runtime_params: HashMap<String, ParamValue>) {
+        match self {
+            ServiceTarget::Process { command, .. } => {
+                if let ProcessCommand::Template { params, .. } = command {
+                    for (k, v) in runtime_params {
+                        params.insert(k, v);
+                    }
+                }
+            }
+            ServiceTarget::Docker { params, .. } => {
+                for (k, v) in runtime_params {
+                    params.insert(k, v);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Get the port configuration for this target.
+    ///
+    /// Returns the port config if available (Process targets only for now).
+    pub fn port_config(&self) -> Option<&PortConfig> {
+        match self {
+            ServiceTarget::Process { ports, .. } => {
+                if ports.is_empty() {
+                    None
+                } else {
+                    Some(ports)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Apply parameter substitution to process validation/command fields
+    ///
+    /// For Process targets, substitutes `{param}` in validation and command strings
+    pub fn substitute_process_fields(&mut self, params: &HashMap<String, ParamValue>) {
+        if let ServiceTarget::Process {
+            validation,
+            command,
+            ..
+        } = self
+        {
+            // Substitute in validation
+            if let Some(val) = validation {
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    *val = val.replace(&placeholder, &value.as_string());
+                }
+            }
+            // Substitute in command template if it's a Template variant
+            if let ProcessCommand::Template {
+                command_template, ..
+            } = command
+            {
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    *command_template = command_template.replace(&placeholder, &value.as_string());
+                }
+            }
         }
     }
 }
@@ -553,6 +625,20 @@ impl Default for HealthCheck {
     }
 }
 
+impl HealthCheck {
+    /// Substitute `{param}` placeholders in health check command and args
+    pub fn substitute_params(&mut self, params: &HashMap<String, ParamValue>) {
+        for (key, value) in params {
+            let placeholder = format!("{{{}}}", key);
+            let value_str = value.as_string();
+            self.command = self.command.replace(&placeholder, &value_str);
+            for arg in self.args.iter_mut() {
+                *arg = arg.replace(&placeholder, &value_str);
+            }
+        }
+    }
+}
+
 /// Current status of a service
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ServiceStatus {
@@ -582,6 +668,8 @@ mod tests {
                     command: "echo hello".to_string(),
                 },
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: Some("/tmp".to_string()),
                 validation: None,
             },
@@ -613,6 +701,8 @@ mod tests {
                 command: "test".to_string(),
             },
             env: HashMap::new(),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: None,
             validation: None,
         };

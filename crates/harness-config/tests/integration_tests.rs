@@ -79,16 +79,6 @@ services:
       API_URL: "http://localhost:8080"
     dependencies:
       - api
-
-  metrics:
-    type: package
-    network: lan
-    host: "192.168.1.100"
-    package: "./packages/metrics-v1.0.0.tar.gz"
-    version: "1.0.0"
-    install_path: "/opt/metrics"
-    env:
-      RETENTION_DAYS: "30"
 "#;
 
     let config = parser::parse_str(yaml).unwrap();
@@ -116,7 +106,7 @@ services:
     ));
 
     // Check services
-    assert_eq!(config.services.len(), 4);
+    assert_eq!(config.services.len(), 3);
 
     // Check Docker service
     let postgres = config.services.get("postgres").unwrap();

@@ -131,13 +131,6 @@ impl YamlTask {
                     "Docker launcher not yet implemented for YAML tasks",
                 ))
             }
-            ServiceTarget::Layered { .. } => {
-                // For now, layered execution is not supported in YamlTask
-                // This would require converting LayerConfig to command-executor layers
-                Err(Error::validation(
-                    "Layered execution not yet implemented for YAML tasks",
-                ))
-            }
             _ => Err(Error::validation("Unsupported target type for YAML task")),
         }
     }
@@ -267,19 +260,6 @@ impl TaskFromConfig for YamlTask {
                     service_orchestration::ProcessCommand::Legacy { command } => command.clone(),
                 }
             }
-            ServiceTarget::Layered {
-                command_template: Some(template),
-                params,
-                ..
-            } => {
-                // Substitute params in command template
-                let mut cmd = template.clone();
-                for (key, value) in params {
-                    let placeholder = format!("{{{}}}", key);
-                    cmd = cmd.replace(&placeholder, &value.as_string());
-                }
-                cmd
-            }
             _ => {
                 return Err(Error::validation(
                     "YAML task requires command or command_template",
@@ -291,13 +271,11 @@ impl TaskFromConfig for YamlTask {
         // These should be top-level fields in ServiceTarget, not in params
         let validation_command = match &config.target {
             ServiceTarget::Process { validation, .. } => validation.clone(),
-            ServiceTarget::Layered { validation, .. } => validation.clone(),
             _ => None,
         };
 
         let working_dir = match &config.target {
             ServiceTarget::Process { working_dir, .. } => working_dir.clone(),
-            ServiceTarget::Layered { .. } => None, // Layered doesn't have working_dir at top level
             _ => None,
         };
 

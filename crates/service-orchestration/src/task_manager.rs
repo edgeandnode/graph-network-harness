@@ -61,7 +61,11 @@ pub trait TaskExecutor: Send + Sync {
     fn can_handle(&self, config: &crate::TaskConfig) -> bool;
 
     /// Check if a task has already been completed
-    async fn is_complete(&self, name: &str, config: &crate::TaskConfig) -> Result<bool, OrchestrationError>;
+    async fn is_complete(
+        &self,
+        name: &str,
+        config: &crate::TaskConfig,
+    ) -> Result<bool, OrchestrationError>;
 
     /// Execute a task
     async fn execute(
@@ -157,21 +161,24 @@ impl TaskManager {
     pub fn register_task(&self, name: String, config: crate::TaskConfig) {
         self.task_configs.write().unwrap().insert(name, config);
     }
-    
+
     /// Find the appropriate executor for a task configuration
-    fn find_executor(&self, config: &crate::TaskConfig) -> Result<Arc<dyn TaskExecutor>, OrchestrationError> {
+    fn find_executor(
+        &self,
+        config: &crate::TaskConfig,
+    ) -> Result<Arc<dyn TaskExecutor>, OrchestrationError> {
         for executor in self.executors.values() {
             if executor.can_handle(config) {
                 return Ok(executor.clone());
             }
         }
-        
+
         Err(OrchestrationError::Config(format!(
             "No executor found for task target: {:?}",
             config.target
         )))
     }
-    
+
     /// Execute a task
     ///
     /// Typed tasks (Rust state machines) take precedence over config-based tasks.
@@ -208,7 +215,9 @@ impl TaskManager {
         if let Some(provider) = &self.typed_task_provider {
             if provider.has_task(name) {
                 debug!("Found typed task implementation for: {}", name);
-                return self.execute_typed_task(name, provider.clone(), spawner).await;
+                return self
+                    .execute_typed_task(name, provider.clone(), spawner)
+                    .await;
             }
         }
 
@@ -225,7 +234,10 @@ impl TaskManager {
     ) -> Result<TaskExecution, OrchestrationError> {
         // Check if task is already complete (idempotency check)
         if provider.validate(name).await? {
-            debug!("Typed task {} is already complete (validated), skipping execution", name);
+            debug!(
+                "Typed task {} is already complete (validated), skipping execution",
+                name
+            );
             let execution = TaskExecution {
                 name: name.to_string(),
                 status: TaskStatus::Completed,
@@ -303,7 +315,10 @@ impl TaskManager {
 
         // Check if task is already complete (idempotency check)
         if executor.is_complete(name, &config).await? {
-            debug!("Task {} is already complete (validated), skipping execution", name);
+            debug!(
+                "Task {} is already complete (validated), skipping execution",
+                name
+            );
             let execution = TaskExecution {
                 name: name.to_string(),
                 status: TaskStatus::Completed,
@@ -469,16 +484,13 @@ impl TaskManager {
     }
 
     /// Wait for a task to complete
-    pub async fn wait_for_completion(
-        &self,
-        name: &str,
-    ) -> Result<TaskStatus, OrchestrationError> {
+    pub async fn wait_for_completion(&self, name: &str) -> Result<TaskStatus, OrchestrationError> {
         // If we have a state receiver, wait for updates
         let execution = {
             let executions = self.task_executions.read().unwrap();
             executions.get(name).cloned()
         };
-        
+
         if let Some(exec) = execution {
             if let Some(rx) = exec.state_receiver {
                 // Consume all state updates
@@ -486,23 +498,26 @@ impl TaskManager {
                     // State updates are being monitored by the spawned task
                 }
             }
-            
+
             // Get the final status
             let executions = self.task_executions.read().unwrap();
             if let Some(final_exec) = executions.get(name) {
                 return Ok(final_exec.status.clone());
             }
         }
-        
-        Err(OrchestrationError::Config(format!("Task {} not found", name)))
+
+        Err(OrchestrationError::Config(format!(
+            "Task {} not found",
+            name
+        )))
     }
-    
+
     /// Get the status of a task
     pub fn get_task_status(&self, name: &str) -> Option<TaskStatus> {
         let executions = self.task_executions.read().unwrap();
         executions.get(name).map(|e| e.status.clone())
     }
-    
+
     /// Get all task executions
     pub fn get_all_executions(&self) -> HashMap<String, TaskExecution> {
         let executions = self.task_executions.read().unwrap();

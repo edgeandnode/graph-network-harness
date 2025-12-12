@@ -203,6 +203,8 @@ pub fn convert_to_orchestrator_with_context(
                 command: format!("{} {}", binary, args.join(" ")),
             },
             env,
+            ports: std::collections::HashMap::new(),
+            resources: None,
             working_dir: working_dir.clone(),
             validation: None,
         },

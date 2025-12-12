@@ -3,9 +3,9 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    DockerExecutor, HealthCheck, HealthChecker, HealthStatus, LayerConfig, LayeredServiceExecutor,
-    ProcessCommand, ProcessExecutor, ServiceConfig, ServiceExecutor, ServiceManager, ServiceStatus,
-    ServiceTarget,
+    ByteSize, CpuLimit, DockerExecutor, HealthCheck, HealthChecker, HealthStatus,
+    PortSpec, ProcessCommand, ProcessExecutor, ResourceLimits, ServiceConfig,
+    ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -21,6 +21,8 @@ fn test_service_config_yaml_roundtrip() {
                 ("LOG_LEVEL".to_string(), "debug".to_string()),
                 ("PORT".to_string(), "8080".to_string()),
             ]),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: Some("/tmp".to_string()),
             validation: None,
         },
@@ -78,54 +80,7 @@ fn test_docker_service_config() {
 
     // Test that other executors cannot handle this config
     let process_executor = ProcessExecutor::new();
-    // TODO: Remote executor not yet implemented
-    // let remote_executor = RemoteExecutor::new();
     assert!(!process_executor.can_handle(&config));
-    // assert!(!remote_executor.can_handle(&config));
-}
-
-#[test]
-fn test_layered_ssh_service_config() {
-    let config = ServiceConfig {
-        name: "remote-api".to_string(),
-        target: ServiceTarget::Layered {
-            params: HashMap::new(),
-            layers: vec![
-                LayerConfig::Ssh {
-                    host: "192.168.1.100".to_string(),
-                    user: "deploy".to_string(),
-                    env: HashMap::new(),
-                    port: None,
-                    identity_file: None,
-                    options: vec![],
-                },
-                LayerConfig::Local {
-                    env: HashMap::new(),
-                    working_dir: None,
-                },
-            ],
-            command_template: None,
-            command: Some(service_orchestration::CommandSpec {
-                binary: "./api-server".to_string(),
-                args: vec!["--port".to_string(), "3000".to_string()],
-            }),
-            validation: None,
-        },
-        depends_on: vec![service_orchestration::Dependency::Service {
-            service: "database".to_string(),
-        }],
-        health_check: None,
-    };
-
-    // Test that LayeredServiceExecutor can handle this config
-    let layered_executor = LayeredServiceExecutor::new();
-    assert!(layered_executor.can_handle(&config));
-
-    // Test that other executors cannot handle this config
-    let process_executor = ProcessExecutor::new();
-    let docker_executor = DockerExecutor::new();
-    assert!(!process_executor.can_handle(&config));
-    assert!(!docker_executor.can_handle(&config));
 }
 
 #[test]
@@ -138,6 +93,8 @@ fn test_service_target_env_methods() {
             command: "test".to_string(),
         },
         env: env.clone(),
+        ports: HashMap::new(),
+        resources: None,
         working_dir: None,
         validation: None,
     };
@@ -197,6 +154,8 @@ async fn test_service_manager_initialization() {
                 command: "echo test".to_string(),
             },
             env: HashMap::new(),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: None,
             validation: None,
         },
@@ -256,7 +215,6 @@ fn test_service_status_serialization() {
 fn test_executor_type_detection() {
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
-    let layered_executor = LayeredServiceExecutor::new();
 
     let process_config = ServiceConfig {
         name: "test".to_string(),
@@ -265,6 +223,8 @@ fn test_executor_type_detection() {
                 command: "test".to_string(),
             },
             env: HashMap::new(),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: None,
             validation: None,
         },
@@ -286,47 +246,12 @@ fn test_executor_type_detection() {
         health_check: None,
     };
 
-    let layered_config = ServiceConfig {
-        name: "test".to_string(),
-        target: ServiceTarget::Layered {
-            params: HashMap::new(),
-            layers: vec![
-                LayerConfig::Ssh {
-                    host: "test.example.com".to_string(),
-                    user: "test".to_string(),
-                    env: HashMap::new(),
-                    port: None,
-                    identity_file: None,
-                    options: vec![],
-                },
-                LayerConfig::Local {
-                    env: HashMap::new(),
-                    working_dir: None,
-                },
-            ],
-            command_template: None,
-            command: Some(service_orchestration::CommandSpec {
-                binary: "test".to_string(),
-                args: vec![],
-            }),
-            validation: None,
-        },
-        depends_on: vec![],
-        health_check: None,
-    };
-
     // Test that each executor only handles its own type
     assert!(process_executor.can_handle(&process_config));
     assert!(!process_executor.can_handle(&docker_config));
-    assert!(!process_executor.can_handle(&layered_config));
 
     assert!(!docker_executor.can_handle(&process_config));
     assert!(docker_executor.can_handle(&docker_config));
-    assert!(!docker_executor.can_handle(&layered_config));
-
-    assert!(!layered_executor.can_handle(&process_config));
-    assert!(!layered_executor.can_handle(&docker_config));
-    assert!(layered_executor.can_handle(&layered_config));
 }
 
 #[test]
@@ -340,6 +265,8 @@ fn test_service_config_env_injection() {
                 command: "test".to_string(),
             },
             env: original_env.clone(),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: None,
             validation: None,
         },
@@ -364,4 +291,225 @@ fn test_service_config_env_injection() {
     assert_eq!(updated_config.target.env(), injected_env);
     assert_eq!(updated_config.name, config.name);
     assert_eq!(updated_config.depends_on, config.depends_on);
+}
+
+// ============================================================================
+// Port Allocation Integration Tests
+// ============================================================================
+
+#[smol_potat::test]
+async fn test_service_manager_port_allocation() {
+    let manager = ServiceManager::new().await.unwrap();
+
+    // Create services with auto ports
+    let postgres_config = ServiceConfig {
+        name: "postgres".to_string(),
+        target: ServiceTarget::Process {
+            command: ProcessCommand::Legacy {
+                command: "echo postgres".to_string(),
+            },
+            env: HashMap::new(),
+            ports: HashMap::from([
+                ("main".to_string(), PortSpec::Fixed(5432)),
+            ]),
+            resources: None,
+            working_dir: None,
+            validation: None,
+        },
+        depends_on: vec![],
+        health_check: None,
+    };
+
+    let graph_node_config = ServiceConfig {
+        name: "graph-node".to_string(),
+        target: ServiceTarget::Process {
+            command: ProcessCommand::Legacy {
+                command: "echo graph-node".to_string(),
+            },
+            env: HashMap::from([
+                ("DATABASE_URL".to_string(), "postgres://localhost:{postgres.port.main}/graph".to_string()),
+            ]),
+            ports: HashMap::from([
+                ("http".to_string(), PortSpec::Auto),
+                ("ws".to_string(), PortSpec::Auto),
+            ]),
+            resources: None,
+            working_dir: None,
+            validation: None,
+        },
+        depends_on: vec![],
+        health_check: None,
+    };
+
+    // Allocate ports for all services
+    let services: Vec<(&str, &ServiceConfig)> = vec![
+        ("postgres", &postgres_config),
+        ("graph-node", &graph_node_config),
+    ];
+    manager.allocate_ports_for_services(&services).unwrap();
+
+    // Verify ports were allocated
+    let registry = manager.port_registry();
+
+    // Postgres should have fixed port
+    assert_eq!(registry.get("postgres").unwrap().get("main"), Some(&5432));
+
+    // Graph-node should have auto-allocated ports in ephemeral range
+    let gn_ports = registry.get("graph-node").unwrap();
+    let http_port = *gn_ports.get("http").unwrap();
+    let ws_port = *gn_ports.get("ws").unwrap();
+
+    assert!(http_port >= 49152, "HTTP port {} not in ephemeral range", http_port);
+    assert!(ws_port >= 49152, "WS port {} not in ephemeral range", ws_port);
+    assert_ne!(http_port, ws_port, "HTTP and WS ports should be different");
+}
+
+#[test]
+fn test_port_config_yaml_roundtrip() {
+    let config = ServiceConfig {
+        name: "test-with-ports".to_string(),
+        target: ServiceTarget::Process {
+            command: ProcessCommand::Legacy {
+                command: "echo test".to_string(),
+            },
+            env: HashMap::new(),
+            ports: HashMap::from([
+                ("http".to_string(), PortSpec::Auto),
+                ("admin".to_string(), PortSpec::Fixed(8020)),
+            ]),
+            resources: None,
+            working_dir: None,
+            validation: None,
+        },
+        depends_on: vec![],
+        health_check: None,
+    };
+
+    let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
+    let deserialized: ServiceConfig = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+
+    if let ServiceTarget::Process { ports, .. } = &deserialized.target {
+        assert_eq!(ports.get("http"), Some(&PortSpec::Auto));
+        assert_eq!(ports.get("admin"), Some(&PortSpec::Fixed(8020)));
+    } else {
+        panic!("Expected Process target");
+    }
+}
+
+// ============================================================================
+// Resource Limits Integration Tests
+// ============================================================================
+
+#[test]
+fn test_resource_limits_yaml_roundtrip() {
+    let config = ServiceConfig {
+        name: "test-with-resources".to_string(),
+        target: ServiceTarget::Process {
+            command: ProcessCommand::Legacy {
+                command: "echo test".to_string(),
+            },
+            env: HashMap::new(),
+            ports: HashMap::new(),
+            resources: Some(ResourceLimits::none()
+                .memory(ByteSize::from_gb(2))
+                .cpu(CpuLimit::from_percentage(200))),
+            working_dir: None,
+            validation: None,
+        },
+        depends_on: vec![],
+        health_check: None,
+    };
+
+    let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
+    let deserialized: ServiceConfig = serde_yaml::from_str(&yaml).expect("Failed to deserialize");
+
+    if let ServiceTarget::Process { resources, .. } = &deserialized.target {
+        let res = resources.as_ref().expect("Resources should be present");
+        assert_eq!(res.memory.as_ref().unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(res.cpu.as_ref().unwrap().percentage, 200);
+    } else {
+        panic!("Expected Process target");
+    }
+}
+
+#[test]
+fn test_resource_limits_systemd_command_generation() {
+    let limits = ResourceLimits::none()
+        .memory(ByteSize::from_mb(512))
+        .cpu(CpuLimit::from_cores(1.5));
+
+    let cmd = limits.to_systemd_command("my-service");
+
+    assert_eq!(cmd[0], "systemd-run");
+    assert!(cmd.contains(&"--user".to_string()));
+    assert!(cmd.contains(&"--scope".to_string()));
+    assert!(cmd.contains(&"--unit=harness-my-service.scope".to_string()));
+    assert!(cmd.contains(&"--slice=harness-test.slice".to_string()));
+    assert!(cmd.contains(&format!("-p MemoryMax={}", 512 * 1024 * 1024)));
+    assert!(cmd.contains(&"-p CPUQuota=150%".to_string()));
+    assert_eq!(cmd.last(), Some(&"--".to_string()));
+}
+
+#[test]
+fn test_full_config_with_ports_and_resources() {
+    // Test a realistic config with both ports and resources
+    let yaml = r#"
+name: graph-node
+target:
+  type: process
+  command: /usr/bin/graph-node
+  env:
+    RUST_LOG: info
+    DATABASE_URL: "postgres://localhost:{postgres.port.main}/graph"
+  ports:
+    http: auto
+    ws: auto
+    admin: 8020
+  resources:
+    memory: 2G
+    cpu: 200%
+depends_on:
+  - service: postgres
+  - service: ipfs
+health_check:
+  command: curl
+  args:
+    - "-f"
+    - "http://localhost:{port.http}/health"
+  interval: 30
+  retries: 3
+  timeout: 10
+"#;
+
+    let config: ServiceConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+
+    assert_eq!(config.name, "graph-node");
+
+    if let ServiceTarget::Process { command, env, ports, resources, .. } = &config.target {
+        // Check command
+        if let ProcessCommand::Legacy { command: cmd } = command {
+            assert_eq!(cmd, "/usr/bin/graph-node");
+        } else {
+            panic!("Expected Legacy command");
+        }
+
+        // Check env has port reference
+        assert!(env.get("DATABASE_URL").unwrap().contains("{postgres.port.main}"));
+
+        // Check ports
+        assert_eq!(ports.get("http"), Some(&PortSpec::Auto));
+        assert_eq!(ports.get("ws"), Some(&PortSpec::Auto));
+        assert_eq!(ports.get("admin"), Some(&PortSpec::Fixed(8020)));
+
+        // Check resources
+        let res = resources.as_ref().expect("Resources should be present");
+        assert_eq!(res.memory.as_ref().unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(res.cpu.as_ref().unwrap().percentage, 200);
+    } else {
+        panic!("Expected Process target");
+    }
+
+    // Check health check has port reference
+    let health = config.health_check.as_ref().unwrap();
+    assert!(health.args.iter().any(|a| a.contains("{port.http}")));
 }

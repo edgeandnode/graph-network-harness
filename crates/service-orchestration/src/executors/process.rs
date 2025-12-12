@@ -64,10 +64,9 @@ impl ServiceExecutor for ProcessExecutor {
     ) -> Result<RunningService, Error> {
         let ServiceTarget::Process {
             command,
-            // TODO: why is env ignored
-            env: _,
             working_dir,
-            validation: _,
+            resources,
+            ..
         } = &config.target
         else {
             return Err(crate::Error::Config(
@@ -85,12 +84,29 @@ impl ServiceExecutor for ProcessExecutor {
             return Err(crate::Error::Config("No command specified".to_string()));
         }
 
-        debug!("Command: {}", command_parts.join(" "));
+        // Wrap with systemd-run if resource limits are configured
+        let final_command_parts = if let Some(res) = resources {
+            if res.has_limits() {
+                let mut systemd_cmd = res.to_systemd_command(&config.name);
+                systemd_cmd.extend(command_parts);
+                debug!(
+                    "Wrapping with systemd-run for resource limits: {}",
+                    systemd_cmd.join(" ")
+                );
+                systemd_cmd
+            } else {
+                command_parts
+            }
+        } else {
+            command_parts
+        };
+
+        debug!("Command: {}", final_command_parts.join(" "));
 
         // Build command
-        let mut cmd = Command::new(&command_parts[0]);
-        if command_parts.len() > 1 {
-            cmd.args(&command_parts[1..]);
+        let mut cmd = Command::new(&final_command_parts[0]);
+        if final_command_parts.len() > 1 {
+            cmd.args(&final_command_parts[1..]);
         }
 
         // Set environment variables
@@ -287,6 +303,8 @@ mod tests {
                     command: "echo hello".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -326,6 +344,8 @@ mod tests {
                     command: "echo 'hello world'".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -352,6 +372,8 @@ mod tests {
                     command: "sleep 0.1".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -366,6 +388,8 @@ mod tests {
                     command: "sleep 0.1".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -414,6 +438,8 @@ mod tests {
                             command: "sleep 0.1".to_string(),
                         },
                         env: HashMap::new(),
+                        ports: HashMap::new(),
+                        resources: None,
                         working_dir: None,
                         validation: None,
                     },
@@ -456,6 +482,8 @@ mod tests {
                     command: "echo done".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -495,6 +523,8 @@ mod tests {
                     command: "sh -c \"echo 'Starting service'; sleep 0.1; echo 'Service running'; sleep 0.1; echo 'Stopping service'\"".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -550,6 +580,8 @@ mod tests {
                         .to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },
@@ -565,6 +597,8 @@ mod tests {
                         .to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },

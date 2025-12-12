@@ -1,21 +1,16 @@
-//! Generic attached service executor using layered execution.
+//! Attached service executor for connecting to existing services.
 //!
-//! This module provides a single executor that can observe any existing service
-//! by using the appropriate layers and commands.
+//! This module provides executors that can observe and interact with
+//! already-running services (processes, Docker containers).
 
 use super::RunningService;
 use super::traits::{AttachedService, EventStreamable};
-use crate::{Error, config::ServiceConfig, executors::layered::LayerConfig};
+use crate::{Error, config::ServiceConfig};
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use async_trait::async_trait;
 use command_executor::event::ProcessEvent;
-use command_executor::{
-    Command, ProcessHandle,
-    backends::LocalLauncher,
-    layered::{DockerLayer, LayeredExecutor as CmdLayeredExecutor, LocalLayer, SshLayer},
-    target::Target,
-};
+use command_executor::{Command, Executor, ProcessHandle, Target, backends::LocalLauncher};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::result::Result;
@@ -28,123 +23,38 @@ struct AttachedServiceInfo {
     observation_handle: Option<Box<dyn ProcessHandle>>,
     /// Service configuration
     config: ServiceConfig,
-    /// Additional metadata
-    #[allow(dead_code)]
-    metadata: HashMap<String, String>,
 }
 
-/// A generic executor that attaches to existing services using layered execution.
+/// A simple executor that attaches to existing services.
 ///
 /// This executor can attach to:
-/// - Systemd services (local or remote via SSH)
-/// - Docker containers (local or remote)
 /// - Local processes by PID or name
-/// - Services in Docker containers on remote hosts
-/// - Any combination through layer composition
-pub struct LayeredAttachedExecutor {
+/// - Docker containers by name/ID
+pub struct AttachedExecutor {
+    executor: Executor<LocalLauncher>,
     attached_services: Arc<Mutex<HashMap<String, AttachedServiceInfo>>>,
 }
 
-impl Default for LayeredAttachedExecutor {
+impl Default for AttachedExecutor {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl LayeredAttachedExecutor {
-    /// Create a new layered attached executor
+impl AttachedExecutor {
+    /// Create a new attached executor
     pub fn new() -> Self {
         Self {
+            executor: Executor::new("attached-executor".to_string(), LocalLauncher),
             attached_services: Arc::new(Mutex::new(HashMap::new())),
         }
-    }
-
-    /// Build a layered executor from the service configuration
-    fn build_executor(
-        &self,
-        config: &ServiceConfig,
-    ) -> Result<CmdLayeredExecutor<LocalLauncher>, Error> {
-        let mut executor = CmdLayeredExecutor::new(LocalLauncher);
-
-        // Check if the target has layers (only for Layered targets)
-        if let crate::config::ServiceTarget::Layered { layers, .. } = &config.target {
-            for layer in layers {
-                executor = match layer {
-                    LayerConfig::Local { env, working_dir } => {
-                        let mut local_layer = LocalLayer::new();
-                        for (k, v) in env {
-                            local_layer = local_layer.with_env(k.clone(), v.clone());
-                        }
-                        if let Some(dir) = working_dir {
-                            local_layer = local_layer.with_working_dir(dir.clone());
-                        }
-                        executor.with_layer(local_layer)
-                    }
-                    LayerConfig::Ssh {
-                        host,
-                        user,
-                        env,
-                        port,
-                        identity_file,
-                        options,
-                    } => {
-                        let mut ssh_layer = SshLayer::new(format!("{}@{}", user, host));
-                        if let Some(p) = port {
-                            ssh_layer = ssh_layer.with_port(*p);
-                        }
-                        if let Some(id_file) = identity_file {
-                            ssh_layer = ssh_layer.with_identity_file(id_file.clone());
-                        }
-                        for opt in options {
-                            ssh_layer = ssh_layer.with_option(opt.clone());
-                        }
-                        for (k, v) in env {
-                            ssh_layer = ssh_layer.with_env(k.clone(), v.clone());
-                        }
-                        executor.with_layer(ssh_layer)
-                    }
-                    LayerConfig::Docker {
-                        container,
-                        user,
-                        working_dir,
-                        env,
-                        interactive,
-                        tty,
-                    } => {
-                        let mut docker_layer = DockerLayer::new(container.clone())
-                            .with_interactive(*interactive)
-                            .with_tty(*tty);
-                        if let Some(u) = user {
-                            docker_layer = docker_layer.with_user(u.clone());
-                        }
-                        if let Some(dir) = working_dir {
-                            docker_layer = docker_layer.with_working_dir(dir.clone());
-                        }
-                        for (k, v) in env {
-                            docker_layer = docker_layer.with_env(k.clone(), v.clone());
-                        }
-                        executor.with_layer(docker_layer)
-                    }
-                }
-            }
-        }
-
-        Ok(executor)
     }
 
     /// Get the appropriate status command based on the service type
     fn get_status_command(&self, config: &ServiceConfig) -> Option<Command> {
         let env = config.target.env();
 
-        if let Some(service_name) = env.get("SYSTEMD_SERVICE") {
-            // Systemd service
-            Some(
-                Command::new("systemctl")
-                    .arg("is-active")
-                    .arg(service_name)
-                    .clone(),
-            )
-        } else if let Some(container_name) = env.get("CONTAINER_NAME") {
+        if let Some(container_name) = env.get("CONTAINER_NAME") {
             // Docker container
             Some(
                 Command::new("docker")
@@ -167,17 +77,7 @@ impl LayeredAttachedExecutor {
     fn get_log_command(&self, config: &ServiceConfig, follow: bool) -> Option<Command> {
         let env = config.target.env();
 
-        if let Some(service_name) = env.get("SYSTEMD_SERVICE") {
-            // Systemd service logs via journalctl
-            let mut cmd = Command::new("journalctl")
-                .arg("-u")
-                .arg(service_name)
-                .clone();
-            if follow {
-                cmd = cmd.arg("-f").arg("-n").arg("0").clone();
-            }
-            Some(cmd)
-        } else if let Some(container_name) = env.get("CONTAINER_NAME") {
+        if let Some(container_name) = env.get("CONTAINER_NAME") {
             // Docker container logs
             let mut cmd = Command::new("docker").arg("logs").clone();
             if follow {
@@ -210,13 +110,8 @@ impl LayeredAttachedExecutor {
     /// Check if the service is accessible/running
     async fn check_service_status(&self, config: &ServiceConfig) -> Result<bool, Error> {
         if let Some(status_cmd) = self.get_status_command(config) {
-            let executor = self.build_executor(config)?;
-            let (event_stream, mut handle) = executor.execute(status_cmd, &Target::Command).await?;
-
-            // Wait for the command to complete and check exit status
-            drop(event_stream); // We don't need the events
-            let exit_result = handle.wait().await?;
-            Ok(exit_result.success())
+            let result = self.executor.execute(&Target::Command, status_cmd).await?;
+            Ok(result.success())
         } else {
             // If no status command, assume it's accessible
             Ok(true)
@@ -225,7 +120,7 @@ impl LayeredAttachedExecutor {
 }
 
 #[async_trait]
-impl EventStreamable for LayeredAttachedExecutor {
+impl EventStreamable for AttachedExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
@@ -234,8 +129,10 @@ impl EventStreamable for LayeredAttachedExecutor {
         let attached = self.attached_services.lock().await;
         if let Some(info) = attached.get(&service.name) {
             if let Some(log_cmd) = self.get_log_command(&info.config, true) {
-                let executor = self.build_executor(&info.config)?;
-                let (event_stream, _handle) = executor.execute(log_cmd, &Target::Command).await?;
+                let target = command_executor::target::Target::ManagedProcess(
+                    command_executor::target::ManagedProcess::new(),
+                );
+                let (event_stream, _handle) = self.executor.launch(&target, log_cmd).await?;
 
                 // Convert stream to receiver
                 let (tx, rx) = async_channel::unbounded();
@@ -266,7 +163,7 @@ impl EventStreamable for LayeredAttachedExecutor {
 }
 
 #[async_trait]
-impl AttachedService for LayeredAttachedExecutor {
+impl AttachedService for AttachedExecutor {
     async fn attach(
         &self,
         config: ServiceConfig,
@@ -283,11 +180,13 @@ impl AttachedService for LayeredAttachedExecutor {
             )));
         }
 
-        // Optionally start log streaming (could be done on-demand instead)
+        // Optionally start log streaming
         let observation_handle = if let Some(log_cmd) = self.get_log_command(&config, true) {
             debug!("Starting log streaming for {}", service_name);
-            let executor = self.build_executor(&config)?;
-            let (_, handle) = executor.execute(log_cmd, &Target::Command).await?;
+            let target = command_executor::target::Target::ManagedProcess(
+                command_executor::target::ManagedProcess::new(),
+            );
+            let (_, handle) = self.executor.launch(&target, log_cmd).await?;
             Some(Box::new(handle) as Box<dyn ProcessHandle>)
         } else {
             None
@@ -297,10 +196,7 @@ impl AttachedService for LayeredAttachedExecutor {
         let mut metadata = HashMap::new();
         let env = config.target.env();
 
-        if let Some(systemd_service) = env.get("SYSTEMD_SERVICE") {
-            metadata.insert("systemd_unit".to_string(), systemd_service.clone());
-            metadata.insert("service_type".to_string(), "systemd".to_string());
-        } else if let Some(container) = env.get("CONTAINER_NAME") {
+        if let Some(container) = env.get("CONTAINER_NAME") {
             metadata.insert("container_name".to_string(), container.clone());
             metadata.insert("service_type".to_string(), "docker".to_string());
         } else if let Some(pid) = env.get("PID") {
@@ -317,7 +213,6 @@ impl AttachedService for LayeredAttachedExecutor {
         let info = AttachedServiceInfo {
             observation_handle,
             config: config.clone(),
-            metadata: metadata.clone(),
         };
 
         self.attached_services
@@ -377,8 +272,7 @@ impl AttachedService for LayeredAttachedExecutor {
     fn can_handle(&self, config: &ServiceConfig) -> bool {
         // This executor can handle any service that has identifiable metadata
         let env = config.target.env();
-        env.contains_key("SYSTEMD_SERVICE")
-            || env.contains_key("CONTAINER_NAME")
+        env.contains_key("CONTAINER_NAME")
             || env.contains_key("PID")
             || env.contains_key("PROCESS_NAME")
             || env.contains_key("LOG_FILE")
@@ -391,27 +285,8 @@ mod tests {
     use crate::config::ServiceTarget;
 
     #[test]
-    fn test_can_handle_systemd() {
-        let executor = LayeredAttachedExecutor::new();
-        let config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Process {
-                command: crate::config::ProcessCommand::Legacy {
-                    command: "dummy".to_string(),
-                },
-                env: HashMap::from([("SYSTEMD_SERVICE".to_string(), "nginx".to_string())]),
-                working_dir: None,
-                validation: None,
-            },
-            depends_on: vec![],
-            health_check: None,
-        };
-        assert!(executor.can_handle(&config));
-    }
-
-    #[test]
     fn test_can_handle_docker() {
-        let executor = LayeredAttachedExecutor::new();
+        let executor = AttachedExecutor::new();
         let config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Docker {
@@ -430,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_can_handle_process() {
-        let executor = LayeredAttachedExecutor::new();
+        let executor = AttachedExecutor::new();
         let config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
@@ -438,6 +313,8 @@ mod tests {
                     command: "dummy".to_string(),
                 },
                 env: HashMap::from([("PID".to_string(), "1234".to_string())]),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },

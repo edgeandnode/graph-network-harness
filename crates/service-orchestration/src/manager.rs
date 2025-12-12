@@ -7,10 +7,11 @@ use crate::{
     OrchestrationError,
     config::{HealthCheck, ServiceConfig, ServiceStatus, ServiceTarget},
     executors::{
-        AttachedService, DockerExecutor, LayeredAttachedExecutor, LayeredServiceExecutor,
-        ProcessExecutor, RunningService, ServiceExecutor, traits::EventStreamable,
+        AttachedExecutor, AttachedService, DockerExecutor, ProcessExecutor, RunningService,
+        ServiceExecutor, traits::EventStreamable,
     },
     health::{HealthChecker, HealthMonitor, HealthStatus},
+    ports::{PortAllocator, PortRegistry},
 };
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
@@ -19,16 +20,23 @@ use std::collections::HashMap;
 use std::result::Result;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 /// Central service orchestrator
+///
+/// Uses interior mutability for:
+/// - `active_services`: RwLock allows concurrent reads, exclusive writes for service lifecycle
+/// - `health_monitors`: RwLock for health check state updates
+/// - `port_allocator`: RwLock for port allocation during service startup
 pub struct ServiceManager {
     /// Service executors by type
     executors: HashMap<String, Arc<dyn ServiceExecutor>>,
-    /// Currently running services
+    /// Currently running services (interior mutability for &self methods)
     active_services: Arc<RwLock<HashMap<String, RunningService>>>,
-    /// Service health monitors
+    /// Service health monitors (interior mutability for health check updates)
     health_monitors: Arc<RwLock<HashMap<String, HealthMonitor>>>,
+    /// Port allocator for dynamic port assignment (interior mutability for allocation)
+    port_allocator: Arc<RwLock<PortAllocator>>,
 }
 
 impl ServiceManager {
@@ -60,15 +68,12 @@ impl ServiceManager {
         let mut executors: HashMap<String, Arc<dyn ServiceExecutor>> = HashMap::new();
         executors.insert("process".to_string(), Arc::new(ProcessExecutor::new()));
         executors.insert("docker".to_string(), Arc::new(DockerExecutor::new()));
-        executors.insert(
-            "layered".to_string(),
-            Arc::new(LayeredServiceExecutor::new()),
-        );
 
         Ok(Self {
             executors,
             active_services: Arc::new(RwLock::new(HashMap::new())),
             health_monitors: Arc::new(RwLock::new(HashMap::new())),
+            port_allocator: Arc::new(RwLock::new(PortAllocator::with_default_range())),
         })
     }
 
@@ -82,6 +87,126 @@ impl ServiceManager {
         std::mem::forget(temp_dir);
 
         Self::with_state_dir(state_dir).await
+    }
+
+    /// Allocate ports for all services that have port configurations.
+    ///
+    /// This should be called before launching any services to ensure all port
+    /// references can be resolved. Services are processed in the order provided.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Collect all service configs
+    /// let services: Vec<(&str, &ServiceConfig)> = config.services
+    ///     .iter()
+    ///     .map(|(name, svc)| (name.as_str(), &svc.orchestration))
+    ///     .collect();
+    ///
+    /// // Allocate all ports upfront
+    /// manager.allocate_ports_for_services(&services)?;
+    /// ```
+    pub fn allocate_ports_for_services(
+        &self,
+        services: &[(&str, &ServiceConfig)],
+    ) -> Result<(), OrchestrationError> {
+        let mut allocator = self.port_allocator.write().unwrap();
+
+        for (name, config) in services {
+            if let Some(port_config) = config.target.port_config() {
+                info!("Allocating ports for service '{}': {:?}", name, port_config);
+                allocator
+                    .allocate_for_service(name, port_config)
+                    .map_err(|e| OrchestrationError::Port(e))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get the port registry for inspection or testing.
+    pub fn port_registry(&self) -> PortRegistry {
+        self.port_allocator.read().unwrap().registry().clone()
+    }
+
+    /// Substitute port references in a service configuration.
+    ///
+    /// This replaces patterns like `{port.http}` and `{postgres.port.main}` in
+    /// the service's command, environment variables, and health check.
+    fn substitute_ports_in_config(
+        &self,
+        service_name: &str,
+        config: ServiceConfig,
+    ) -> Result<ServiceConfig, OrchestrationError> {
+        let allocator = self.port_allocator.read().unwrap();
+
+        // If this service has no ports allocated, return config unchanged
+        if allocator.get_port(service_name, "").is_none()
+            && allocator.registry().get(service_name).is_none()
+        {
+            // Check if config has port references that need resolving
+            // For now, we'll try substitution anyway in case it references other services
+        }
+
+        let mut new_config = config.clone();
+
+        match &mut new_config.target {
+            ServiceTarget::Process {
+                command,
+                env,
+                ..
+            } => {
+                // Substitute in environment variables
+                for value in env.values_mut() {
+                    *value = allocator
+                        .substitute_ports(value, Some(service_name))
+                        .map_err(OrchestrationError::Port)?;
+                }
+
+                // Substitute in command template if present
+                match command {
+                    crate::config::ProcessCommand::Template { command_template, .. } => {
+                        *command_template = allocator
+                            .substitute_ports(command_template, Some(service_name))
+                            .map_err(OrchestrationError::Port)?;
+                    }
+                    crate::config::ProcessCommand::Legacy { command: cmd } => {
+                        *cmd = allocator
+                            .substitute_ports(cmd, Some(service_name))
+                            .map_err(OrchestrationError::Port)?;
+                    }
+                }
+            }
+            ServiceTarget::Docker { env, command_template, .. } => {
+                // Substitute in environment variables
+                for value in env.values_mut() {
+                    *value = allocator
+                        .substitute_ports(value, Some(service_name))
+                        .map_err(OrchestrationError::Port)?;
+                }
+                // Substitute in command template if present
+                if let Some(template) = command_template {
+                    *template = allocator
+                        .substitute_ports(template, Some(service_name))
+                        .map_err(OrchestrationError::Port)?;
+                }
+            }
+            // Other target types don't have port substitution
+            _ => {}
+        }
+
+        // Substitute in health check if present
+        if let Some(health_check) = &mut new_config.health_check {
+            health_check.command = allocator
+                .substitute_ports(&health_check.command, Some(service_name))
+                .map_err(OrchestrationError::Port)?;
+            for arg in &mut health_check.args {
+                *arg = allocator
+                    .substitute_ports(arg, Some(service_name))
+                    .map_err(OrchestrationError::Port)?;
+            }
+        }
+
+        Ok(new_config)
     }
 
     /// Launch a service with the given configuration
@@ -152,8 +277,8 @@ impl ServiceManager {
         // Inject network configuration
         let network_config = self.inject_network_config(&config).await?;
 
-        // Use the unified LayeredAttachedExecutor for all attachment types
-        let executor = LayeredAttachedExecutor::new();
+        // Use the AttachedExecutor for all attachment types
+        let executor = AttachedExecutor::new();
 
         // Create a modified config with the appropriate metadata in env
         let mut attach_config = network_config.clone();
@@ -243,7 +368,7 @@ impl ServiceManager {
         timeout: Duration,
     ) -> Result<(), OrchestrationError> {
         let start = std::time::Instant::now();
-        
+
         while start.elapsed() < timeout {
             match self.get_service_status(name).await? {
                 ServiceStatus::Running => {
@@ -252,7 +377,8 @@ impl ServiceManager {
                 }
                 ServiceStatus::Failed(reason) => {
                     return Err(OrchestrationError::Config(format!(
-                        "Service {} failed: {}", name, reason
+                        "Service {} failed: {}",
+                        name, reason
                     )));
                 }
                 _ => {
@@ -261,9 +387,9 @@ impl ServiceManager {
                 }
             }
         }
-        
+
         Err(OrchestrationError::Config(format!(
-            "Service {} failed to become healthy within {:?}", 
+            "Service {} failed to become healthy within {:?}",
             name, timeout
         )))
     }
@@ -377,20 +503,19 @@ impl ServiceManager {
         Ok(results)
     }
 
-    /// Inject network configuration into service config
+    /// Inject network configuration into service config.
+    ///
+    /// Substitutes port references ({service.port.name}) with allocated ports.
     async fn inject_network_config(
         &self,
         config: &ServiceConfig,
     ) -> Result<ServiceConfig, OrchestrationError> {
         debug!("Injecting network config for service: {}", config.name);
 
-        // TODO: Implement network injection:
-        // 1. Register service with network manager
-        // 2. Resolve dependency IPs
-        // 3. Update environment variables
+        // Substitute port references in the config
+        let config = self.substitute_ports_in_config(&config.name, config.clone())?;
 
-        // For now, return config as-is
-        Ok(config.clone())
+        Ok(config)
     }
 
     /// Find the appropriate executor for a service configuration
@@ -447,6 +572,8 @@ mod tests {
                     command: "echo".to_string(),
                 },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
                 validation: None,
             },

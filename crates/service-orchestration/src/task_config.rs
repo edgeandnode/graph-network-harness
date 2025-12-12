@@ -81,14 +81,37 @@ impl StackConfig {
     pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
-        serde_yaml::from_str(&content)
-            .map_err(|e| format!("Failed to parse config YAML: {}", e))
+        serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse config YAML: {}", e))
     }
-    
+
     /// Load configuration from a reader
     pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self, String> {
-        serde_yaml::from_reader(reader)
-            .map_err(|e| format!("Failed to parse config YAML: {}", e))
+        serde_yaml::from_reader(reader).map_err(|e| format!("Failed to parse config YAML: {}", e))
+    }
+
+    /// Inject runtime parameters into all service and task targets
+    ///
+    /// These params are merged with existing params and can be referenced
+    /// using `{param_name}` syntax in templates, layer hosts, health checks, etc.
+    /// Substitution is applied immediately after injection.
+    ///
+    /// Common runtime params:
+    /// - `container_host`: IP/hostname of the container running services
+    pub fn inject_runtime_params(&mut self, params: HashMap<String, crate::config::ParamValue>) {
+        for service_config in self.services.values_mut() {
+            service_config
+                .orchestration
+                .target
+                .inject_params(params.clone());
+            // Substitute in health check args
+            if let Some(health_check) = &mut service_config.orchestration.health_check {
+                health_check.substitute_params(&params);
+            }
+        }
+        for task_config in self.tasks.values_mut() {
+            task_config.target.inject_params(params.clone());
+            task_config.target.substitute_process_fields(&params);
+        }
     }
 }
 
@@ -106,6 +129,8 @@ mod tests {
                     command: "npx hardhat deploy".to_string(),
                 },
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: Some("./contracts".to_string()),
                 validation: None,
             },
@@ -138,6 +163,8 @@ mod tests {
                             command: "hardhat deploy".to_string(),
                         },
                         env: HashMap::new(),
+                        ports: HashMap::new(),
+                        resources: None,
                         working_dir: None,
                         validation: None,
                     },

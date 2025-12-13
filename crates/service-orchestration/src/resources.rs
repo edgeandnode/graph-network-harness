@@ -174,17 +174,18 @@ impl ByteSize {
         }
 
         // Check for suffix
-        let (num_str, multiplier) = if let Some(n) = s.strip_suffix('K').or_else(|| s.strip_suffix('k')) {
-            (n, 1024u64)
-        } else if let Some(n) = s.strip_suffix('M').or_else(|| s.strip_suffix('m')) {
-            (n, 1024 * 1024)
-        } else if let Some(n) = s.strip_suffix('G').or_else(|| s.strip_suffix('g')) {
-            (n, 1024 * 1024 * 1024)
-        } else if let Some(n) = s.strip_suffix('T').or_else(|| s.strip_suffix('t')) {
-            (n, 1024 * 1024 * 1024 * 1024)
-        } else {
-            (s, 1)
-        };
+        let (num_str, multiplier) =
+            if let Some(n) = s.strip_suffix('K').or_else(|| s.strip_suffix('k')) {
+                (n, 1024u64)
+            } else if let Some(n) = s.strip_suffix('M').or_else(|| s.strip_suffix('m')) {
+                (n, 1024 * 1024)
+            } else if let Some(n) = s.strip_suffix('G').or_else(|| s.strip_suffix('g')) {
+                (n, 1024 * 1024 * 1024)
+            } else if let Some(n) = s.strip_suffix('T').or_else(|| s.strip_suffix('t')) {
+                (n, 1024 * 1024 * 1024 * 1024)
+            } else {
+                (s, 1)
+            };
 
         let num: u64 = num_str
             .parse()
@@ -452,8 +453,14 @@ mod tests {
         assert_eq!(ByteSize::parse("512").unwrap().to_bytes(), 512);
         assert_eq!(ByteSize::parse("1K").unwrap().to_bytes(), 1024);
         assert_eq!(ByteSize::parse("1k").unwrap().to_bytes(), 1024);
-        assert_eq!(ByteSize::parse("512M").unwrap().to_bytes(), 512 * 1024 * 1024);
-        assert_eq!(ByteSize::parse("2G").unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(
+            ByteSize::parse("512M").unwrap().to_bytes(),
+            512 * 1024 * 1024
+        );
+        assert_eq!(
+            ByteSize::parse("2G").unwrap().to_bytes(),
+            2 * 1024 * 1024 * 1024
+        );
     }
 
     #[test]
@@ -507,7 +514,10 @@ cpu: 200%
 "#;
 
         let limits: ResourceLimits = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(limits.memory.as_ref().unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(
+            limits.memory.as_ref().unwrap().to_bytes(),
+            2 * 1024 * 1024 * 1024
+        );
         assert_eq!(limits.cpu.as_ref().unwrap().percentage, 200);
     }
 

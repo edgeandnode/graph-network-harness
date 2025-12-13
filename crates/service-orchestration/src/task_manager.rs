@@ -13,7 +13,7 @@
 //! 2. **Typed tasks**: Complex state-machine-based tasks implemented in Rust code.
 //!    These are executed via a `TypedTaskProvider` that abstracts the task registry.
 
-use crate::OrchestrationError;
+use crate::{OrchestrationError, RuntimeContext};
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
 use serde_json::Value as JsonValue;
@@ -94,12 +94,12 @@ pub trait TypedTaskProvider: Send + Sync {
 
     /// Execute a typed task, returning a stream of JSON state updates
     ///
-    /// Returns a tuple of:
-    /// - A receiver for JSON state updates
-    /// - A future that performs the JSON conversion (must be spawned)
+    /// The RuntimeContext provides access to outputs from completed dependency tasks,
+    /// allocated ports, and other runtime state.
     async fn execute(
         &self,
         name: &str,
+        ctx: &RuntimeContext,
         spawner: &dyn Spawner,
     ) -> Result<Receiver<JsonValue>, OrchestrationError>;
 }
@@ -187,6 +187,7 @@ impl TaskManager {
     pub async fn execute_task(
         &self,
         name: &str,
+        ctx: &RuntimeContext,
         spawner: &dyn Spawner,
     ) -> Result<TaskExecution, OrchestrationError> {
         debug!("Executing task: {}", name);
@@ -216,7 +217,7 @@ impl TaskManager {
             if provider.has_task(name) {
                 debug!("Found typed task implementation for: {}", name);
                 return self
-                    .execute_typed_task(name, provider.clone(), spawner)
+                    .execute_typed_task(name, provider.clone(), ctx, spawner)
                     .await;
             }
         }
@@ -230,6 +231,7 @@ impl TaskManager {
         &self,
         name: &str,
         provider: Arc<dyn TypedTaskProvider>,
+        ctx: &RuntimeContext,
         spawner: &dyn Spawner,
     ) -> Result<TaskExecution, OrchestrationError> {
         // Check if task is already complete (idempotency check)
@@ -268,7 +270,7 @@ impl TaskManager {
         }
 
         // Execute the typed task
-        let state_receiver = match provider.execute(name, spawner).await {
+        let state_receiver = match provider.execute(name, ctx, spawner).await {
             Ok(rx) => rx,
             Err(e) => {
                 let mut executions = self.task_executions.write().unwrap();

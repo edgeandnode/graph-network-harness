@@ -356,7 +356,10 @@ async fn main() -> Result<()> {
     let port_registry = daemon.base.service_manager().port_registry();
     for (service_name, ports) in &port_registry {
         for (port_name, port) in ports {
-            out.info(&format!("{}.{}: localhost:{}", service_name, port_name, port));
+            out.info(&format!(
+                "{}.{}: localhost:{}",
+                service_name, port_name, port
+            ));
         }
     }
 
@@ -364,7 +367,10 @@ async fn main() -> Result<()> {
     out.header("Ready");
     if !args.plain {
         println!();
-        println!("  Stack is running. Press {} to shutdown.", style("Ctrl+C").yellow().bold());
+        println!(
+            "  Stack is running. Press {} to shutdown.",
+            style("Ctrl+C").yellow().bold()
+        );
         println!();
     } else {
         tracing::info!("Stack is running. Press Ctrl+C to shutdown.");

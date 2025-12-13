@@ -172,7 +172,8 @@ impl ServiceManager {
 
         let run_context = self.run_context.as_ref().ok_or_else(|| {
             OrchestrationError::Config(
-                "Run context not set - call set_run_context before processing templates".to_string(),
+                "Run context not set - call set_run_context before processing templates"
+                    .to_string(),
             )
         })?;
 
@@ -213,11 +214,7 @@ impl ServiceManager {
         let mut new_config = config.clone();
 
         match &mut new_config.target {
-            ServiceTarget::Process {
-                command,
-                env,
-                ..
-            } => {
+            ServiceTarget::Process { command, env, .. } => {
                 // Substitute in environment variables
                 for value in env.values_mut() {
                     *value = substitute(value)?;
@@ -225,7 +222,9 @@ impl ServiceManager {
 
                 // Substitute in command template if present
                 match command {
-                    crate::config::ProcessCommand::Template { command_template, .. } => {
+                    crate::config::ProcessCommand::Template {
+                        command_template, ..
+                    } => {
                         *command_template = substitute(command_template)?;
                     }
                     crate::config::ProcessCommand::Legacy { command: cmd } => {
@@ -236,7 +235,11 @@ impl ServiceManager {
                     }
                 }
             }
-            ServiceTarget::Docker { env, command_template, .. } => {
+            ServiceTarget::Docker {
+                env,
+                command_template,
+                ..
+            } => {
                 // Substitute in environment variables
                 for value in env.values_mut() {
                     *value = substitute(value)?;

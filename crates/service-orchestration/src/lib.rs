@@ -48,20 +48,21 @@ mod health;
 mod manager;
 mod ports;
 mod resources;
+mod runtime_context;
 mod state;
-mod template;
 mod task_config;
 mod task_executors;
 mod task_manager;
+mod template;
 
 pub use config::{
     CommandSpec, Dependency, HealthCheck, ParamValue, ProcessCommand, RemoteMode, ServiceConfig,
     ServiceStatus, ServiceTarget, TemplateConfig,
 };
-pub use ports::{PortAllocator, PortConfig, PortError, PortRegistry, PortSpec};
-pub use resources::{ByteSize, CpuLimit, ResourceLimits};
 pub use context::OrchestrationContext;
 pub use dependency_graph::{DependencyGraph, DependencyNode};
+pub use ports::{PortAllocator, PortConfig, PortError, PortRegistry, PortSpec};
+pub use resources::{ByteSize, CpuLimit, ResourceLimits};
 // pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint}; // TODO: Refactor
 pub use executors::{
     AttachedExecutor, AttachedService, DockerExecutor, EventStreamable, ManagedService,
@@ -70,6 +71,7 @@ pub use executors::{
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
 // pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager}; // TODO: Refactor
 pub use manager::ServiceManager;
+pub use runtime_context::RuntimeContext;
 pub use state::{
     DeploymentState, DeploymentStatus, DeploymentSummary, ServiceDeploymentState, ServiceState,
     ServiceStateFilter, StateManager, TaskExecutionState, TaskState, TaskStateFilter,

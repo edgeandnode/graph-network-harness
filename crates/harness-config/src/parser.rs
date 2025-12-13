@@ -183,11 +183,17 @@ pub fn convert_to_orchestrator_with_context(
                 .collect();
 
             // Convert simple ports to PortConfig (named as port_0, port_1, etc.)
-            let port_config: std::collections::HashMap<String, service_orchestration::PortSpec> = simple_ports
-                .iter()
-                .enumerate()
-                .map(|(i, p)| (format!("port_{}", i), service_orchestration::PortSpec::Fixed(*p)))
-                .collect();
+            let port_config: std::collections::HashMap<String, service_orchestration::PortSpec> =
+                simple_ports
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        (
+                            format!("port_{}", i),
+                            service_orchestration::PortSpec::Fixed(*p),
+                        )
+                    })
+                    .collect();
             let container_ports: std::collections::HashMap<String, u16> = simple_ports
                 .iter()
                 .enumerate()

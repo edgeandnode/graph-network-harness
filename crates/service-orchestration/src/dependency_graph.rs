@@ -263,7 +263,8 @@ mod tests {
                         working_dir: None,
                         complete_if: None,
                     },
-                ).with_depends_on(vec![Dependency::Service {
+                )
+                .with_depends_on(vec![Dependency::Service {
                     service: "service-b".to_string(),
                 }]),
             },

@@ -13,7 +13,9 @@ use std::result::Result;
 use tracing::info;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
-use crate::tasks::{CargoBuildTask, GraphContractsTask, SubgraphDeployTask, TapContractsTask};
+use crate::tasks::{
+    CargoBuildTask, GraphContractsTask, SubgraphDeployTask, TapContractsTask, YarnTask,
+};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -38,7 +40,8 @@ impl AutoWire for GraphTestDaemon {
             .wire_task_type::<CargoBuildTask>()?
             .wire_task_type::<GraphContractsTask>()?
             .wire_task_type::<TapContractsTask>()?
-            .wire_task_type::<SubgraphDeployTask>()?;
+            .wire_task_type::<SubgraphDeployTask>()?
+            .wire_task_type::<YarnTask>()?;
 
         Ok(())
     }

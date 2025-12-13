@@ -69,7 +69,10 @@ impl DeploymentTask for TapContractsTask {
 
     const TASK_TYPE: &'static str = "tap-contracts-deployment";
 
-    async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+    async fn execute(
+        &self,
+        ctx: &service_orchestration::RuntimeContext,
+    ) -> Result<async_channel::Receiver<Self::State>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         // Clone what we need for the async task

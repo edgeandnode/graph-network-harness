@@ -452,8 +452,8 @@ mod tests {
                     },
                     depends_on: vec![],
                     health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+                    templates: vec![],
+                    allocated_ports: HashMap::new(),
                 };
 
                 let spawner = AsyncSpawner::new();

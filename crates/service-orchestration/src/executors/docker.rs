@@ -233,7 +233,10 @@ impl ServiceExecutor for DockerExecutor {
         // Uses allocated_ports (from manager) mapped to container_ports
         for (port_name, host_port) in &config.allocated_ports {
             if let Some(container_port) = container_ports.get(port_name) {
-                args.extend(["-p".to_string(), format!("{}:{}", host_port, container_port)]);
+                args.extend([
+                    "-p".to_string(),
+                    format!("{}:{}", host_port, container_port),
+                ]);
             }
         }
 

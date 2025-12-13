@@ -3,9 +3,9 @@
 //! These tests verify that all components work together correctly.
 
 use service_orchestration::{
-    ByteSize, CpuLimit, DockerExecutor, HealthCheck, HealthChecker, HealthStatus,
-    PortSpec, ProcessCommand, ProcessExecutor, ResourceLimits, ServiceConfig,
-    ServiceExecutor, ServiceManager, ServiceStatus, ServiceTarget,
+    ByteSize, CpuLimit, DockerExecutor, HealthCheck, HealthChecker, HealthStatus, PortSpec,
+    ProcessCommand, ProcessExecutor, ResourceLimits, ServiceConfig, ServiceExecutor,
+    ServiceManager, ServiceStatus, ServiceTarget,
 };
 use std::collections::HashMap;
 
@@ -268,8 +268,8 @@ fn test_service_config_env_injection() {
             service: "db".to_string(),
         }],
         health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+        templates: vec![],
+        allocated_ports: HashMap::new(),
     };
 
     // Test environment injection (simulating network config injection)
@@ -305,17 +305,15 @@ async fn test_service_manager_port_allocation() {
                 command: "echo postgres".to_string(),
             },
             env: HashMap::new(),
-            ports: HashMap::from([
-                ("main".to_string(), PortSpec::Fixed(5432)),
-            ]),
+            ports: HashMap::from([("main".to_string(), PortSpec::Fixed(5432))]),
             resources: None,
             working_dir: None,
             validation: None,
         },
         depends_on: vec![],
         health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+        templates: vec![],
+        allocated_ports: HashMap::new(),
     };
 
     let graph_node_config = ServiceConfig {
@@ -324,9 +322,10 @@ async fn test_service_manager_port_allocation() {
             command: ProcessCommand::Legacy {
                 command: "echo graph-node".to_string(),
             },
-            env: HashMap::from([
-                ("DATABASE_URL".to_string(), "postgres://localhost:{postgres.port.main}/graph".to_string()),
-            ]),
+            env: HashMap::from([(
+                "DATABASE_URL".to_string(),
+                "postgres://localhost:{postgres.port.main}/graph".to_string(),
+            )]),
             ports: HashMap::from([
                 ("http".to_string(), PortSpec::Auto),
                 ("ws".to_string(), PortSpec::Auto),
@@ -337,8 +336,8 @@ async fn test_service_manager_port_allocation() {
         },
         depends_on: vec![],
         health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+        templates: vec![],
+        allocated_ports: HashMap::new(),
     };
 
     // Allocate ports for all services
@@ -359,8 +358,16 @@ async fn test_service_manager_port_allocation() {
     let http_port = *gn_ports.get("http").unwrap();
     let ws_port = *gn_ports.get("ws").unwrap();
 
-    assert!(http_port >= 49152, "HTTP port {} not in ephemeral range", http_port);
-    assert!(ws_port >= 49152, "WS port {} not in ephemeral range", ws_port);
+    assert!(
+        http_port >= 49152,
+        "HTTP port {} not in ephemeral range",
+        http_port
+    );
+    assert!(
+        ws_port >= 49152,
+        "WS port {} not in ephemeral range",
+        ws_port
+    );
     assert_ne!(http_port, ws_port, "HTTP and WS ports should be different");
 }
 
@@ -383,8 +390,8 @@ fn test_port_config_yaml_roundtrip() {
         },
         depends_on: vec![],
         health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+        templates: vec![],
+        allocated_ports: HashMap::new(),
     };
 
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -412,16 +419,18 @@ fn test_resource_limits_yaml_roundtrip() {
             },
             env: HashMap::new(),
             ports: HashMap::new(),
-            resources: Some(ResourceLimits::none()
-                .memory(ByteSize::from_gb(2))
-                .cpu(CpuLimit::from_percentage(200))),
+            resources: Some(
+                ResourceLimits::none()
+                    .memory(ByteSize::from_gb(2))
+                    .cpu(CpuLimit::from_percentage(200)),
+            ),
             working_dir: None,
             validation: None,
         },
         depends_on: vec![],
         health_check: None,
-            templates: vec![],
-            allocated_ports: HashMap::new(),
+        templates: vec![],
+        allocated_ports: HashMap::new(),
     };
 
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -429,7 +438,10 @@ fn test_resource_limits_yaml_roundtrip() {
 
     if let ServiceTarget::Process { resources, .. } = &deserialized.target {
         let res = resources.as_ref().expect("Resources should be present");
-        assert_eq!(res.memory.as_ref().unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(
+            res.memory.as_ref().unwrap().to_bytes(),
+            2 * 1024 * 1024 * 1024
+        );
         assert_eq!(res.cpu.as_ref().unwrap().percentage, 200);
     } else {
         panic!("Expected Process target");
@@ -489,7 +501,14 @@ health_check:
 
     assert_eq!(config.name, "graph-node");
 
-    if let ServiceTarget::Process { command, env, ports, resources, .. } = &config.target {
+    if let ServiceTarget::Process {
+        command,
+        env,
+        ports,
+        resources,
+        ..
+    } = &config.target
+    {
         // Check command
         if let ProcessCommand::Legacy { command: cmd } = command {
             assert_eq!(cmd, "/usr/bin/graph-node");
@@ -498,7 +517,11 @@ health_check:
         }
 
         // Check env has port reference
-        assert!(env.get("DATABASE_URL").unwrap().contains("{postgres.port.main}"));
+        assert!(
+            env.get("DATABASE_URL")
+                .unwrap()
+                .contains("{postgres.port.main}")
+        );
 
         // Check ports
         assert_eq!(ports.get("http"), Some(&PortSpec::Auto));
@@ -507,7 +530,10 @@ health_check:
 
         // Check resources
         let res = resources.as_ref().expect("Resources should be present");
-        assert_eq!(res.memory.as_ref().unwrap().to_bytes(), 2 * 1024 * 1024 * 1024);
+        assert_eq!(
+            res.memory.as_ref().unwrap().to_bytes(),
+            2 * 1024 * 1024 * 1024
+        );
         assert_eq!(res.cpu.as_ref().unwrap().percentage, 200);
     } else {
         panic!("Expected Process target");

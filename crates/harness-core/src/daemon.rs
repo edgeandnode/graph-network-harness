@@ -14,7 +14,9 @@ use async_trait::async_trait;
 use tracing::{debug, info};
 
 use command_executor::ProcessEvent;
-use service_orchestration::{DependencyGraph, DependencyNode, PortAllocator, ServiceConfig, StackConfig};
+use service_orchestration::{
+    DependencyGraph, DependencyNode, PortAllocator, RuntimeContext, ServiceConfig, StackConfig,
+};
 use service_orchestration::{RunningService, TaskConfig};
 
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
@@ -295,6 +297,9 @@ impl BaseDaemon {
         let spawner = AsyncSpawner::new();
 
         spawner.spawn_detached(Box::pin(async move {
+            // Create runtime context for passing data between tasks
+            let runtime_ctx = RuntimeContext::new();
+
             let result: Result<(), async_channel::SendError<DaemonEvent>> = async {
                 for node in start_order {
                     match node {
@@ -372,17 +377,19 @@ impl BaseDaemon {
                                 continue;
                             }
 
-                            // Execute the task using TaskManager
+                            // Execute the task using TaskManager with runtime context
                             let task_spawner = AsyncSpawner::new();
-                            let execution =
-                                match task_manager.execute_task(&name, &task_spawner).await {
-                                    Ok(exec) => exec,
-                                    Err(e) => {
-                                        sender.send(DaemonEvent::task_fail(&name)).await?;
-                                        tracing::error!("Failed to execute task {}: {}", name, e);
-                                        continue;
-                                    }
-                                };
+                            let execution = match task_manager
+                                .execute_task(&name, &runtime_ctx, &task_spawner)
+                                .await
+                            {
+                                Ok(exec) => exec,
+                                Err(e) => {
+                                    sender.send(DaemonEvent::task_fail(&name)).await?;
+                                    tracing::error!("Failed to execute task {}: {}", name, e);
+                                    continue;
+                                }
+                            };
 
                             // Check if task was already completed
                             //
@@ -392,6 +399,10 @@ impl BaseDaemon {
                             match execution.status {
                                 TaskStatus::Completed => {
                                     debug!("Task {} was already completed", name);
+                                    // Record task outputs in runtime context
+                                    if let Some(outputs) = task_manager.get_task_outputs(&name) {
+                                        runtime_ctx.set_task_outputs(&name, outputs);
+                                    }
                                     sender.send(DaemonEvent::task_completed(&name)).await?;
                                 }
                                 TaskStatus::Running => {
@@ -399,6 +410,12 @@ impl BaseDaemon {
                                     match task_manager.wait_for_completion(&name).await {
                                         Ok(TaskStatus::Completed) => {
                                             debug!("Task {} completed successfully", name);
+                                            // Record task outputs in runtime context
+                                            if let Some(outputs) =
+                                                task_manager.get_task_outputs(&name)
+                                            {
+                                                runtime_ctx.set_task_outputs(&name, outputs);
+                                            }
                                             sender.send(DaemonEvent::task_completed(&name)).await?;
                                         }
                                         Ok(TaskStatus::Failed(reason)) => {
@@ -580,9 +597,10 @@ impl DaemonBuilder {
 
         // Get topological order
         let order = dep_graph.topological_sort().map_err(|e| {
-            Error::Config(harness_config::ConfigError::ValidationError(
-                format!("Failed to sort dependencies: {:?}", e)
-            ))
+            Error::Config(harness_config::ConfigError::ValidationError(format!(
+                "Failed to sort dependencies: {:?}",
+                e
+            )))
         })?;
 
         // Allocate ports in dependency order
@@ -593,9 +611,11 @@ impl DaemonBuilder {
                         info!("Allocating ports for service '{}': {:?}", name, port_config);
                         self.port_allocator
                             .allocate_for_service(name, port_config)
-                            .map_err(|e| Error::Config(harness_config::ConfigError::ValidationError(
-                                format!("Port allocation failed: {}", e)
-                            )))?;
+                            .map_err(|e| {
+                                Error::Config(harness_config::ConfigError::ValidationError(
+                                    format!("Port allocation failed: {}", e),
+                                ))
+                            })?;
                     }
                 }
             }
@@ -1089,7 +1109,10 @@ mod tests {
         type State = TestTaskState;
         const TASK_TYPE: &'static str = "test-task";
 
-        async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+        async fn execute(
+            &self,
+            _ctx: &RuntimeContext,
+        ) -> Result<async_channel::Receiver<Self::State>, Error> {
             let (tx, rx) = async_channel::bounded(3);
             let state = self.state.clone();
 

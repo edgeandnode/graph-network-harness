@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use command_executor::{Command, ProcessHandle};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use service_orchestration::{ServiceTarget, TaskConfig};
+use service_orchestration::{RuntimeContext, ServiceTarget, TaskConfig};
 use std::collections::HashMap;
 use tracing::{debug, info};
 
@@ -185,7 +185,7 @@ impl DeploymentTask for YamlTask {
         self.validate_idempotent().await
     }
 
-    async fn execute(&self) -> Result<Receiver<Self::State>, Error> {
+    async fn execute(&self, _ctx: &RuntimeContext) -> Result<Receiver<Self::State>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         let name = self.name.clone();

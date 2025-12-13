@@ -83,9 +83,9 @@ impl<'de> Deserialize<'de> for PortSpec {
                     Ok(PortSpec::Auto)
                 } else {
                     // Try to parse as number
-                    v.parse::<u16>()
-                        .map(PortSpec::Fixed)
-                        .map_err(|_| de::Error::custom(format!("expected 'auto' or port number, got '{}'", v)))
+                    v.parse::<u16>().map(PortSpec::Fixed).map_err(|_| {
+                        de::Error::custom(format!("expected 'auto' or port number, got '{}'", v))
+                    })
                 }
             }
 
@@ -212,7 +212,8 @@ impl PortAllocator {
         }
 
         // Store in registry
-        self.registry.insert(service_name.to_string(), allocated.clone());
+        self.registry
+            .insert(service_name.to_string(), allocated.clone());
 
         Ok(allocated)
     }
@@ -240,7 +241,10 @@ impl PortAllocator {
             attempts += 1;
         }
 
-        Err(PortError::NoAvailablePorts(self.range_start, self.range_end))
+        Err(PortError::NoAvailablePorts(
+            self.range_start,
+            self.range_end,
+        ))
     }
 
     /// Verify a fixed port is available.
@@ -304,9 +308,9 @@ impl PortAllocator {
                 })
             }
             // {service.port.name} - another service's port
-            [service, "port", port_name] => self.get_port(service, port_name).ok_or_else(|| {
-                PortError::PortNotFound(service.to_string(), port_name.to_string())
-            }),
+            [service, "port", port_name] => self
+                .get_port(service, port_name)
+                .ok_or_else(|| PortError::PortNotFound(service.to_string(), port_name.to_string())),
             _ => Err(PortError::InvalidReference(reference.to_string())),
         }
     }
@@ -415,7 +419,9 @@ admin: 8020
         .into_iter()
         .collect();
 
-        let ports = allocator.allocate_for_service("test-service", &config).unwrap();
+        let ports = allocator
+            .allocate_for_service("test-service", &config)
+            .unwrap();
 
         assert!(ports.contains_key("http"));
         assert!(ports.contains_key("ws"));
@@ -440,7 +446,9 @@ admin: 8020
         .into_iter()
         .collect();
 
-        let ports = allocator.allocate_for_service("test-service", &config).unwrap();
+        let ports = allocator
+            .allocate_for_service("test-service", &config)
+            .unwrap();
 
         assert_eq!(ports.get("http"), Some(&59080));
         assert_eq!(ports.get("admin"), Some(&59020));
@@ -454,7 +462,9 @@ admin: 8020
         let postgres_config: PortConfig = [("main".to_string(), PortSpec::Fixed(5432))]
             .into_iter()
             .collect();
-        allocator.allocate_for_service("postgres", &postgres_config).unwrap();
+        allocator
+            .allocate_for_service("postgres", &postgres_config)
+            .unwrap();
 
         // Allocate ports for graph-node
         let gn_config: PortConfig = [
@@ -463,13 +473,19 @@ admin: 8020
         ]
         .into_iter()
         .collect();
-        allocator.allocate_for_service("graph-node", &gn_config).unwrap();
+        allocator
+            .allocate_for_service("graph-node", &gn_config)
+            .unwrap();
 
         // Test resolution
-        let port = allocator.resolve_reference("{postgres.port.main}", None).unwrap();
+        let port = allocator
+            .resolve_reference("{postgres.port.main}", None)
+            .unwrap();
         assert_eq!(port, 5432);
 
-        let port = allocator.resolve_reference("{port.http}", Some("graph-node")).unwrap();
+        let port = allocator
+            .resolve_reference("{port.http}", Some("graph-node"))
+            .unwrap();
         assert!(port >= 50000 && port <= 50100);
     }
 
@@ -481,20 +497,28 @@ admin: 8020
         let postgres_config: PortConfig = [("main".to_string(), PortSpec::Fixed(5432))]
             .into_iter()
             .collect();
-        allocator.allocate_for_service("postgres", &postgres_config).unwrap();
+        allocator
+            .allocate_for_service("postgres", &postgres_config)
+            .unwrap();
 
         let gn_config: PortConfig = [("http".to_string(), PortSpec::Fixed(8000))]
             .into_iter()
             .collect();
-        allocator.allocate_for_service("graph-node", &gn_config).unwrap();
+        allocator
+            .allocate_for_service("graph-node", &gn_config)
+            .unwrap();
 
         // Test substitution
         let template = "postgres://localhost:{postgres.port.main}/graph";
-        let result = allocator.substitute_ports(template, Some("graph-node")).unwrap();
+        let result = allocator
+            .substitute_ports(template, Some("graph-node"))
+            .unwrap();
         assert_eq!(result, "postgres://localhost:5432/graph");
 
         let template = "http://localhost:{port.http}/graphql";
-        let result = allocator.substitute_ports(template, Some("graph-node")).unwrap();
+        let result = allocator
+            .substitute_ports(template, Some("graph-node"))
+            .unwrap();
         assert_eq!(result, "http://localhost:8000/graphql");
     }
 
@@ -509,7 +533,9 @@ admin: 8020
         .into_iter()
         .collect();
 
-        allocator.allocate_for_service("my-service", &config).unwrap();
+        allocator
+            .allocate_for_service("my-service", &config)
+            .unwrap();
 
         assert_eq!(allocator.get_port("my-service", "http"), Some(8000));
         assert_eq!(allocator.get_port("my-service", "ws"), Some(8001));

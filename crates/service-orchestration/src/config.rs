@@ -587,11 +587,7 @@ impl ServiceTarget {
     pub fn port_config(&self) -> Option<&PortConfig> {
         match self {
             ServiceTarget::Process { ports, .. } | ServiceTarget::Docker { ports, .. } => {
-                if ports.is_empty() {
-                    None
-                } else {
-                    Some(ports)
-                }
+                if ports.is_empty() { None } else { Some(ports) }
             }
             _ => None,
         }
@@ -800,10 +796,7 @@ mod tests {
                 ("http".to_string(), crate::ports::PortSpec::Fixed(80)),
                 ("https".to_string(), crate::ports::PortSpec::Fixed(443)),
             ]),
-            container_ports: HashMap::from([
-                ("http".to_string(), 80),
-                ("https".to_string(), 443),
-            ]),
+            container_ports: HashMap::from([("http".to_string(), 80), ("https".to_string(), 443)]),
             volumes: vec!["/data:/app/data".to_string()],
         };
 

@@ -249,12 +249,18 @@ mod tests {
 
         // Set up port allocator
         let mut allocator = PortAllocator::new(50000, 50100);
-        let postgres_ports: PortConfig =
-            [("main".to_string(), PortSpec::Fixed(5432))].into_iter().collect();
-        let anvil_ports: PortConfig =
-            [("rpc".to_string(), PortSpec::Fixed(8545))].into_iter().collect();
-        allocator.allocate_for_service("postgres", &postgres_ports).unwrap();
-        allocator.allocate_for_service("anvil", &anvil_ports).unwrap();
+        let postgres_ports: PortConfig = [("main".to_string(), PortSpec::Fixed(5432))]
+            .into_iter()
+            .collect();
+        let anvil_ports: PortConfig = [("rpc".to_string(), PortSpec::Fixed(8545))]
+            .into_iter()
+            .collect();
+        allocator
+            .allocate_for_service("postgres", &postgres_ports)
+            .unwrap();
+        allocator
+            .allocate_for_service("anvil", &anvil_ports)
+            .unwrap();
 
         // Process template
         let ctx = RunContext::with_run_id("test-run", &run_data_dir, &templates_dir);

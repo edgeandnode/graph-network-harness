@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Serialize;
 use serde_json::Value;
-use service_orchestration::{OrchestrationError, TypedTaskProvider};
+use service_orchestration::{OrchestrationError, RuntimeContext, TypedTaskProvider};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
@@ -48,11 +48,16 @@ pub trait DeploymentTask: Send + Sync + 'static {
         Ok(false)
     }
 
-    /// Execute the task, returning a stream of state changes
+    /// Execute the task with runtime context, returning a stream of state changes
+    ///
+    /// The runtime context provides access to:
+    /// - Outputs from completed dependency tasks (contract addresses, etc.)
+    /// - Allocated ports for services
+    /// - Other runtime state
     ///
     /// The task runs its internal state machine and emits state transitions
     /// as they occur. The final state indicates completion or failure.
-    async fn execute(&self) -> Result<Receiver<Self::State>, Error>;
+    async fn execute(&self, ctx: &RuntimeContext) -> Result<Receiver<Self::State>, Error>;
 }
 
 /// Adapter that adds JSON serialization to any DeploymentTask
@@ -87,8 +92,9 @@ where
     /// Execute the task, returning a receiver for JSON state updates and a converter future
     pub async fn execute_json(
         &self,
+        ctx: &RuntimeContext,
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
-        let state_rx = self.inner.execute().await?;
+        let state_rx = self.inner.execute(ctx).await?;
         let (tx, rx) = async_channel::unbounded();
 
         // Create a future to convert states to JSON
@@ -113,6 +119,7 @@ pub trait JsonTask: Send + Sync {
     /// Execute the task, returning a stream of JSON state updates and a converter future
     async fn execute_json(
         &self,
+        ctx: &RuntimeContext,
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error>;
 
     /// Get the state schema
@@ -132,8 +139,9 @@ where
 
     async fn execute_json(
         &self,
+        ctx: &RuntimeContext,
     ) -> Result<(Receiver<Value>, Pin<Box<dyn Future<Output = ()> + Send>>), Error> {
-        self.execute_json().await
+        self.execute_json(ctx).await
     }
 
     fn state_schema(&self) -> &Value {
@@ -209,17 +217,18 @@ impl JsonTaskRegistry {
         task.validate().await
     }
 
-    /// Execute a task
+    /// Execute a task with runtime context
     pub async fn execute<S: Spawner>(
         &self,
         instance_name: &str,
+        ctx: &RuntimeContext,
         spawner: &S,
     ) -> Result<Receiver<Value>, Error> {
         let task = self.get(instance_name).ok_or_else(|| {
             Error::service_type(format!("Task instance '{instance_name}' not found"))
         })?;
 
-        let (rx, converter) = task.execute_json().await?;
+        let (rx, converter) = task.execute_json(ctx).await?;
         spawner.spawn(converter);
         Ok(rx)
     }
@@ -254,6 +263,7 @@ impl TypedTaskProvider for JsonTaskRegistry {
     async fn execute(
         &self,
         name: &str,
+        ctx: &RuntimeContext,
         spawner: &dyn Spawner,
     ) -> Result<Receiver<Value>, OrchestrationError> {
         let task = self.get(name).ok_or_else(|| {
@@ -261,7 +271,7 @@ impl TypedTaskProvider for JsonTaskRegistry {
         })?;
 
         let (rx, converter) = task
-            .execute_json()
+            .execute_json(ctx)
             .await
             .map_err(|e| OrchestrationError::Other(e.to_string()))?;
 
@@ -303,7 +313,7 @@ mod tests {
 
         const TASK_TYPE: &'static str = "test-task";
 
-        async fn execute(&self) -> Result<Receiver<Self::State>, Error> {
+        async fn execute(&self, _ctx: &RuntimeContext) -> Result<Receiver<Self::State>, Error> {
             let (tx, rx) = async_channel::bounded(10);
             let state = self.state.clone();
 
@@ -354,8 +364,9 @@ mod tests {
             .register("test-1".to_string(), TestTask::new())
             .unwrap();
 
+        let ctx = RuntimeContext::new();
         let spawner = SmolSpawner;
-        let rx = stack.execute("test-1", &spawner).await.unwrap();
+        let rx = stack.execute("test-1", &ctx, &spawner).await.unwrap();
 
         // Collect state transitions
         let mut states = Vec::new();
@@ -383,8 +394,9 @@ mod tests {
         stack.register("test-1".to_string(), task).unwrap();
 
         // Execute the task
+        let ctx = RuntimeContext::new();
         let spawner = SmolSpawner;
-        let rx = stack.execute("test-1", &spawner).await.unwrap();
+        let rx = stack.execute("test-1", &ctx, &spawner).await.unwrap();
 
         // First state should be Running
         let state = rx.recv().await.unwrap();
@@ -420,10 +432,11 @@ mod tests {
         use async_runtime_compat::smol::SmolSpawner;
 
         let stack = JsonTaskRegistry::new();
+        let ctx = RuntimeContext::new();
         let spawner = SmolSpawner;
 
         // Try to execute non-existent task
-        let result = stack.execute("non-existent", &spawner).await;
+        let result = stack.execute("non-existent", &ctx, &spawner).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 

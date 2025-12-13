@@ -6,7 +6,9 @@
 #![allow(missing_docs)]
 
 use async_trait::async_trait;
-use command_executor::{Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher};
+use command_executor::{
+    Command, Executor, ProcessEventType, ProcessHandle, backends::LocalLauncher,
+};
 use futures::StreamExt;
 use harness_core::{Error, config_traits::TaskFromConfig, task::DeploymentTask};
 use schemars::JsonSchema;
@@ -189,7 +191,10 @@ impl DeploymentTask for CargoBuildTask {
 
     const TASK_TYPE: &'static str = "cargo-build";
 
-    async fn execute(&self) -> Result<async_channel::Receiver<Self::State>, Error> {
+    async fn execute(
+        &self,
+        _ctx: &service_orchestration::RuntimeContext,
+    ) -> Result<async_channel::Receiver<Self::State>, Error> {
         let (tx, rx) = async_channel::unbounded();
 
         let source_dir = self.source_dir.clone();

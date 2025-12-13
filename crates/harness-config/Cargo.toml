@@ -19,7 +19,6 @@ nom = { workspace = true }
 
 # Internal dependencies
 service-orchestration = { path = "../service-orchestration" }
-service-registry = { path = "../service-registry" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

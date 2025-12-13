@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 # Core async types
 futures = "0.3"
+cfg-if = "1.0"
 
 # Optional runtime dependencies
 tokio = { version = "1", optional = true, features = ["rt"] }
@@ -16,7 +17,7 @@ smol = { version = "2", optional = true }
 async-global-executor = { version = "2", optional = true }
 
 [features]
-default = []
+default = ["smol"]
 tokio = ["dep:tokio"]
 async-std = ["dep:async-std"]
 smol = ["dep:smol"]

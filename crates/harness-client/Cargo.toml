@@ -1,0 +1,62 @@
+[package]
+name = "harness-client"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "CLI and client library for graph-network-harness"
+
+[[bin]]
+name = "harness"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace dependencies
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Runtime-agnostic async runtime
+smol = { workspace = true }
+smol-potat = { workspace = true }
+async-net = { workspace = true }
+async-tungstenite = { workspace = true }
+futures = { workspace = true }
+futures-rustls = { workspace = true }
+async-io = "2.0"
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+
+# Internal dependencies
+harness-config = { path = "../harness-config" }
+harness-core = { path = "../harness-core" }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
+
+# For table output
+comfy-table = "7.1"
+
+# For daemon functionality
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-appender = "0.2"
+dirs = "5.0"
+
+# For TLS certificate generation
+rcgen = { version = "0.12", features = ["pem"] }
+time = "0.3"
+x509-parser = "0.15"
+pem = "3.0"
+chrono = { workspace = true }
+base64 = "0.22"
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+
+# For demo daemon example
+async-trait = { workspace = true }
+schemars = { workspace = true }
+rand = "0.8"
+async-channel = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+tempfile = "3.8"

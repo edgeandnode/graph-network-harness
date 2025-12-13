@@ -1,11 +1,12 @@
 //! Launcher trait for executing commands in different contexts
 
 use crate::command::Command;
-use crate::error::Result;
+use crate::error::Error;
 use crate::event::ProcessEvent;
 use crate::process::{ExitResult, ProcessHandle};
 use async_trait::async_trait;
 use futures::stream::Stream;
+use std::result::Result;
 
 /// A launcher that can execute commands in a specific context
 #[async_trait]
@@ -24,10 +25,10 @@ pub trait Launcher: Send + Sync + 'static {
         &self,
         target: &Self::Target,
         command: Command,
-    ) -> Result<(Self::EventStream, Self::Handle)>;
+    ) -> Result<(Self::EventStream, Self::Handle), Error>;
 
     /// Execute a command and wait for it to complete, capturing output
-    async fn execute(&self, target: &Self::Target, command: Command) -> Result<ExitResult> {
+    async fn execute(&self, target: &Self::Target, command: Command) -> Result<ExitResult, Error> {
         use futures::StreamExt;
 
         let (mut events, mut handle) = self.launch(target, command).await?;

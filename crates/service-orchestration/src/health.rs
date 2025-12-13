@@ -67,7 +67,7 @@ impl HealthChecker {
                 }
             }
             Err(e) => {
-                let error = format!("Health check execution failed: {}", e);
+                let error = format!("Health check execution failed: {e}");
                 warn!("Health check execution failed: {}", e);
                 Ok(HealthStatus::Unhealthy(error))
             }

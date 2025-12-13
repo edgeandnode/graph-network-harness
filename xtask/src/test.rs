@@ -60,7 +60,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
     if args.all_features {
         println!("Features: all-features (includes docker-tests, ssh-tests, integration-tests)");
     } else if let Some(features) = &args.features {
-        println!("Features: {}", features);
+        println!("Features: {features}");
     }
     println!();
 
@@ -84,7 +84,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    println!("{}", data);
+                    println!("{data}");
 
                     // Parse test output
                     test_summary.parse_line(data);
@@ -95,7 +95,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
                 }
             }
             ProcessEventType::Started { pid } => {
-                eprintln!("Test process started (PID: {})", pid);
+                eprintln!("Test process started (PID: {pid})");
             }
             ProcessEventType::Exited { .. } => {
                 // Handled after loop
@@ -106,7 +106,7 @@ pub async fn run(args: TestArgs) -> Result<()> {
     let status = handle.wait().await?;
 
     // Print summary
-    println!("\n{}", test_summary);
+    println!("\n{test_summary}");
 
     if !status.success() || test_failed {
         bail!("Tests failed");

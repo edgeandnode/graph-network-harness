@@ -8,36 +8,41 @@ repository = { workspace = true }
 description = "Heterogeneous service orchestration implementing ADR-007"
 
 [features]
-default = []
+default = ["smol"]
 ssh-tests = ["command-executor/ssh-tests"]
 docker-tests = ["command-executor/docker-tests"]
 test-utils = []
+# Runtime features (select one)
+smol = ["async-runtime-compat/smol", "dep:smol"]
+tokio = ["async-runtime-compat/tokio", "dep:tokio"]
+async-std = ["async-runtime-compat/async-std", "dep:async-std"]
 
 [dependencies]
 # Workspace dependencies
 anyhow = { workspace = true }
+async-channel = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
+chrono = { workspace = true }
 
 # Internal crates
 command-executor = { workspace = true, features = ["ssh"] }
-service-registry = { workspace = true }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 # Additional dependencies for orchestration
 tokio = { version = "1.0", features = ["full"], optional = true }
 async-std = { version = "1.12", optional = true }
 smol = { version = "2.0", optional = true }
 
-# For package management
-tar = "0.4"
-flate2 = "1.0"
 tempfile = { workspace = true }
+rand = { workspace = true }
 
 # For state directory management
 dirs = "5.0"
@@ -47,4 +52,11 @@ tempfile = { workspace = true }
 # Use smol for runtime-agnostic tests
 smol = "2.0"
 smol-potat = { workspace = true }
+# Enable smol feature for tests
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+# Enable smol feature for self during tests
+service-orchestration = { path = ".", features = ["smol"] }
+# For SSH integration tests
+signal-hook = "0.3"
+libc = "0.2"
 

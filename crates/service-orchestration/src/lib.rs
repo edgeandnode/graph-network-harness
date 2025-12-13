@@ -8,8 +8,8 @@
 //!
 //! ## Example
 //!
-//! ```rust
-//! use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget};
+//! ```rust,ignore
+//! use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget, ProcessCommand};
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let mut manager = ServiceManager::new().await?;
@@ -17,13 +17,17 @@
 //! let config = ServiceConfig {
 //!     name: "test-service".to_string(),
 //!     target: ServiceTarget::Process {
-//!         binary: "echo".to_string(),
-//!         args: vec!["hello".to_string()],
+//!         command: ProcessCommand::Legacy { command: "echo hello".to_string() },
 //!         env: Default::default(),
+//!         ports: Default::default(),
+//!         resources: None,
 //!         working_dir: None,
+//!         complete_if: None,
 //!     },
-//!     dependencies: vec![],
+//!     depends_on: vec![],
 //!     health_check: None,
+//!     templates: vec![],
+//!     allocated_ports: Default::default(),
 //! };
 //!
 //! manager.start_service("test-service", config).await?;
@@ -35,34 +39,56 @@
 #![warn(unsafe_code)]
 
 mod config;
+mod context;
+mod dependency_graph;
+// mod discovery; // TODO: Refactor to remove service-registry dependency
 mod executors;
 mod health;
+// mod health_integration; // TODO: Refactor to remove service-registry dependency
 mod manager;
-mod package;
+mod ports;
+mod resources;
+mod runtime_context;
+mod state;
 mod task_config;
+mod task_executors;
+mod task_manager;
+mod template;
 
 pub use config::{
-    Dependency, HealthCheck, RemoteMode, ServiceConfig, ServiceStatus, ServiceTarget,
+    CommandSpec, Dependency, HealthCheck, ParamValue, ProcessCommand, RemoteMode, ServiceConfig,
+    ServiceStatus, ServiceTarget, TemplateConfig,
 };
+pub use context::OrchestrationContext;
+pub use dependency_graph::{DependencyGraph, DependencyNode};
+pub use ports::{PortAllocator, PortConfig, PortError, PortRegistry, PortSpec};
+pub use resources::{ByteSize, CpuLimit, ResourceLimits};
+// pub use discovery::{ConfigurationProvider, ServiceDiscovery, ServiceEndpoint}; // TODO: Refactor
 pub use executors::{
-    AttachedService, DockerAttachedExecutor, DockerExecutor, EventStream, EventStreamable,
-    ManagedService, ProcessExecutor, RunningService, ServiceExecutor, SystemdAttachedExecutor,
+    AttachedExecutor, AttachedService, DockerExecutor, EventStreamable, ManagedService,
+    ProcessExecutor, RunningService, ServiceExecutor,
 };
 pub use health::{HealthCheckable, HealthChecker, HealthMonitor, HealthStatus};
+// pub use health_integration::{HealthMonitoringExt, HealthMonitoringManager}; // TODO: Refactor
 pub use manager::ServiceManager;
-pub use package::{
-    DeployedPackage, PackageBuilder, PackageDeployer, PackageHealthCheck, PackageManifest,
-    PackageService, RemoteTarget,
+pub use runtime_context::RuntimeContext;
+pub use state::{
+    DeploymentState, DeploymentStatus, DeploymentSummary, ServiceDeploymentState, ServiceState,
+    ServiceStateFilter, StateManager, TaskExecutionState, TaskState, TaskStateFilter,
 };
 pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
+pub use task_executors::ProcessTaskExecutor;
+pub use task_manager::{TaskExecution, TaskExecutor, TaskManager, TaskStatus, TypedTaskProvider};
+pub use template::{RunContext, TemplateError, TemplateProcessor};
+
+// Re-export with the old name for backwards compatibility during transition
+#[deprecated(note = "Use OrchestrationError instead")]
+pub use OrchestrationError as Error;
 
 /// Error types for orchestration operations
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
-    /// Service registry errors
-    #[error("Service registry error: {0}")]
-    Registry(#[from] service_registry::Error),
-
+pub enum OrchestrationError {
+    // Registry errors removed - no longer using service-registry
     /// Command executor errors  
     #[error("Command execution error: {0}")]
     CommandExecutor(#[from] command_executor::Error),
@@ -90,6 +116,10 @@ pub enum Error {
     /// Health check error
     #[error("Health check error: {0}")]
     HealthCheck(String),
+
+    /// Port allocation error
+    #[error("Port allocation error: {0}")]
+    Port(#[from] crate::ports::PortError),
 
     /// IO error
     #[error("IO error: {0}")]

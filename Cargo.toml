@@ -1,11 +1,12 @@
 [workspace]
 members = [
     "crates/command-executor",
-    "crates/service-registry",
     "crates/service-orchestration",
     "crates/harness-config",
     "crates/harness-core",
-    "crates/harness",
+    "crates/harness-macros",
+    "crates/harness-macros-test",
+    "crates/harness-client",
     "crates/graph-test-daemon",
     "crates/async-runtime-compat",
     "xtask",
@@ -33,6 +34,7 @@ reqwest = { version = "0.12.15", features = ["json"] }
 
 # Utilities
 uuid = { version = "1.11", features = ["v4", "serde"] }
+rand = "0.9"
 tempfile = "3.13"
 futures = "0.3"
 futures-util = "0.3"
@@ -44,12 +46,10 @@ async-trait = "0.1"
 pin-project-lite = "0.2"
 nom = "8.0.0"
 schemars = "1.0.4"
+statig = { version = "0.3.0", features = ["async"] }
+dotenvy = "0.15"
 
-# New dependencies for distributed features
-wireguard-control = "1.5"
-
-# Database
-sled = "0.34"
+# Utilities
 dirs = "6.0"
 
 # Service registry dependencies
@@ -76,7 +76,6 @@ alloy-rpc-types-anvil = "1.0"
 
 # Internal crates
 command-executor = { path = "crates/command-executor" }
-service-registry = { path = "crates/service-registry" }
 service-orchestration = { path = "crates/service-orchestration" }
 
 [workspace.lints.rust]

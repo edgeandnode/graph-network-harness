@@ -1,0 +1,156 @@
+# Graph Protocol Test Stack
+name: graph-stack
+description: Graph Protocol test environment
+
+services:
+  anvil:
+    service_type: anvil
+    name: anvil
+    target:
+      type: process
+      params:
+        host: 0.0.0.0
+        chain_id: 1337
+        block_time: 1
+      ports:
+        rpc: auto
+      resources:
+        memory: 512M
+        cpu: 100%
+      command_template: "anvil --host {host} --port {port.rpc} --chain-id {chain_id} --block-time {block_time}"
+    health_check:
+      command: curl
+      args:
+        - "-sf"
+        - "-X"
+        - "POST"
+        - "-H"
+        - "Content-Type: application/json"
+        - "--data"
+        - '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+        - "http://localhost:{port.rpc}"
+      interval: 1
+      timeout: 1
+      retries: 5
+
+  postgres:
+    service_type: postgres
+    name: postgres
+    target:
+      type: docker
+      image: postgres:15
+      env:
+        POSTGRES_USER: graph-node
+        POSTGRES_PASSWORD: graph-password
+        POSTGRES_DB: graph-node
+      ports:
+        main: auto
+      container_ports:
+        main: 5432
+      volumes: []
+    health_check:
+      # Check if postgres port is accepting TCP connections
+      command: bash
+      args:
+        - "-c"
+        - "nc -z localhost {port.main}"
+      interval: 2
+      timeout: 5
+      retries: 15
+
+  ipfs:
+    service_type: ipfs
+    name: ipfs
+    target:
+      type: docker
+      image: ipfs/kubo:latest
+      env:
+        IPFS_PROFILE: server
+      ports:
+        api: auto
+        gateway: auto
+      container_ports:
+        api: 5001
+        gateway: 8080
+      volumes: []
+    health_check:
+      command: curl
+      args:
+        - "-sf"
+        - "http://localhost:{port.api}/api/v0/id"
+      interval: 2
+      timeout: 5
+      retries: 15
+
+  graph-node:
+    service_type: graph-node
+    name: graph-node
+    depends_on:
+      - service: postgres
+      - service: ipfs
+      - service: anvil
+      - task: build-graph-node
+    templates:
+      - source: graph-node/config.toml.template
+    target:
+      type: process
+      ports:
+        http: auto
+        ws: auto
+        admin: auto
+        metrics: auto
+      env:
+        GRAPH_LOG: info
+        GRAPH_NODE_CONFIG: "{run.config_dir}/config.toml"
+        ETHEREUM_REORG_THRESHOLD: "1"
+        ETHEREUM_ANCESTOR_COUNT: "1"
+      command_template: /home/dan/Development/en/graph-node/target/release/graph-node --config {run.config_dir}/config.toml
+    health_check:
+      command: curl
+      args:
+        - "-sf"
+        - "http://localhost:{port.http}/health"
+      interval: 2
+      timeout: 5
+      retries: 30
+
+# One-time deployment tasks (executed by Rust state machines)
+tasks:
+  build-graph-node:
+    task_type: cargo-build
+    depends_on: []
+    target:
+      type: process
+      typed: true
+      working_dir: /home/dan/Development/en/graph-node
+      env: {}
+    config:
+      binary_name: "graph-node"
+      release: true
+
+  deploy-contracts:
+    task_type: graph-contracts-deployment
+    depends_on:
+      - service: anvil
+    target:
+      type: process
+      typed: true
+      working_dir: "${GRAPH_CONTRACTS_DIR:-/home/dan/Development/en/contracts}/packages/contracts"
+      env:
+        ETHEREUM_URL: "http://localhost:{anvil.port.rpc}"
+
+  deploy-graph-network-subgraph:
+    task_type: subgraph-deployment
+    depends_on:
+      - service: graph-node
+      - service: ipfs
+      - task: deploy-contracts
+    target:
+      type: process
+      typed: true
+      working_dir: "${GRAPH_SUBGRAPH_DIR:-/home/dan/Development/en/graph-network-subgraph}"
+      env:
+        GRAPH_NODE_URL: "http://localhost:{graph-node.port.admin}"
+        IPFS_URL: "http://localhost:{ipfs.port.api}"
+        ETHEREUM_URL: "http://localhost:{anvil.port.rpc}"
+        SUBGRAPH_NAME: "graph-network"

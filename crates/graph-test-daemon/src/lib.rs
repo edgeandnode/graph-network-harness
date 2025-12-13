@@ -7,21 +7,32 @@
 #![warn(missing_docs)]
 
 pub mod daemon;
-pub mod service_registry;
 pub mod services;
-pub mod services_test;
 pub mod tasks;
 
 // Export the main types
 pub use daemon::GraphTestDaemon;
 pub use services::{
-    AnvilAction, AnvilEvent, AnvilService, GraphNodeAction, GraphNodeEvent, GraphNodeService,
-    GraphTestStack, IpfsAction, IpfsEvent, IpfsService, PostgresAction, PostgresEvent,
-    PostgresService,
+    AnvilEvent, AnvilService, GraphNodeService, GraphTestStack, IpfsService, PostgresService,
 };
 pub use tasks::{
-    GraphContractsAction, GraphContractsEvent, GraphContractsTask, TapContractsAction,
-    TapContractsEvent, TapContractsTask,
+    // State machine exports (internal use)
+    GraphContractsContext,
+    GraphContractsDeployTaskState,
+    GraphContractsDeployTaskStateMachine,
+    GraphContractsEvent,
+    // Task types
+    GraphContractsTask,
+    SubgraphContext,
+    SubgraphDeployTask,
+    SubgraphDeployTaskState,
+    SubgraphDeployTaskStateMachine,
+    SubgraphEvent,
+    TapContractsContext,
+    TapContractsDeployTaskState,
+    TapContractsDeployTaskStateMachine,
+    TapContractsEvent,
+    TapContractsTask,
 };
 
 /// Re-export core types for convenience

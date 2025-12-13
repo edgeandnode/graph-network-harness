@@ -2,19 +2,12 @@
 
 use thiserror::Error;
 
-/// Result type alias for harness-core operations
-pub type Result<T> = std::result::Result<T, Error>;
-
 /// Core harness error types
 #[derive(Error, Debug)]
 pub enum Error {
     /// Service orchestration error
     #[error("Service orchestration error: {0}")]
     ServiceOrchestration(#[from] service_orchestration::Error),
-
-    /// Service registry error
-    #[error("Service registry error: {0}")]
-    ServiceRegistry(#[from] service_registry::Error),
 
     /// Configuration error
     #[error("Configuration error: {0}")]
@@ -57,6 +50,10 @@ pub enum Error {
     /// Validation error
     #[error("Validation error: {0}")]
     Validation(String),
+
+    /// Service not found error
+    #[error("Service not found: {0}")]
+    ServiceNotFound(String),
 }
 
 impl Error {
@@ -92,5 +89,15 @@ impl Error {
     /// Create a validation error
     pub fn validation(message: impl Into<String>) -> Self {
         Self::Validation(message.into())
+    }
+
+    /// Create a service not found error
+    pub fn service_not_found(name: impl Into<String>) -> Self {
+        Self::ServiceNotFound(name.into())
+    }
+
+    /// Create a service orchestration error
+    pub fn service_orchestration(error: service_orchestration::Error) -> Self {
+        Self::ServiceOrchestration(error)
     }
 }

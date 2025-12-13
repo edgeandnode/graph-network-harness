@@ -1,7 +1,8 @@
 //! Process management traits and types
 
-use crate::error::Result;
+use crate::error::Error;
 use async_trait::async_trait;
+use std::result::Result;
 
 /// A handle to control a running process
 #[async_trait]
@@ -10,22 +11,22 @@ pub trait ProcessHandle: Send + Sync {
     fn pid(&self) -> Option<u32>;
 
     /// Wait for the process to complete and return its exit status
-    async fn wait(&mut self) -> Result<ExitStatus>;
+    async fn wait(&mut self) -> Result<ExitStatus, Error>;
 
     /// Send SIGTERM (or equivalent) for graceful shutdown
-    async fn terminate(&mut self) -> Result<()>;
+    async fn terminate(&mut self) -> Result<(), Error>;
 
     /// Send SIGKILL (or equivalent) to forcefully stop the process
-    async fn kill(&mut self) -> Result<()>;
+    async fn kill(&mut self) -> Result<(), Error>;
 
     /// Send SIGINT (or equivalent) to interrupt the process
-    async fn interrupt(&mut self) -> Result<()>;
+    async fn interrupt(&mut self) -> Result<(), Error>;
 
     /// Send SIGHUP (or equivalent) to reload/reconfigure the process
     ///
     /// Note: Not all processes handle SIGHUP. This is typically used
     /// by daemons to reload their configuration.
-    async fn reload(&mut self) -> Result<()>;
+    async fn reload(&mut self) -> Result<(), Error>;
 }
 
 /// Process exit status

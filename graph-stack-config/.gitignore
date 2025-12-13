@@ -1,0 +1,6 @@
+# Ignore generated configs, keep templates
+*.toml
+!*.toml.template
+
+# Runtime data (generated configs, logs, state)
+run-data/

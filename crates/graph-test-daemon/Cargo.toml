@@ -24,21 +24,41 @@ clap = { workspace = true }
 
 # Harness dependencies
 harness-core = { path = "../harness-core" }
-service-orchestration = { path = "../service-orchestration" }
-service-registry = { path = "../service-registry" }
+harness-macros = { path = "../harness-macros" }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
 command-executor = { path = "../command-executor" }
-async-runtime-compat = { path = "../async-runtime-compat" }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 # Graph Protocol specific dependencies
 reqwest = { workspace = true }
 schemars = { workspace = true }
 chrono = { workspace = true }
 async-channel = { workspace = true }
+async-fs = { workspace = true }
+statig = { version = "0.3", features = ["async"] }
+regex = { workspace = true }
+
+# Binary dependencies
+smol-potat = { workspace = true }
+async-io = "2.3"
+ctrlc = "3.4"
+dotenvy = { workspace = true }
+indicatif = "0.17"
+console = "0.15"
 
 [dev-dependencies]
 tempfile = { workspace = true }
 smol-potat = { workspace = true }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+service-orchestration = { path = "../service-orchestration", features = ["smol"] }
+signal-hook = "0.3"
+libc = "0.2"
+async-io = "2.3"
 
 [[bin]]
 name = "graph-test-daemon"
 path = "src/main.rs"
+
+[[bin]]
+name = "graph_stack_runner"
+path = "src/bin/graph_stack_runner.rs"

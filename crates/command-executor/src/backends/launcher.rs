@@ -8,12 +8,13 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::command::Command;
-use crate::error::{Error, Result};
+use crate::error::Error;
 use crate::event::{LogFilter, LogSource, NoOpFilter, ProcessEvent, ProcessEventType};
 use crate::launcher::Launcher;
 use crate::process::{ExitStatus, ProcessHandle};
 use crate::stdin::StdinHandle;
 use crate::target::Target;
+use std::result::Result;
 
 /// Launcher for executing processes locally
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +50,7 @@ impl Launcher for LocalLauncher {
         &self,
         target: &Self::Target,
         mut command: Command,
-    ) -> Result<(Self::EventStream, Self::Handle)> {
+    ) -> Result<(Self::EventStream, Self::Handle), Error> {
         match target {
             Target::Command | Target::ManagedProcess(_) => {
                 // Take stdin channel if provided
@@ -67,7 +68,7 @@ impl Launcher for LocalLauncher {
 
                 let mut child = async_cmd
                     .spawn()
-                    .map_err(|e| Error::spawn_failed(format!("Failed to spawn process: {}", e)))?;
+                    .map_err(|e| Error::spawn_failed(format!("Failed to spawn process: {e}")))?;
 
                 let child_id = child.id();
 
@@ -97,13 +98,6 @@ impl Launcher for LocalLauncher {
 
                 Ok((events, handle))
             }
-
-            _ => {
-                // Other target types not implemented yet
-                Err(Error::spawn_failed(
-                    "Target type not yet implemented for LocalLauncher",
-                ))
-            }
         }
     }
 }
@@ -114,12 +108,12 @@ impl ProcessHandle for LocalProcessHandle {
         Some(self.child.id())
     }
 
-    async fn wait(&mut self) -> Result<ExitStatus> {
+    async fn wait(&mut self) -> Result<ExitStatus, Error> {
         let status = self
             .child
             .status()
             .await
-            .map_err(|e| Error::spawn_failed(format!("Failed to wait for process: {}", e)))?;
+            .map_err(|e| Error::spawn_failed(format!("Failed to wait for process: {e}")))?;
 
         Ok(ExitStatus {
             code: status.code(),
@@ -131,7 +125,7 @@ impl ProcessHandle for LocalProcessHandle {
         })
     }
 
-    async fn terminate(&mut self) -> Result<()> {
+    async fn terminate(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -152,7 +146,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn kill(&mut self) -> Result<()> {
+    async fn kill(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -173,7 +167,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn interrupt(&mut self) -> Result<()> {
+    async fn interrupt(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};
@@ -193,7 +187,7 @@ impl ProcessHandle for LocalProcessHandle {
         Ok(())
     }
 
-    async fn reload(&mut self) -> Result<()> {
+    async fn reload(&mut self) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use nix::sys::signal::{self, Signal};

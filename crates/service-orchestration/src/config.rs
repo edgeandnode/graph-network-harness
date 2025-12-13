@@ -3,31 +3,216 @@
 //! This module defines the configuration model for services that matches
 //! the ADR-007 specification for heterogeneous service orchestration.
 
+use crate::ports::PortConfig;
+use crate::resources::ResourceLimits;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
-/// Dependency specification for services and tasks
+/// Parameter value that can be a string, number, or boolean
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
+pub enum ParamValue {
+    /// String value
+    String(String),
+    /// Unsigned 32-bit integer
+    U32(u32),
+    /// Boolean value
+    Bool(bool),
+}
+
+impl ParamValue {
+    /// Convert to string for substitution in templates
+    pub fn as_string(&self) -> String {
+        match self {
+            ParamValue::String(s) => s.clone(),
+            ParamValue::U32(n) => n.to_string(),
+            ParamValue::Bool(b) => b.to_string(),
+        }
+    }
+
+    /// Try to parse as u32
+    pub fn as_u32(&self) -> Option<u32> {
+        match self {
+            ParamValue::U32(n) => Some(*n),
+            ParamValue::String(s) => s.parse().ok(),
+            ParamValue::Bool(_) => None,
+        }
+    }
+
+    /// Try to parse as u16
+    pub fn as_u16(&self) -> Option<u16> {
+        self.as_u32().and_then(|n| u16::try_from(n).ok())
+    }
+
+    /// Try to parse as u64
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            ParamValue::U32(n) => Some(*n as u64),
+            ParamValue::String(s) => s.parse().ok(),
+            ParamValue::Bool(_) => None,
+        }
+    }
+
+    /// Try to get as bool
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            ParamValue::Bool(b) => Some(*b),
+            ParamValue::String(s) => match s.as_str() {
+                "true" | "yes" | "1" => Some(true),
+                "false" | "no" | "0" => Some(false),
+                _ => None,
+            },
+            ParamValue::U32(n) => Some(*n != 0),
+        }
+    }
+}
+
+impl fmt::Display for ParamValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
+
+impl From<String> for ParamValue {
+    fn from(s: String) -> Self {
+        ParamValue::String(s)
+    }
+}
+
+impl From<&str> for ParamValue {
+    fn from(s: &str) -> Self {
+        ParamValue::String(s.to_string())
+    }
+}
+
+impl From<u32> for ParamValue {
+    fn from(n: u32) -> Self {
+        ParamValue::U32(n)
+    }
+}
+
+impl From<bool> for ParamValue {
+    fn from(b: bool) -> Self {
+        ParamValue::Bool(b)
+    }
+}
+
+/// Dependency specification for services and tasks
+///
+/// Supports two syntaxes in YAML:
+/// 1. Explicit (currently used): `- service: postgres` or `- task: deploy`
+/// 2. Namespaced (alternative): `- services.postgres` or `- tasks.deploy`
+///
+/// The explicit syntax deserializes directly to Service/Task variants.
+/// The namespaced syntax deserializes to Namespaced and needs resolve().
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged, rename_all = "kebab-case")]
 pub enum Dependency {
-    /// Dependency on a service
-    Service { service: String },
-    /// Dependency on a task
-    Task { task: String },
+    /// Namespaced dependency string that needs resolution
+    /// Examples: "services.postgres", "tasks.deploy", or bare "postgres"
+    /// Use resolve() to convert to Service or Task variant
+    Namespaced(String),
+    /// Explicit service dependency (from `service: name` in YAML)
+    Service {
+        /// Name of the service this depends on
+        service: String,
+    },
+    /// Explicit task dependency (from `task: name` in YAML)
+    Task {
+        /// Name of the task this depends on
+        task: String,
+    },
+}
+
+impl Dependency {
+    /// Parse a namespaced dependency string into Service or Task variant
+    ///
+    /// This is only needed for Namespaced variants. Service and Task variants
+    /// are already resolved and will be returned unchanged.
+    ///
+    /// Our YAML configs use the explicit syntax (service:/task:) so they don't
+    /// need resolution, but this method enables the alternative string syntax.
+    pub fn resolve(&self) -> Self {
+        match self {
+            Dependency::Namespaced(s) => {
+                if let Some(name) = s.strip_prefix("services.") {
+                    Dependency::Service {
+                        service: name.to_string(),
+                    }
+                } else if let Some(name) = s.strip_prefix("tasks.") {
+                    Dependency::Task {
+                        task: name.to_string(),
+                    }
+                } else {
+                    // Default to service for backward compatibility
+                    Dependency::Service { service: s.clone() }
+                }
+            }
+            other => other.clone(),
+        }
+    }
+}
+
+/// Template file configuration for config generation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TemplateConfig {
+    /// Source template file path (relative to templates/ directory)
+    /// e.g., "graph-node/config.toml.template"
+    pub source: String,
+    /// Output filename (written to run-data/runs/<run-id>/config/<service>/)
+    /// If not specified, derived from source by stripping .template suffix
+    #[serde(default)]
+    pub output: Option<String>,
 }
 
 /// Configuration for a service to be managed by the orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ServiceConfig {
     /// Unique service name
+    #[serde(default)]
     pub name: String,
     /// Where and how to run the service
     pub target: ServiceTarget,
     /// Services and tasks this service depends on
     #[serde(default)]
-    pub dependencies: Vec<Dependency>,
+    pub depends_on: Vec<Dependency>,
     /// Optional health check configuration
     pub health_check: Option<HealthCheck>,
+    /// Template files to process before starting service
+    /// Supports {service.port.name} substitution
+    #[serde(default)]
+    pub templates: Vec<TemplateConfig>,
+    /// Allocated ports (populated at runtime by manager)
+    /// Maps port name -> allocated host port
+    #[serde(skip)]
+    pub allocated_ports: HashMap<String, u16>,
+}
+
+/// Command execution specification
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum ProcessCommand {
+    /// Modern template-based command with parameters
+    Template {
+        /// Service parameters for substitution
+        #[serde(default)]
+        params: HashMap<String, ParamValue>,
+        /// Command template with {param} substitution
+        /// e.g., "anvil --port {port} --chain-id {chain_id}"
+        command_template: String,
+    },
+    /// Legacy raw command as a single string
+    Legacy {
+        /// Full command to execute (binary + args)
+        command: String,
+    },
+    /// Typed task - command provided by Rust implementation, not YAML
+    /// Use this for tasks where task_type determines the execution logic
+    Typed {
+        /// Marker field for serde disambiguation (must be true)
+        typed: bool,
+    },
 }
 
 /// Service execution target specification
@@ -37,24 +222,46 @@ pub enum ServiceTarget {
     /// Local process execution (managed)
     #[serde(rename = "process")]
     Process {
-        /// Binary to execute
-        binary: String,
-        /// Command line arguments
-        args: Vec<String>,
-        /// Environment variables
+        /// Command specification (either template or legacy)
+        #[serde(flatten)]
+        command: ProcessCommand,
+        /// Environment variables (supports {param} substitution with template)
+        #[serde(default)]
         env: HashMap<String, String>,
+        /// Named port configuration (e.g., http: auto, ws: 8001)
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        ports: PortConfig,
+        /// Resource limits (memory, CPU) for systemd-run cgroups
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resources: Option<ResourceLimits>,
         /// Working directory (optional)
+        #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
+        /// Command to check if task is already complete (exit 0 = complete, skip execution)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        complete_if: Option<String>,
     },
     /// Docker container execution (managed)
     #[serde(rename = "docker")]
     Docker {
+        /// Service parameters for substitution
+        #[serde(default)]
+        params: HashMap<String, ParamValue>,
         /// Container image
         image: String,
-        /// Environment variables
+        /// Command template override (optional - uses image default if not specified)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        command_template: Option<String>,
+        /// Environment variables (supports {param} substitution and {port.name} references)
+        #[serde(default)]
         env: HashMap<String, String>,
-        /// Port mappings (host ports)
-        ports: Vec<u16>,
+        /// Named port configuration (e.g., main: auto, admin: 8080)
+        /// Host ports are allocated, container ports must be specified
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        ports: PortConfig,
+        /// Container port for each named port (required for mapping)
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        container_ports: HashMap<String, u16>,
         /// Volume mounts
         #[serde(default)]
         volumes: Vec<String>,
@@ -77,8 +284,8 @@ pub enum ServiceTarget {
         /// Environment variables
         env: HashMap<String, String>,
     },
-    /// Remote execution via SSH (replaces RemoteLan/Wireguard)
-    #[serde(rename = "remote")]
+    /// Remote execution via SSH
+    #[serde(rename = "remote-ssh")]
     Remote {
         /// Remote host address
         host: String,
@@ -90,28 +297,31 @@ pub enum ServiceTarget {
         /// Environment variables
         env: HashMap<String, String>,
     },
-    /// Remote LAN execution via SSH (deprecated, use Remote)
-    #[deprecated(note = "Use Remote variant instead")]
-    RemoteLan {
+
+    /// Remote attach via SSH
+    #[serde(rename = "remote-attach")]
+    RemoteAttach {
         /// Remote host address
         host: String,
         /// SSH username
         user: String,
-        /// Binary to execute on remote host
-        binary: String,
-        /// Command line arguments
-        args: Vec<String>,
+        /// Process ID to attach to
+        pid: Option<u32>,
+        /// Process name to search for
+        process_name: Option<String>,
+        /// Environment variables
+        #[serde(default)]
+        env: HashMap<String, String>,
     },
-    /// WireGuard network execution with package deployment (deprecated, use Remote)
-    #[deprecated(note = "Use Remote variant instead")]
-    Wireguard {
-        /// WireGuard peer address
-        host: String,
-        /// SSH username
-        user: String,
-        /// Path to package tarball for deployment
-        package: String,
-    },
+}
+
+/// Command specification for layered execution
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommandSpec {
+    /// Binary to execute
+    pub binary: String,
+    /// Command line arguments
+    pub args: Vec<String>,
 }
 
 /// Remote execution mode
@@ -125,15 +335,149 @@ pub enum RemoteMode {
         /// Command line arguments
         args: Vec<String>,
     },
-    /// Deploy a package to the remote host
-    Package {
-        /// Path to package tarball
-        package: String,
-    },
+}
+
+impl ProcessCommand {
+    /// Get parameters if this is a template command
+    pub fn params(&self) -> Option<&HashMap<String, ParamValue>> {
+        match self {
+            ProcessCommand::Template { params, .. } => Some(params),
+            ProcessCommand::Legacy { .. } | ProcessCommand::Typed { .. } => None,
+        }
+    }
+
+    /// Substitute parameters in a template string
+    pub fn substitute_params(&self, template: &str) -> String {
+        match self {
+            ProcessCommand::Template { params, .. } => {
+                let mut result = template.to_string();
+                // Substitute params
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    result = result.replace(&placeholder, &value.as_string());
+                }
+                result
+            }
+            ProcessCommand::Legacy { .. } | ProcessCommand::Typed { .. } => template.to_string(),
+        }
+    }
+
+    /// Build the command as a vector of strings
+    /// Returns empty vec for Typed commands (execution handled by task_type implementation)
+    pub fn build_command(&self) -> Vec<String> {
+        match self {
+            ProcessCommand::Template {
+                command_template, ..
+            } => {
+                let command = self.substitute_params(command_template);
+                // Simple split on whitespace - could be improved with shell_words
+                command.split_whitespace().map(String::from).collect()
+            }
+            ProcessCommand::Legacy { command } => {
+                // Simple split on whitespace - could be improved with shell_words
+                command.split_whitespace().map(String::from).collect()
+            }
+            ProcessCommand::Typed { .. } => {
+                // Typed tasks don't have YAML-specified commands
+                Vec::new()
+            }
+        }
+    }
+
+    /// Returns true if this is a typed task (command provided by Rust implementation)
+    pub fn is_typed(&self) -> bool {
+        matches!(self, ProcessCommand::Typed { .. })
+    }
 }
 
 impl ServiceTarget {
-    /// Get environment variables from the target
+    /// Get a parameter value by key
+    pub fn get_param(&self, key: &str) -> Option<&ParamValue> {
+        let params = match self {
+            ServiceTarget::Process {
+                command: ProcessCommand::Template { params, .. },
+                ..
+            } => params,
+            ServiceTarget::Docker { params, .. } => params,
+            _ => return None,
+        };
+
+        params.get(key)
+    }
+
+    /// Get a parameter value by key as a string
+    pub fn get_param_str(&self, key: &str) -> Option<String> {
+        self.get_param(key).map(|v| v.as_string())
+    }
+
+    /// Get a parameter value by key and parse as u16
+    pub fn get_param_u16(&self, key: &str) -> Option<u16> {
+        self.get_param(key).and_then(|v| v.as_u16())
+    }
+
+    /// Get a parameter value by key and parse as u32
+    pub fn get_param_u32(&self, key: &str) -> Option<u32> {
+        self.get_param(key).and_then(|v| v.as_u32())
+    }
+
+    /// Get a parameter value by key and parse as u64
+    pub fn get_param_u64(&self, key: &str) -> Option<u64> {
+        self.get_param(key).and_then(|v| v.as_u64())
+    }
+
+    /// Get a parameter value by key and parse as bool
+    pub fn get_param_bool(&self, key: &str) -> Option<bool> {
+        self.get_param(key).and_then(|v| v.as_bool())
+    }
+
+    /// Get a parameter value and parse it with a default
+    pub fn get_param_parsed_or<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
+        self.get_param_str(key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default)
+    }
+
+    /// Substitute {param} placeholders in a template string
+    pub fn substitute_params(&self, template: &str) -> String {
+        match self {
+            ServiceTarget::Process { command, .. } => command.substitute_params(template),
+            ServiceTarget::Docker { params, .. } => {
+                let mut result = template.to_string();
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    result = result.replace(&placeholder, &value.as_string());
+                }
+                result
+            }
+            _ => template.to_string(),
+        }
+    }
+
+    /// Build the command from the command specification
+    pub fn build_command(&self) -> Option<Vec<String>> {
+        match self {
+            ServiceTarget::Process { command, .. } => Some(command.build_command()),
+            ServiceTarget::Docker {
+                command_template: Some(template),
+                ..
+            } => {
+                let command = self.substitute_params(template);
+                // Simple split on whitespace - could be improved with shell_words
+                Some(command.split_whitespace().map(String::from).collect())
+            }
+            _ => None,
+        }
+    }
+
+    /// Build environment variables with parameter substitution
+    pub fn build_env(&self) -> HashMap<String, String> {
+        let env = self.env();
+        env.into_iter()
+            .map(|(k, v)| (k, self.substitute_params(&v)))
+            .collect()
+    }
+
+    /// Get environment variables from the target (legacy - doesn't do substitution)
     pub fn env(&self) -> HashMap<String, String> {
         match self {
             ServiceTarget::Process { env, .. } => env.clone(),
@@ -141,10 +485,7 @@ impl ServiceTarget {
             ServiceTarget::DockerAttach { env, .. } => env.clone(),
             ServiceTarget::ProcessAttach { env, .. } => env.clone(),
             ServiceTarget::Remote { env, .. } => env.clone(),
-            #[allow(deprecated)]
-            ServiceTarget::RemoteLan { .. } => HashMap::new(),
-            #[allow(deprecated)]
-            ServiceTarget::Wireguard { .. } => HashMap::new(),
+            ServiceTarget::RemoteAttach { env, .. } => env.clone(),
         }
     }
 
@@ -152,25 +493,35 @@ impl ServiceTarget {
     pub fn with_env(&self, new_env: HashMap<String, String>) -> Self {
         match self {
             ServiceTarget::Process {
-                binary,
-                args,
+                command,
+                ports,
+                resources,
                 working_dir,
+                complete_if,
                 ..
             } => ServiceTarget::Process {
-                binary: binary.clone(),
-                args: args.clone(),
+                command: command.clone(),
                 env: new_env,
+                ports: ports.clone(),
+                resources: resources.clone(),
                 working_dir: working_dir.clone(),
+                complete_if: complete_if.clone(),
             },
             ServiceTarget::Docker {
+                params,
                 image,
+                command_template,
                 ports,
+                container_ports,
                 volumes,
                 ..
             } => ServiceTarget::Docker {
+                params: params.clone(),
                 image: image.clone(),
+                command_template: command_template.clone(),
                 env: new_env,
                 ports: ports.clone(),
+                container_ports: container_ports.clone(),
                 volumes: volumes.clone(),
             },
             ServiceTarget::DockerAttach { container, .. } => ServiceTarget::DockerAttach {
@@ -192,41 +543,130 @@ impl ServiceTarget {
                 mode: mode.clone(),
                 env: new_env,
             },
-            #[allow(deprecated)]
-            ServiceTarget::RemoteLan {
+            ServiceTarget::RemoteAttach {
                 host,
                 user,
-                binary,
-                args,
-            } => ServiceTarget::RemoteLan {
+                pid,
+                process_name,
+                ..
+            } => ServiceTarget::RemoteAttach {
                 host: host.clone(),
                 user: user.clone(),
-                binary: binary.clone(),
-                args: args.clone(),
+                pid: *pid,
+                process_name: process_name.clone(),
+                env: new_env,
             },
-            #[allow(deprecated)]
-            ServiceTarget::Wireguard {
-                host,
-                user,
-                package,
-            } => ServiceTarget::Wireguard {
-                host: host.clone(),
-                user: user.clone(),
-                package: package.clone(),
-            },
+        }
+    }
+
+    /// Inject additional parameters into this target
+    ///
+    /// Runtime params are merged with existing params (runtime takes precedence).
+    /// Use `{param_name}` syntax in templates.
+    pub fn inject_params(&mut self, runtime_params: HashMap<String, ParamValue>) {
+        match self {
+            ServiceTarget::Process { command, .. } => {
+                if let ProcessCommand::Template { params, .. } = command {
+                    for (k, v) in runtime_params {
+                        params.insert(k, v);
+                    }
+                }
+            }
+            ServiceTarget::Docker { params, .. } => {
+                for (k, v) in runtime_params {
+                    params.insert(k, v);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Get the port configuration for this target.
+    ///
+    /// Returns the port config if available (Process and Docker targets).
+    pub fn port_config(&self) -> Option<&PortConfig> {
+        match self {
+            ServiceTarget::Process { ports, .. } | ServiceTarget::Docker { ports, .. } => {
+                if ports.is_empty() { None } else { Some(ports) }
+            }
+            _ => None,
+        }
+    }
+
+    /// Apply parameter substitution to process complete_if/command fields
+    ///
+    /// For Process targets, substitutes `{param}` in complete_if and command strings
+    pub fn substitute_process_fields(&mut self, params: &HashMap<String, ParamValue>) {
+        if let ServiceTarget::Process {
+            complete_if,
+            command,
+            ..
+        } = self
+        {
+            // Substitute in complete_if
+            if let Some(val) = complete_if {
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    *val = val.replace(&placeholder, &value.as_string());
+                }
+            }
+            // Substitute in command template if it's a Template variant
+            if let ProcessCommand::Template {
+                command_template, ..
+            } = command
+            {
+                for (key, value) in params {
+                    let placeholder = format!("{{{}}}", key);
+                    *command_template = command_template.replace(&placeholder, &value.as_string());
+                }
+            }
         }
     }
 }
 
 impl ServiceConfig {
+    /// Create a new ServiceConfig with just the required fields.
+    ///
+    /// This is useful for tests and simple configurations.
+    pub fn new(name: impl Into<String>, target: ServiceTarget) -> Self {
+        Self {
+            name: name.into(),
+            target,
+            depends_on: vec![],
+            health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
+        }
+    }
+
     /// Create a new config with updated environment variables
     pub fn with_env(&self, env: HashMap<String, String>) -> Self {
         ServiceConfig {
             name: self.name.clone(),
             target: self.target.with_env(env),
-            dependencies: self.dependencies.clone(),
+            depends_on: self.depends_on.clone(),
             health_check: self.health_check.clone(),
+            templates: self.templates.clone(),
+            allocated_ports: self.allocated_ports.clone(),
         }
+    }
+
+    /// Builder method to add a health check
+    pub fn with_health_check(mut self, health_check: HealthCheck) -> Self {
+        self.health_check = Some(health_check);
+        self
+    }
+
+    /// Builder method to add dependencies
+    pub fn with_depends_on(mut self, depends_on: Vec<Dependency>) -> Self {
+        self.depends_on = depends_on;
+        self
+    }
+
+    /// Builder method to add templates
+    pub fn with_templates(mut self, templates: Vec<TemplateConfig>) -> Self {
+        self.templates = templates;
+        self
     }
 }
 
@@ -257,6 +697,20 @@ impl Default for HealthCheck {
     }
 }
 
+impl HealthCheck {
+    /// Substitute `{param}` placeholders in health check command and args
+    pub fn substitute_params(&mut self, params: &HashMap<String, ParamValue>) {
+        for (key, value) in params {
+            let placeholder = format!("{{{}}}", key);
+            let value_str = value.as_string();
+            self.command = self.command.replace(&placeholder, &value_str);
+            for arg in self.args.iter_mut() {
+                *arg = arg.replace(&placeholder, &value_str);
+            }
+        }
+    }
+}
+
 /// Current status of a service
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ServiceStatus {
@@ -282,12 +736,16 @@ mod tests {
         let config = ServiceConfig {
             name: "test-service".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec!["hello".to_string()],
+                command: ProcessCommand::Legacy {
+                    command: "echo hello".to_string(),
+                },
                 env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: Some("/tmp".to_string()),
+                complete_if: None,
             },
-            dependencies: vec![Dependency::Service {
+            depends_on: vec![Dependency::Service {
                 service: "database".to_string(),
             }],
             health_check: Some(HealthCheck {
@@ -297,6 +755,8 @@ mod tests {
                 retries: 3,
                 timeout: 10,
             }),
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -311,10 +771,14 @@ mod tests {
         env.insert("KEY1".to_string(), "value1".to_string());
 
         let target = ServiceTarget::Process {
-            binary: "test".to_string(),
-            args: vec![],
+            command: ProcessCommand::Legacy {
+                command: "test".to_string(),
+            },
             env: HashMap::new(),
+            ports: HashMap::new(),
+            resources: None,
             working_dir: None,
+            complete_if: None,
         };
 
         let updated = target.with_env(env.clone());
@@ -324,9 +788,15 @@ mod tests {
     #[test]
     fn test_docker_target_serialization() {
         let target = ServiceTarget::Docker {
+            params: HashMap::new(),
             image: "nginx:latest".to_string(),
+            command_template: None,
             env: HashMap::from([("ENV_VAR".to_string(), "value".to_string())]),
-            ports: vec![80, 443],
+            ports: HashMap::from([
+                ("http".to_string(), crate::ports::PortSpec::Fixed(80)),
+                ("https".to_string(), crate::ports::PortSpec::Fixed(443)),
+            ]),
+            container_ports: HashMap::from([("http".to_string(), 80), ("https".to_string(), 443)]),
             volumes: vec!["/data:/app/data".to_string()],
         };
 
@@ -360,9 +830,54 @@ mod tests {
     }
 
     #[test]
+    fn test_namespaced_dependency_parsing() {
+        // Test namespaced service dependency
+        let yaml = "services.postgres";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "postgres".to_string()
+            }
+        );
+
+        // Test namespaced task dependency
+        let yaml = "tasks.deploy-contracts";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Task {
+                task: "deploy-contracts".to_string()
+            }
+        );
+
+        // Test plain string defaults to service
+        let yaml = "some-service";
+        let dep: Dependency =
+            serde_yaml::from_str(&format!("\"{}\"", yaml)).expect("Failed to parse");
+        assert!(matches!(dep, Dependency::Namespaced(_)));
+
+        let resolved = dep.resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "some-service".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn test_dependencies_in_yaml() {
         let yaml = r#"
-dependencies:
+depends_on:
   - service: postgres
   - service: redis
   - task: deploy-contracts
@@ -371,21 +886,125 @@ dependencies:
 
         #[derive(Deserialize)]
         struct TestConfig {
-            dependencies: Vec<Dependency>,
+            depends_on: Vec<Dependency>,
         }
 
         let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
-        assert_eq!(config.dependencies.len(), 4);
+        assert_eq!(config.depends_on.len(), 4);
 
-        match &config.dependencies[0] {
+        match &config.depends_on[0] {
             Dependency::Service { service } => assert_eq!(service, "postgres"),
             _ => panic!("Expected service dependency"),
         }
 
-        match &config.dependencies[2] {
+        match &config.depends_on[2] {
             Dependency::Task { task } => assert_eq!(task, "deploy-contracts"),
             _ => panic!("Expected task dependency"),
         }
+    }
+
+    #[test]
+    fn test_namespaced_dependencies_in_yaml() {
+        let yaml = r#"
+depends_on:
+  - services.postgres
+  - tasks.deploy-contracts
+  - services.redis
+  - my-other-service
+"#;
+
+        #[derive(Deserialize)]
+        struct TestConfig {
+            depends_on: Vec<Dependency>,
+        }
+
+        let config: TestConfig = serde_yaml::from_str(yaml).expect("Failed to parse YAML");
+        assert_eq!(config.depends_on.len(), 4);
+
+        // First dependency should resolve to service
+        let resolved = config.depends_on[0].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "postgres".to_string()
+            }
+        );
+
+        // Second dependency should resolve to task
+        let resolved = config.depends_on[1].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Task {
+                task: "deploy-contracts".to_string()
+            }
+        );
+
+        // Third dependency should resolve to service
+        let resolved = config.depends_on[2].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "redis".to_string()
+            }
+        );
+
+        // Fourth dependency (plain string) defaults to service
+        let resolved = config.depends_on[3].resolve();
+        assert_eq!(
+            resolved,
+            Dependency::Service {
+                service: "my-other-service".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_both_dependency_syntaxes() {
+        use crate::task_config::StackConfig;
+
+        // Test that both explicit and namespaced syntaxes work
+        let yaml = r#"
+        name: test-stack
+        services:
+          test-service:
+            service_type: test
+            target:
+              type: process
+              command: "test"
+            depends_on:
+              # Explicit syntax (what we use in YAML)
+              - service: postgres
+              - task: setup-db
+              # Namespaced syntax (alternative)
+              - services.redis
+              - tasks.migrate-schema
+              # Plain string (defaults to service for backward compat)
+              - mongodb
+        "#;
+
+        let config: StackConfig = serde_yaml::from_str(yaml).unwrap();
+        let service = config.services.get("test-service").unwrap();
+        let deps = &service.orchestration.depends_on;
+
+        // First dependency - explicit service
+        assert!(matches!(&deps[0], Dependency::Service { service } if service == "postgres"));
+
+        // Second dependency - explicit task
+        assert!(matches!(&deps[1], Dependency::Task { task } if task == "setup-db"));
+
+        // Third dependency - namespaced service (needs resolve)
+        assert!(matches!(&deps[2], Dependency::Namespaced(s) if s == "services.redis"));
+        assert!(matches!(deps[2].resolve(), Dependency::Service { service } if service == "redis"));
+
+        // Fourth dependency - namespaced task (needs resolve)
+        assert!(matches!(&deps[3], Dependency::Namespaced(s) if s == "tasks.migrate-schema"));
+        assert!(matches!(deps[3].resolve(), Dependency::Task { task } if task == "migrate-schema"));
+
+        // Fifth dependency - plain string defaults to service
+        assert!(matches!(&deps[4], Dependency::Namespaced(s) if s == "mongodb"));
+        assert!(
+            matches!(deps[4].resolve(), Dependency::Service { service } if service == "mongodb")
+        );
     }
 
     #[test]
@@ -423,7 +1042,7 @@ dependencies:
         };
 
         let yaml = serde_yaml::to_string(&remote).expect("Failed to serialize");
-        assert!(yaml.contains("type: remote"));
+        assert!(yaml.contains("type: remote-ssh"));
         assert!(yaml.contains("host: example.com"));
         assert!(yaml.contains("binary: myapp"));
     }

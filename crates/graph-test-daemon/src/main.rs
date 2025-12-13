@@ -6,9 +6,9 @@
 use clap::{Arg, Command};
 use graph_test_daemon::GraphTestDaemon;
 use harness_core::prelude::Daemon;
+use service_orchestration::StackConfig;
 use std::net::SocketAddr;
 use tracing::{error, info};
-use tracing_subscriber;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     smol::block_on(async_main())
@@ -37,6 +37,12 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Path to YAML configuration file")
                 .required(true),
         )
+        .arg(
+            Arg::new("auto-start")
+                .long("auto-start")
+                .help("Automatically launch all services on startup")
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     let endpoint: SocketAddr = matches
@@ -47,10 +53,18 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting Graph Test Daemon on {}", endpoint);
 
-    // Create and start the daemon
+    // Load configuration from YAML file
     let config_path = matches.get_one::<String>("config").unwrap();
     info!("Loading daemon configuration from: {}", config_path);
-    let daemon = GraphTestDaemon::from_config(endpoint, config_path).await?;
+
+    let config_content = std::fs::read_to_string(config_path)
+        .map_err(|e| format!("Failed to read config file: {e}"))?;
+
+    let config: StackConfig = serde_yaml::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse config YAML: {e}"))?;
+
+    // Create the daemon from the configuration
+    let daemon = GraphTestDaemon::from_stack_config(endpoint, config).await?;
 
     info!("Graph Test Daemon created successfully");
 
@@ -61,6 +75,16 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     info!("Graph Test Daemon is running");
+
+    // Auto-start services if requested
+    if matches.get_flag("auto-start") {
+        info!("Auto-starting Graph Protocol stack...");
+        if let Err(e) = daemon.launch_stack().await {
+            error!("Failed to launch stack: {}", e);
+            return Err(e.into());
+        }
+        info!("Stack launched successfully");
+    }
 
     // Keep the daemon running
     // In a real implementation, this would handle signals and graceful shutdown

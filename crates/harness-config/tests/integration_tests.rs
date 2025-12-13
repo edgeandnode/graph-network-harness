@@ -1,7 +1,6 @@
 //! Integration tests for harness-config
 
-use harness_config::{Config, HealthCheck, HealthCheckType, Network, Service, ServiceType, parser};
-use std::collections::HashMap;
+use harness_config::{HealthCheckType, Network, ServiceType, parser};
 
 #[test]
 fn test_full_config_parsing() {
@@ -80,16 +79,6 @@ services:
       API_URL: "http://localhost:8080"
     dependencies:
       - api
-
-  metrics:
-    type: package
-    network: lan
-    host: "192.168.1.100"
-    package: "./packages/metrics-v1.0.0.tar.gz"
-    version: "1.0.0"
-    install_path: "/opt/metrics"
-    env:
-      RETENTION_DAYS: "30"
 "#;
 
     let config = parser::parse_str(yaml).unwrap();
@@ -117,7 +106,7 @@ services:
     ));
 
     // Check services
-    assert_eq!(config.services.len(), 4);
+    assert_eq!(config.services.len(), 3);
 
     // Check Docker service
     let postgres = config.services.get("postgres").unwrap();
@@ -179,7 +168,7 @@ services:
     let service_config = parser::convert_to_orchestrator(&config, "test-service").unwrap();
 
     assert_eq!(service_config.name, "test-service");
-    assert_eq!(service_config.dependencies.len(), 0);
+    assert_eq!(service_config.depends_on.len(), 0);
     assert!(service_config.health_check.is_some());
 
     let hc = service_config.health_check.unwrap();
@@ -271,7 +260,7 @@ services:
     let service = config.services.get("redis").unwrap();
 
     assert!(service.health_check.is_some());
-    let hc = service.health_check.as_ref().unwrap();
+    let _hc = service.health_check.as_ref().unwrap();
 
     // Verify TCP check is converted to nc command
     let orchestrator_config = parser::convert_to_orchestrator(&config, "redis").unwrap();

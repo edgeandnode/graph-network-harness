@@ -1,29 +1,32 @@
 //! Configuration parser with environment variable substitution
 
 use crate::{
-    Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Result, Service, ServiceType,
+    Config, ConfigError, HealthCheck, HealthCheckType, PortMapping, Service, ServiceType,
     resolver::{ResolutionContext, resolve_service_env, validate_references},
 };
 use regex::Regex;
-use service_orchestration::{HealthCheck as OrchestratorHealthCheck, ServiceConfig, ServiceTarget};
+use service_orchestration::{
+    HealthCheck as OrchestratorHealthCheck, ProcessCommand, ServiceConfig, ServiceTarget,
+};
 use std::collections::HashMap;
 use std::path::Path;
+use std::result::Result;
 
 /// Parse a YAML configuration file
-pub fn parse_file(path: impl AsRef<Path>) -> Result<Config> {
+pub fn parse_file(path: impl AsRef<Path>) -> std::result::Result<Config, ConfigError> {
     let content = std::fs::read_to_string(path)?;
     parse_str(&content)
 }
 
 /// Parse YAML configuration from a string
-pub fn parse_str(content: &str) -> Result<Config> {
+pub fn parse_str(content: &str) -> Result<Config, ConfigError> {
     let config: Config = serde_yaml::from_str(content)?;
     validate_config(&config)?;
     Ok(config)
 }
 
 /// Validate configuration
-fn validate_config(config: &Config) -> Result<()> {
+fn validate_config(config: &Config) -> Result<(), ConfigError> {
     // Check version
     if config.version != "1.0" {
         return Err(ConfigError::ValidationError(format!(
@@ -45,8 +48,7 @@ fn validate_config(config: &Config) -> Result<()> {
         for dep in &service.dependencies {
             if !config.services.contains_key(dep) {
                 return Err(ConfigError::ValidationError(format!(
-                    "Service '{}' depends on unknown service '{}'",
-                    name, dep
+                    "Service '{name}' depends on unknown service '{dep}'"
                 )));
             }
         }
@@ -59,7 +61,7 @@ fn validate_config(config: &Config) -> Result<()> {
 }
 
 /// Substitute environment variables in a string
-pub fn substitute_env_vars(input: &str) -> Result<String> {
+pub fn substitute_env_vars(input: &str) -> Result<String, ConfigError> {
     let re = Regex::new(r"\$\{([^}]+)\}").unwrap();
     let mut result = input.to_string();
     let mut errors = Vec::new();
@@ -103,7 +105,7 @@ pub fn substitute_env_vars(input: &str) -> Result<String> {
 pub fn substitute_service_refs(
     input: &str,
     service_ips: &HashMap<String, String>,
-) -> Result<String> {
+) -> Result<String, ConfigError> {
     let re = Regex::new(r"\$\{([^}]+)\.ip\}").unwrap();
     let mut result = input.to_string();
 
@@ -125,7 +127,7 @@ pub fn substitute_service_refs(
 pub fn process_service_env(
     service: &Service,
     service_ips: &HashMap<String, String>,
-) -> Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ConfigError> {
     let mut processed_env = HashMap::new();
 
     for (key, value) in &service.env {
@@ -140,7 +142,10 @@ pub fn process_service_env(
 }
 
 /// Convert configuration to orchestrator types
-pub fn convert_to_orchestrator(config: &Config, service_name: &str) -> Result<ServiceConfig> {
+pub fn convert_to_orchestrator(
+    config: &Config,
+    service_name: &str,
+) -> Result<ServiceConfig, ConfigError> {
     convert_to_orchestrator_with_context(config, service_name, None)
 }
 
@@ -149,7 +154,7 @@ pub fn convert_to_orchestrator_with_context(
     config: &Config,
     service_name: &str,
     context: Option<&ResolutionContext>,
-) -> Result<ServiceConfig> {
+) -> Result<ServiceConfig, ConfigError> {
     let service = config
         .services
         .get(service_name)
@@ -177,10 +182,31 @@ pub fn convert_to_orchestrator_with_context(
                 })
                 .collect();
 
+            // Convert simple ports to PortConfig (named as port_0, port_1, etc.)
+            let port_config: std::collections::HashMap<String, service_orchestration::PortSpec> =
+                simple_ports
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        (
+                            format!("port_{}", i),
+                            service_orchestration::PortSpec::Fixed(*p),
+                        )
+                    })
+                    .collect();
+            let container_ports: std::collections::HashMap<String, u16> = simple_ports
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (format!("port_{}", i), *p))
+                .collect();
+
             ServiceTarget::Docker {
+                params: HashMap::new(), // No params for legacy configs
+                command_template: None, // Use Docker default CMD
                 image: image.clone(),
                 env,
-                ports: simple_ports,
+                ports: port_config,
+                container_ports,
                 volumes: volumes.clone(),
             }
         }
@@ -191,47 +217,41 @@ pub fn convert_to_orchestrator_with_context(
             working_dir,
             ..
         } => ServiceTarget::Process {
-            binary: binary.clone(),
-            args: args.clone(),
+            command: ProcessCommand::Legacy {
+                // Combine binary and args into a single command string
+                command: format!("{} {}", binary, args.join(" ")),
+            },
             env,
+            ports: std::collections::HashMap::new(),
+            resources: None,
             working_dir: working_dir.clone(),
+            complete_if: None,
         },
 
         ServiceType::Remote {
             host,
             binary,
             args,
-            working_dir,
+            working_dir: _, // TODO: wire up
         } => {
-            // For MVP, assume LAN network for remote services
-            // In Phase 6, we'll properly handle network types
-            ServiceTarget::RemoteLan {
+            ServiceTarget::Remote {
                 host: host.clone(),
-                user: "root".to_string(), // Default for MVP
-                binary: binary.clone(),
-                args: args.clone(),
-            }
-        }
-
-        ServiceType::Package { host, package, .. } => {
-            // Map to WireGuard target for MVP
-            ServiceTarget::Wireguard {
-                host: host.clone(),
-                user: "root".to_string(), // Default for MVP
-                package: package.clone(),
+                user: "root".to_string(), // TODO: Default for MVP
+                mode: service_orchestration::RemoteMode::Process {
+                    binary: binary.clone(),
+                    args: args.clone(),
+                },
+                env: std::collections::HashMap::new(),
             }
         }
     };
 
-    let health_check = service
-        .health_check
-        .as_ref()
-        .map(|hc| convert_health_check(hc));
+    let health_check = service.health_check.as_ref().map(convert_health_check);
 
     Ok(ServiceConfig {
         name: service_name.to_string(),
         target,
-        dependencies: service
+        depends_on: service
             .dependencies
             .iter()
             .map(|dep| service_orchestration::Dependency::Service {
@@ -239,6 +259,8 @@ pub fn convert_to_orchestrator_with_context(
             })
             .collect(),
         health_check,
+        templates: vec![], // TODO: Parse from service config when format is defined
+        allocated_ports: HashMap::new(), // Populated at runtime by manager
     })
 }
 
@@ -284,13 +306,13 @@ mod tests {
             assert_eq!(result, home);
 
             let result = substitute_env_vars("prefix-${HOME}-suffix").unwrap();
-            assert_eq!(result, format!("prefix-{}-suffix", home));
+            assert_eq!(result, format!("prefix-{home}-suffix"));
         } else if let Ok(user) = std::env::var("USER") {
             let result = substitute_env_vars("${USER}").unwrap();
             assert_eq!(result, user);
 
             let result = substitute_env_vars("prefix-${USER}-suffix").unwrap();
-            assert_eq!(result, format!("prefix-{}-suffix", user));
+            assert_eq!(result, format!("prefix-{user}-suffix"));
         } else {
             // Skip test if no suitable env var is available
             println!("Skipping test - no suitable environment variable found");

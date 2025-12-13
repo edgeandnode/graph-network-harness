@@ -75,7 +75,7 @@ fn install_signal_handlers() {
         thread::spawn(move || {
             #[allow(clippy::never_loop)]
             for sig in signals.forever() {
-                eprintln!("Received signal: {:?}", sig);
+                eprintln!("Received signal: {sig:?}");
                 // Cleanup containers before exiting
                 if let Some(guard) = CONTAINER_GUARD.get() {
                     guard.cleanup();
@@ -154,7 +154,7 @@ pub async fn ensure_container_running() -> Result<()> {
         .arg("ps")
         .arg("-q")
         .arg("-f")
-        .arg(format!("name={}", CONTAINER_NAME))
+        .arg(format!("name={CONTAINER_NAME}"))
         .build();
 
     let executor = Executor::local("container-check");
@@ -271,7 +271,7 @@ async fn wait_for_container_ready() -> Result<()> {
             anyhow::bail!("Timeout waiting for systemd");
         }
 
-        eprintln!("Waiting for systemd... ({}/{})", i, max_attempts);
+        eprintln!("Waiting for systemd... ({i}/{max_attempts})");
         smol::Timer::after(Duration::from_secs(1)).await;
     }
 
@@ -295,7 +295,7 @@ async fn wait_for_container_ready() -> Result<()> {
             anyhow::bail!("Timeout waiting for SSH");
         }
 
-        eprintln!("Waiting for SSH... ({}/{})", i, max_attempts);
+        eprintln!("Waiting for SSH... ({i}/{max_attempts})");
         smol::Timer::after(Duration::from_secs(1)).await;
     }
 

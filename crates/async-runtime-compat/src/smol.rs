@@ -1,7 +1,8 @@
 //! Smol runtime spawner implementation
 
-use crate::{SpawnHandle, Spawner, SpawnerWithHandle};
+use crate::{SpawnHandle, Spawner, SpawnerWithHandle, Task};
 use std::future::Future;
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 /// Spawner for the Smol runtime
@@ -11,6 +12,23 @@ pub struct SmolSpawner;
 impl Spawner for SmolSpawner {
     fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
         smol::spawn(future).detach();
+    }
+}
+
+impl SmolSpawner {
+    /// Spawn a future and return a handle to it
+    pub fn spawn_with_handle<T>(
+        &self,
+        future: Pin<Box<dyn Future<Output = T> + Send + 'static>>,
+    ) -> Task<T>
+    where
+        T: Send + 'static,
+    {
+        let task = ::smol::spawn(future);
+        Task {
+            inner: crate::InnerTask::Smol(task),
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -69,11 +87,11 @@ mod tests {
         let spawner = SmolSpawner;
         let (tx, rx) = async_channel::bounded(1);
 
-        let handle = spawner.spawn_with_handle(Box::pin(async move {
+        let _handle = spawner.spawn_with_handle(Box::pin(async move {
             tx.send(123).await.unwrap();
         }));
 
         assert_eq!(rx.recv().await.unwrap(), 123);
-        handle.detach();
+        // Task runs to completion, no need to explicitly detach
     }
 }

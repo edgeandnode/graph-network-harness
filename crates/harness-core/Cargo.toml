@@ -11,6 +11,7 @@ authors.workspace = true
 async-trait = { workspace = true }
 async-channel = { workspace = true }
 futures = { workspace = true }
+smol = { workspace = true }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }
@@ -27,6 +28,13 @@ tracing = { workspace = true }
 async-tungstenite = { workspace = true }
 async-net = { workspace = true }
 
+# TLS support
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+webpki-roots = { workspace = true }
+futures-rustls = { workspace = true }
+async-fs = { workspace = true }
+
 # UUID for service IDs
 uuid = { workspace = true, features = ["v4", "serde"] }
 
@@ -40,19 +48,20 @@ indexmap = { workspace = true }
 schemars = { workspace = true }
 
 # Re-export core functionality from existing crates
-service-orchestration = { path = "../service-orchestration", features = ["test-utils"] }
-service-registry = { path = "../service-registry" }
+service-orchestration = { path = "../service-orchestration", features = ["test-utils", "smol"] }
 harness-config = { path = "../harness-config" }
 command-executor = { path = "../command-executor" }
 
 # Runtime compatibility
-async-runtime-compat = { path = "../async-runtime-compat" }
+async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
 
 [dev-dependencies]
-smol = { workspace = true }
 smol-potat = { workspace = true }
 tempfile = { workspace = true }
+smol = { workspace = true }
 async-runtime-compat = { path = "../async-runtime-compat", features = ["smol"] }
+rcgen = "0.13"
+serde_yaml = { workspace = true }
 
 [features]
 default = []

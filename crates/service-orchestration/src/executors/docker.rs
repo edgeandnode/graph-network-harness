@@ -1,19 +1,22 @@
 //! Docker executor for containerized service execution.
 
-use super::{EventStream, NetworkInfo, RunningService, ServiceExecutor};
+use super::{NetworkInfo, RunningService, ServiceExecutor};
 use crate::{
     Error,
     config::{ServiceConfig, ServiceTarget},
     health::{HealthChecker, HealthStatus},
 };
+use async_channel::Receiver;
+use async_runtime_compat::Spawner;
 use async_trait::async_trait;
+use command_executor::event::ProcessEvent;
 use command_executor::{Command, Executor, backends::LocalLauncher, target::Target};
-use futures::stream::{self, StreamExt};
 use tracing::{info, warn};
 
 /// Executor for Docker container services
 pub struct DockerExecutor {
     executor: Executor<LocalLauncher>,
+    #[allow(dead_code)]
     health_checker: HealthChecker,
 }
 
@@ -40,7 +43,7 @@ impl DockerExecutor {
         &self,
         name: &str,
     ) -> std::result::Result<Option<ContainerState>, Error> {
-        let container_name = format!("orchestrator-{}-harness-test", name);
+        let container_name = format!("orchestrator-{name}-harness-test");
 
         // Check if container exists
         let mut ps_cmd = Command::new("docker");
@@ -48,7 +51,7 @@ impl DockerExecutor {
             "ps",
             "-a",
             "--filter",
-            &format!("name={}", container_name),
+            &format!("name={container_name}"),
             "--format",
             "{{.ID}}|{{.State}}|{{.Status}}",
             "--no-trunc",
@@ -108,12 +111,12 @@ impl DockerExecutor {
         &self,
         container_id: &str,
     ) -> std::result::Result<NetworkInfo, Error> {
-        // Get container IP address
+        // Get container IP address (use range to handle network namespaces)
         let mut inspect_cmd = Command::new("docker");
         inspect_cmd.args([
             "inspect",
             "--format",
-            "{{.NetworkSettings.IPAddress}}",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
             container_id,
         ]);
 
@@ -164,12 +167,17 @@ impl Default for DockerExecutor {
 
 #[async_trait]
 impl ServiceExecutor for DockerExecutor {
-    async fn start(&self, config: ServiceConfig) -> std::result::Result<RunningService, Error> {
+    async fn start(
+        &self,
+        config: ServiceConfig,
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<RunningService, Error> {
         let ServiceTarget::Docker {
             image,
             env,
-            ports,
+            container_ports,
             volumes,
+            ..
         } = &config.target
         else {
             return Err(crate::Error::Config(
@@ -213,22 +221,28 @@ impl ServiceExecutor for DockerExecutor {
             "run".to_string(),
             "-d".to_string(), // Detached mode
             "--name".to_string(),
-            format!("orchestrator-{}", config.name),
+            format!("orchestrator-{}-harness-test", config.name),
         ];
 
         // Add environment variables
         for (key, value) in env {
-            args.extend(vec!["-e".to_string(), format!("{}={}", key, value)]);
+            args.extend(["-e".to_string(), format!("{}={}", key, value)]);
         }
 
-        // Add port mappings
-        for port in ports {
-            args.extend(vec!["-p".to_string(), format!("{}:{}", port, port)]);
+        // Add port mappings: host_port:container_port
+        // Uses allocated_ports (from manager) mapped to container_ports
+        for (port_name, host_port) in &config.allocated_ports {
+            if let Some(container_port) = container_ports.get(port_name) {
+                args.extend([
+                    "-p".to_string(),
+                    format!("{}:{}", host_port, container_port),
+                ]);
+            }
         }
 
         // Add volume mounts
         for volume in volumes {
-            args.extend(vec!["-v".to_string(), volume.clone()]);
+            args.extend(["-v".to_string(), volume.clone()]);
         }
 
         // Add image
@@ -267,7 +281,11 @@ impl ServiceExecutor for DockerExecutor {
         Ok(running_service)
     }
 
-    async fn stop(&self, service: &RunningService) -> std::result::Result<(), Error> {
+    async fn stop(
+        &self,
+        service: &RunningService,
+        _spawner: &dyn Spawner,
+    ) -> std::result::Result<(), Error> {
         info!("Stopping Docker service: {}", service.name);
 
         if let Some(container_id) = &service.container_id {
@@ -371,15 +389,41 @@ impl ServiceExecutor for DockerExecutor {
     async fn stream_events(
         &self,
         service: &RunningService,
-    ) -> std::result::Result<EventStream, Error> {
+        spawner: &dyn Spawner,
+    ) -> std::result::Result<Receiver<ProcessEvent>, Error> {
         if let Some(container_id) = &service.container_id {
-            // TODO: Implement proper log streaming with docker logs -f
-            // For now, return empty stream
-            let stream = stream::empty().boxed();
-            Ok(stream)
+            // Create command to stream docker logs
+            let cmd = Command::new("docker")
+                .arg("logs")
+                .arg("-f") // Follow mode
+                .arg("--tail")
+                .arg("0") // Start from end
+                .arg(container_id)
+                .clone();
+
+            let (event_stream, _handle) = self.executor.launch(&Target::Command, cmd).await?;
+
+            // Convert stream to receiver
+            let (tx, rx) = async_channel::unbounded();
+
+            // Spawn task to forward events
+            let forward_task = async move {
+                use futures::StreamExt;
+                let mut stream = event_stream;
+                while let Some(event) = stream.next().await {
+                    if tx.send(event).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
+            };
+
+            spawner.spawn(Box::pin(forward_task));
+
+            Ok(rx)
         } else {
-            let stream = stream::empty().boxed();
-            Ok(stream)
+            // Return empty receiver
+            let (_tx, rx) = async_channel::unbounded();
+            Ok(rx)
         }
     }
 
@@ -397,30 +441,37 @@ mod tests {
     fn test_can_handle() {
         let executor = DockerExecutor::new();
 
-        let docker_config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Docker {
+        let docker_config = ServiceConfig::new(
+            "test",
+            ServiceTarget::Docker {
+                params: HashMap::new(),
                 image: "nginx".to_string(),
+                command_template: None,
                 env: HashMap::new(),
-                ports: vec![8080],
+                ports: HashMap::new(),
+                container_ports: HashMap::new(),
                 volumes: vec![],
             },
-            dependencies: vec![],
-            health_check: None,
-        };
+        );
 
         assert!(executor.can_handle(&docker_config));
 
         let process_config = ServiceConfig {
             name: "test".to_string(),
             target: ServiceTarget::Process {
-                binary: "echo".to_string(),
-                args: vec![],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "echo".to_string(),
+                },
                 env: HashMap::new(),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: None,
+                complete_if: None,
             },
-            dependencies: vec![],
+            depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         assert!(!executor.can_handle(&process_config));

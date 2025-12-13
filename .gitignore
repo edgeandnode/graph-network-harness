@@ -13,3 +13,16 @@
 # Since this is part of a workspace, Cargo.lock is at the workspace root
 # and should not be tracked here
 test-logs
+demo-daemon-data/certs/server.crt
+demo-daemon-data/certs/server.key
+
+# SSH test keys - these should be generated locally
+crates/command-executor/tests/systemd-container/ssh-keys/
+!crates/command-executor/tests/systemd-container/ssh-keys/.gitkeep
+crates/service-orchestration/crates/command-executor/tests/systemd-container/ssh-keys/authorized_keys
+crates/service-orchestration/crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519
+crates/service-orchestration/crates/command-executor/tests/systemd-container/ssh-keys/test_ed25519.pub
+crates/graph-test-daemon/tests/docker-test-env/ssh-keys/test_ed25519
+crates/graph-test-daemon/tests/docker-test-env/ssh-keys/test_ed25519.pub
+crates/graph-test-daemon/tests/docker-test-env/ssh-keys/authorized_keys
+.env

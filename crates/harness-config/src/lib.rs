@@ -38,9 +38,6 @@ pub enum ConfigError {
     ServiceNotFound(String),
 }
 
-/// Result type for configuration operations
-pub type Result<T> = std::result::Result<T, ConfigError>;
-
 /// Root configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -246,21 +243,6 @@ pub enum ServiceType {
         /// Working directory on remote
         #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
-    },
-
-    /// Package deployment service
-    #[serde(rename = "package")]
-    Package {
-        /// Target host (can be node name or IP)
-        host: String,
-        /// Package file path
-        package: String,
-        /// Package version
-        #[serde(skip_serializing_if = "Option::is_none")]
-        version: Option<String>,
-        /// Install path override
-        #[serde(skip_serializing_if = "Option::is_none")]
-        install_path: Option<String>,
     },
 }
 

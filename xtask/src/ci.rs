@@ -117,7 +117,7 @@ async fn run_integration_tests() -> Result<()> {
 
 async fn run_tests(extra_args: Vec<&str>, features_desc: Option<&str>) -> Result<()> {
     if let Some(desc) = features_desc {
-        println!("  Features: {}", desc);
+        println!("  Features: {desc}");
         println!("  This includes: docker-tests, ssh-tests, integration-tests");
     }
     println!();
@@ -137,7 +137,7 @@ async fn run_tests(extra_args: Vec<&str>, features_desc: Option<&str>) -> Result
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    print!("{}", data);
+                    print!("{data}");
                     if data.contains("FAILED") {
                         failure_count += 1;
                         test_failed = true;
@@ -148,17 +148,17 @@ async fn run_tests(extra_args: Vec<&str>, features_desc: Option<&str>) -> Result
                 }
             }
             ProcessEventType::Started { pid } => {
-                eprintln!("Test process started (PID: {})", pid);
+                eprintln!("Test process started (PID: {pid})");
             }
             ProcessEventType::Exited { code, signal } => match (code, signal) {
                 (Some(0), _) if !test_failed => {
                     println!("\nAll tests passed");
                 }
                 (Some(code), _) => {
-                    eprintln!("\nTests exited with code: {}", code);
+                    eprintln!("\nTests exited with code: {code}");
                 }
                 (_, Some(sig)) => {
-                    eprintln!("\nTests terminated by signal: {}", sig);
+                    eprintln!("\nTests terminated by signal: {sig}");
                 }
                 _ => {
                     eprintln!("\nTests exited abnormally");
@@ -186,7 +186,7 @@ async fn run_cargo_command(args: Vec<&str>) -> Result<bool> {
         match &event.event_type {
             ProcessEventType::Stdout | ProcessEventType::Stderr => {
                 if let Some(data) = &event.data {
-                    println!("{}", data);
+                    println!("{data}");
                 }
             }
             _ => {}

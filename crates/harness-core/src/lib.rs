@@ -7,27 +7,33 @@
 #![warn(missing_docs)]
 
 pub mod action;
+pub mod base_service;
 pub mod client;
+pub mod config_traits;
 pub mod daemon;
 pub mod error;
 pub mod service;
 pub mod task;
-pub mod typed_action;
+pub mod tls;
+pub mod typed_registry;
+pub mod websocket_dispatch;
 
-pub use error::{Error, Result};
+pub use error::Error;
 
 /// Convenience prelude for harness-core users
 pub mod prelude {
-    pub use crate::action::{Action, ActionRegistry};
+    pub use crate::base_service::{BaseService, BaseServiceState, ServiceCommand};
     pub use crate::client::TestClient;
-    pub use crate::daemon::{BaseDaemon, Daemon};
-    pub use crate::error::{Error, Result};
+    pub use crate::daemon::{BaseDaemon, Daemon, DaemonEvent};
+    pub use crate::error::Error;
     pub use crate::service::{
-        ActionDescriptor, JsonService, Service, ServiceSetup, ServiceStack, ServiceState,
+        ActionDescriptor, JsonService, JsonServiceRegistry, Service, ServiceSetup, ServiceState,
         StatefulService,
     };
-    pub use crate::task::{DeploymentTask, JsonTask, TaskResult, TaskStack, TaskState};
-    pub use crate::typed_action::TypedAction;
+    pub use crate::task::{
+        BaseTask, BaseTaskState, DeploymentTask, JsonTask, JsonTaskRegistry, TaskContext,
+        TaskContextBuilder, YamlTask, YamlTaskConfig, YamlTaskState,
+    };
 
     // Re-export commonly used types from dependencies
     pub use async_channel::Receiver;
@@ -40,4 +46,3 @@ pub mod prelude {
 // Re-export key types from existing crates for convenience
 pub use harness_config::Config;
 pub use service_orchestration::{ServiceConfig, ServiceManager, ServiceStatus};
-pub use service_registry::Registry;

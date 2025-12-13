@@ -18,7 +18,7 @@ pub struct TaskConfig {
     pub target: ServiceTarget,
     /// Services and tasks this task depends on
     #[serde(default)]
-    pub dependencies: Vec<Dependency>,
+    pub depends_on: Vec<Dependency>,
     /// Task-specific configuration parameters
     #[serde(default)]
     pub config: HashMap<String, Value>,
@@ -30,14 +30,14 @@ impl TaskConfig {
         Self {
             task_type,
             target,
-            dependencies: Vec::new(),
+            depends_on: Vec::new(),
             config: HashMap::new(),
         }
     }
 
     /// Add a dependency
     pub fn with_dependency(mut self, dep: Dependency) -> Self {
-        self.dependencies.push(dep);
+        self.depends_on.push(dep);
         self
     }
 
@@ -76,6 +76,45 @@ pub struct StackConfig {
     pub tasks: HashMap<String, TaskConfig>,
 }
 
+impl StackConfig {
+    /// Load configuration from a file
+    pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        serde_yaml::from_str(&content).map_err(|e| format!("Failed to parse config YAML: {}", e))
+    }
+
+    /// Load configuration from a reader
+    pub fn from_reader<R: std::io::Read>(reader: R) -> Result<Self, String> {
+        serde_yaml::from_reader(reader).map_err(|e| format!("Failed to parse config YAML: {}", e))
+    }
+
+    /// Inject runtime parameters into all service and task targets
+    ///
+    /// These params are merged with existing params and can be referenced
+    /// using `{param_name}` syntax in templates, layer hosts, health checks, etc.
+    /// Substitution is applied immediately after injection.
+    ///
+    /// Common runtime params:
+    /// - `container_host`: IP/hostname of the container running services
+    pub fn inject_runtime_params(&mut self, params: HashMap<String, crate::config::ParamValue>) {
+        for service_config in self.services.values_mut() {
+            service_config
+                .orchestration
+                .target
+                .inject_params(params.clone());
+            // Substitute in health check args
+            if let Some(health_check) = &mut service_config.orchestration.health_check {
+                health_check.substitute_params(&params);
+            }
+        }
+        for task_config in self.tasks.values_mut() {
+            task_config.target.inject_params(params.clone());
+            task_config.target.substitute_process_fields(&params);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,12 +125,16 @@ mod tests {
         let task = TaskConfig {
             task_type: "graph-contracts-deployment".to_string(),
             target: ServiceTarget::Process {
-                binary: "npx".to_string(),
-                args: vec!["hardhat".to_string(), "deploy".to_string()],
+                command: crate::config::ProcessCommand::Legacy {
+                    command: "npx hardhat deploy".to_string(),
+                },
                 env: HashMap::from([("NETWORK".to_string(), "localhost".to_string())]),
+                ports: HashMap::new(),
+                resources: None,
                 working_dir: Some("./contracts".to_string()),
+                complete_if: None,
             },
-            dependencies: vec![Dependency::Service {
+            depends_on: vec![Dependency::Service {
                 service: "anvil".to_string(),
             }],
             config: HashMap::from([(
@@ -116,10 +159,14 @@ mod tests {
                 TaskConfig::new(
                     "graph-contracts".to_string(),
                     ServiceTarget::Process {
-                        binary: "hardhat".to_string(),
-                        args: vec!["deploy".to_string()],
+                        command: crate::config::ProcessCommand::Legacy {
+                            command: "hardhat deploy".to_string(),
+                        },
                         env: HashMap::new(),
+                        ports: HashMap::new(),
+                        resources: None,
                         working_dir: None,
+                        complete_if: None,
                     },
                 ),
             )]),

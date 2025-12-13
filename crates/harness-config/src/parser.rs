@@ -182,12 +182,25 @@ pub fn convert_to_orchestrator_with_context(
                 })
                 .collect();
 
+            // Convert simple ports to PortConfig (named as port_0, port_1, etc.)
+            let port_config: std::collections::HashMap<String, service_orchestration::PortSpec> = simple_ports
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (format!("port_{}", i), service_orchestration::PortSpec::Fixed(*p)))
+                .collect();
+            let container_ports: std::collections::HashMap<String, u16> = simple_ports
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (format!("port_{}", i), *p))
+                .collect();
+
             ServiceTarget::Docker {
                 params: HashMap::new(), // No params for legacy configs
                 command_template: None, // Use Docker default CMD
                 image: image.clone(),
                 env,
-                ports: simple_ports,
+                ports: port_config,
+                container_ports,
                 volumes: volumes.clone(),
             }
         }
@@ -206,7 +219,7 @@ pub fn convert_to_orchestrator_with_context(
             ports: std::collections::HashMap::new(),
             resources: None,
             working_dir: working_dir.clone(),
-            validation: None,
+            complete_if: None,
         },
 
         ServiceType::Remote {
@@ -240,6 +253,8 @@ pub fn convert_to_orchestrator_with_context(
             })
             .collect(),
         health_check,
+        templates: vec![], // TODO: Parse from service config when format is defined
+        allocated_ports: HashMap::new(), // Populated at runtime by manager
     })
 }
 

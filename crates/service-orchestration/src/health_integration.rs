@@ -320,7 +320,7 @@ mod tests {
                 },
                 env: HashMap::new(),
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check,

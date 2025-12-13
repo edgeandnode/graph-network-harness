@@ -13,7 +13,7 @@ use std::result::Result;
 use tracing::info;
 
 use crate::services::{AnvilService, GraphNodeService, IpfsService, PostgresService};
-use crate::tasks::{GraphContractsTask, SubgraphDeployTask, TapContractsTask};
+use crate::tasks::{CargoBuildTask, GraphContractsTask, SubgraphDeployTask, TapContractsTask};
 
 /// Type alias for Graph Protocol stack configuration
 pub type GraphStackConfig = StackConfig;
@@ -35,6 +35,7 @@ impl AutoWire for GraphTestDaemon {
 
         // Wire all known task types
         builder
+            .wire_task_type::<CargoBuildTask>()?
             .wire_task_type::<GraphContractsTask>()?
             .wire_task_type::<TapContractsTask>()?
             .wire_task_type::<SubgraphDeployTask>()?;
@@ -49,6 +50,9 @@ impl GraphTestDaemon {
     pub async fn from_builder(
         mut builder: harness_core::daemon::DaemonBuilder,
     ) -> Result<Self, Error> {
+        // Allocate ports before wiring so services have access to allocated_ports
+        builder.allocate_ports()?;
+
         // Auto-wire all known types before building
         Self::auto_wire_types(&mut builder)?;
         let base = builder.build().await?;
@@ -64,6 +68,8 @@ impl GraphTestDaemon {
         // Build the base daemon with Graph-specific services and auto-wire
         let mut builder = BaseDaemon::builder(config).with_endpoint(endpoint);
 
+        // Allocate ports before wiring
+        builder.allocate_ports()?;
         builder.with_auto_wire::<Self>()?;
 
         let base = builder.build().await?;

@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use tracing::{debug, info};
 
 use command_executor::ProcessEvent;
-use service_orchestration::{DependencyGraph, DependencyNode, ServiceConfig, StackConfig};
+use service_orchestration::{DependencyGraph, DependencyNode, PortAllocator, ServiceConfig, StackConfig};
 use service_orchestration::{RunningService, TaskConfig};
 
 use crate::config_traits::{ServiceFromConfig, TaskFromConfig};
@@ -488,6 +488,12 @@ impl Daemon for BaseDaemon {
         self.running
             .store(false, std::sync::atomic::Ordering::SeqCst);
 
+        // Stop all running services (Docker containers, processes, etc.)
+        let spawner = AsyncSpawner::new();
+        if let Err(e) = self.service_manager.stop_all_services(&spawner).await {
+            tracing::warn!("Error stopping services: {}", e);
+        }
+
         // Shutdown WebSocket server
         if let Some(shutdown_tx) = self.ws_shutdown_tx.lock().await.take() {
             let _ = shutdown_tx.send(()).await;
@@ -520,6 +526,7 @@ pub struct DaemonBuilder {
     typed_service_registry: TypedServiceRegistry,
     typed_task_registry: TypedTaskRegistry,
     stack_config: StackConfig,
+    port_allocator: PortAllocator,
     #[cfg(test)]
     test_mode: bool,
 }
@@ -535,6 +542,7 @@ impl DaemonBuilder {
             typed_service_registry: TypedServiceRegistry::new(),
             typed_task_registry: TypedTaskRegistry::new(),
             stack_config,
+            port_allocator: PortAllocator::with_default_range(),
             #[cfg(test)]
             test_mode: false,
         }
@@ -557,6 +565,57 @@ impl DaemonBuilder {
     pub fn with_state_dir(mut self, path: impl Into<std::path::PathBuf>) -> Self {
         self.state_dir = Some(path.into());
         self
+    }
+
+    /// Allocate ports for all services in dependency order.
+    ///
+    /// This should be called before wiring services so that `allocated_ports`
+    /// is available when creating service instances.
+    ///
+    /// Ports are allocated in topological order so that services can reference
+    /// ports of their dependencies using `{service.port.name}` syntax.
+    pub fn allocate_ports(&mut self) -> Result<&mut Self, Error> {
+        // Build dependency graph from stack config
+        let dep_graph = DependencyGraph::from_stack_config(&self.stack_config);
+
+        // Get topological order
+        let order = dep_graph.topological_sort().map_err(|e| {
+            Error::Config(harness_config::ConfigError::ValidationError(
+                format!("Failed to sort dependencies: {:?}", e)
+            ))
+        })?;
+
+        // Allocate ports in dependency order
+        for node in &order {
+            if let DependencyNode::Service(name) = node {
+                if let Some(service_instance) = self.stack_config.services.get(name) {
+                    if let Some(port_config) = service_instance.orchestration.target.port_config() {
+                        info!("Allocating ports for service '{}': {:?}", name, port_config);
+                        self.port_allocator
+                            .allocate_for_service(name, port_config)
+                            .map_err(|e| Error::Config(harness_config::ConfigError::ValidationError(
+                                format!("Port allocation failed: {}", e)
+                            )))?;
+                    }
+                }
+            }
+        }
+
+        // Update stack_config with allocated ports
+        let registry = self.port_allocator.registry().clone();
+        for (name, service_instance) in &mut self.stack_config.services {
+            if let Some(ports) = registry.get(name) {
+                service_instance.orchestration.allocated_ports = ports.clone();
+            }
+        }
+
+        info!("Port allocation complete: {:?}", registry);
+        Ok(self)
+    }
+
+    /// Get the port allocator (for passing to ServiceManager)
+    pub fn port_allocator(&self) -> &PortAllocator {
+        &self.port_allocator
     }
 
     /// Register a service with the JSON service registry

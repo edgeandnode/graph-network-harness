@@ -19,20 +19,20 @@ impl ProcessTaskExecutor {
         Self {}
     }
 
-    /// Run a validation command to check if task is already complete
-    async fn run_validation(&self, config: &TaskConfig) -> Result<bool, OrchestrationError> {
+    /// Run complete_if command to check if task is already complete
+    async fn check_complete(&self, config: &TaskConfig) -> Result<bool, OrchestrationError> {
         if let ServiceTarget::Process {
-            validation: Some(validation),
+            complete_if: Some(check_cmd),
             env,
             working_dir,
             ..
         } = &config.target
         {
-            debug!("Running validation command: {}", validation);
+            debug!("Running complete_if check: {}", check_cmd);
 
-            // Create the validation command
+            // Create the check command
             let mut cmd = Command::new("sh");
-            cmd.arg("-c").arg(validation);
+            cmd.arg("-c").arg(check_cmd);
 
             // Add environment variables
             for (key, value) in env {
@@ -50,19 +50,19 @@ impl ProcessTaskExecutor {
             match launcher.launch(&target, cmd).await {
                 Ok((_stream, mut handle)) => {
                     let exit = handle.wait().await.map_err(|e| {
-                        OrchestrationError::Config(format!("Failed to wait for validation: {}", e))
+                        OrchestrationError::Config(format!("Failed to wait for complete_if: {}", e))
                     })?;
-                    // If validation succeeds (exit code 0), task is already complete
+                    // If check succeeds (exit code 0), task is already complete
                     Ok(exit.success())
                 }
                 Err(e) => {
-                    debug!("Validation command failed: {}", e);
-                    // If validation fails, task needs to run
+                    debug!("complete_if check failed: {}", e);
+                    // If check fails, task needs to run
                     Ok(false)
                 }
             }
         } else {
-            // No validation command, assume task needs to run
+            // No complete_if command, assume task needs to run
             Ok(false)
         }
     }
@@ -79,8 +79,8 @@ impl TaskExecutor for ProcessTaskExecutor {
         _name: &str,
         config: &TaskConfig,
     ) -> Result<bool, OrchestrationError> {
-        // Check if there's a validation command in the config
-        self.run_validation(config).await
+        // Check if there's a complete_if command in the config
+        self.check_complete(config).await
     }
 
     async fn execute(
@@ -104,6 +104,12 @@ impl TaskExecutor for ProcessTaskExecutor {
                     crate::config::ProcessCommand::Template {
                         command_template, ..
                     } => command_template.clone(),
+                    crate::config::ProcessCommand::Typed { .. } => {
+                        // Typed tasks are handled by TypedTaskProvider, not ProcessTaskExecutor
+                        return Err(OrchestrationError::Config(
+                            "Typed tasks must be executed via TypedTaskProvider".to_string(),
+                        ));
+                    }
                 };
                 (cmd_str, env.clone(), working_dir.clone())
             }

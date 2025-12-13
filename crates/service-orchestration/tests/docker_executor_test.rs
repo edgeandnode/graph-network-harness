@@ -26,19 +26,18 @@ async fn test_docker_executor_starts_container() -> anyhow::Result<()> {
     let executor = DockerExecutor::new();
 
     // Create a simple hello-world container config
-    let config = ServiceConfig {
-        name: "test-hello".to_string(),
-        target: ServiceTarget::Docker {
+    let config = ServiceConfig::new(
+        "test-hello",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "hello-world:latest".to_string(),
             command_template: None,
             env: HashMap::new(),
-            ports: vec![],
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec![],
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Create spawner
     let spawner = AsyncSpawner::new();
@@ -70,19 +69,18 @@ async fn test_docker_executor_with_nginx() -> anyhow::Result<()> {
     let executor = DockerExecutor::new();
 
     // Create an nginx container that stays running
-    let config = ServiceConfig {
-        name: "test-nginx".to_string(),
-        target: ServiceTarget::Docker {
+    let config = ServiceConfig::new(
+        "test-nginx",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "nginx:alpine".to_string(),
             command_template: None,
             env: HashMap::new(),
-            ports: vec![8080], // Map port 8080
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec![],
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Create spawner
     let spawner = AsyncSpawner::new();
@@ -152,19 +150,18 @@ async fn test_docker_executor_environment_variables() -> anyhow::Result<()> {
     env.insert("TEST_VAR".to_string(), "test_value".to_string());
     env.insert("ANOTHER_VAR".to_string(), "another_value".to_string());
 
-    let config = ServiceConfig {
-        name: "test-env".to_string(),
-        target: ServiceTarget::Docker {
+    let config = ServiceConfig::new(
+        "test-env",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "alpine:latest".to_string(),
             command_template: None,
             env,
-            ports: vec![],
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec![],
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Note: Alpine with no command will exit immediately, but that's OK for this test
     // We just want to verify the container was created with the right environment

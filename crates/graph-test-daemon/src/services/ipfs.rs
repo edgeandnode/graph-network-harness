@@ -211,11 +211,8 @@ impl ServiceFromConfig for IpfsService {
             .target
             .get_param_u16("api_port")
             .or_else(|| {
-                if let ServiceTarget::Docker { ports, .. } = &config.target {
-                    ports.first().cloned()
-                } else {
-                    None
-                }
+                // Check allocated_ports (populated during port allocation phase)
+                config.allocated_ports.get("api").copied()
             })
             .unwrap_or(5001);
 
@@ -223,11 +220,8 @@ impl ServiceFromConfig for IpfsService {
             .target
             .get_param_u16("gateway_port")
             .or_else(|| {
-                if let ServiceTarget::Docker { ports, .. } = &config.target {
-                    ports.get(1).cloned()
-                } else {
-                    None
-                }
+                // Check allocated_ports for gateway
+                config.allocated_ports.get("gateway").copied()
             })
             .unwrap_or(8080);
 

@@ -287,19 +287,18 @@ mod tests {
     #[test]
     fn test_can_handle_docker() {
         let executor = AttachedExecutor::new();
-        let config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Docker {
+        let config = ServiceConfig::new(
+            "test",
+            ServiceTarget::Docker {
                 params: HashMap::new(),
                 image: "nginx".to_string(),
                 command_template: None,
                 env: HashMap::from([("CONTAINER_NAME".to_string(), "my-nginx".to_string())]),
-                ports: vec![],
+                ports: HashMap::new(),
+                container_ports: HashMap::new(),
                 volumes: vec![],
             },
-            depends_on: vec![],
-            health_check: None,
-        };
+        );
         assert!(executor.can_handle(&config));
     }
 
@@ -316,10 +315,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
         assert!(executor.can_handle(&config));
     }

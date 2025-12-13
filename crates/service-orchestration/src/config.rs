@@ -154,6 +154,18 @@ impl Dependency {
     }
 }
 
+/// Template file configuration for config generation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TemplateConfig {
+    /// Source template file path (relative to templates/ directory)
+    /// e.g., "graph-node/config.toml.template"
+    pub source: String,
+    /// Output filename (written to run-data/runs/<run-id>/config/<service>/)
+    /// If not specified, derived from source by stripping .template suffix
+    #[serde(default)]
+    pub output: Option<String>,
+}
+
 /// Configuration for a service to be managed by the orchestrator
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ServiceConfig {
@@ -167,6 +179,14 @@ pub struct ServiceConfig {
     pub depends_on: Vec<Dependency>,
     /// Optional health check configuration
     pub health_check: Option<HealthCheck>,
+    /// Template files to process before starting service
+    /// Supports {service.port.name} substitution
+    #[serde(default)]
+    pub templates: Vec<TemplateConfig>,
+    /// Allocated ports (populated at runtime by manager)
+    /// Maps port name -> allocated host port
+    #[serde(skip)]
+    pub allocated_ports: HashMap<String, u16>,
 }
 
 /// Command execution specification
@@ -186,6 +206,12 @@ pub enum ProcessCommand {
     Legacy {
         /// Full command to execute (binary + args)
         command: String,
+    },
+    /// Typed task - command provided by Rust implementation, not YAML
+    /// Use this for tasks where task_type determines the execution logic
+    Typed {
+        /// Marker field for serde disambiguation (must be true)
+        typed: bool,
     },
 }
 
@@ -211,9 +237,9 @@ pub enum ServiceTarget {
         /// Working directory (optional)
         #[serde(skip_serializing_if = "Option::is_none")]
         working_dir: Option<String>,
-        /// Validation command for idempotent tasks (optional)
+        /// Command to check if task is already complete (exit 0 = complete, skip execution)
         #[serde(skip_serializing_if = "Option::is_none")]
-        validation: Option<String>,
+        complete_if: Option<String>,
     },
     /// Docker container execution (managed)
     #[serde(rename = "docker")]
@@ -226,12 +252,16 @@ pub enum ServiceTarget {
         /// Command template override (optional - uses image default if not specified)
         #[serde(skip_serializing_if = "Option::is_none")]
         command_template: Option<String>,
-        /// Environment variables (supports {param} substitution)
+        /// Environment variables (supports {param} substitution and {port.name} references)
         #[serde(default)]
         env: HashMap<String, String>,
-        /// Port mappings (host ports)
-        #[serde(default)]
-        ports: Vec<u16>,
+        /// Named port configuration (e.g., main: auto, admin: 8080)
+        /// Host ports are allocated, container ports must be specified
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        ports: PortConfig,
+        /// Container port for each named port (required for mapping)
+        #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+        container_ports: HashMap<String, u16>,
         /// Volume mounts
         #[serde(default)]
         volumes: Vec<String>,
@@ -312,7 +342,7 @@ impl ProcessCommand {
     pub fn params(&self) -> Option<&HashMap<String, ParamValue>> {
         match self {
             ProcessCommand::Template { params, .. } => Some(params),
-            ProcessCommand::Legacy { .. } => None,
+            ProcessCommand::Legacy { .. } | ProcessCommand::Typed { .. } => None,
         }
     }
 
@@ -328,11 +358,12 @@ impl ProcessCommand {
                 }
                 result
             }
-            ProcessCommand::Legacy { .. } => template.to_string(),
+            ProcessCommand::Legacy { .. } | ProcessCommand::Typed { .. } => template.to_string(),
         }
     }
 
     /// Build the command as a vector of strings
+    /// Returns empty vec for Typed commands (execution handled by task_type implementation)
     pub fn build_command(&self) -> Vec<String> {
         match self {
             ProcessCommand::Template {
@@ -346,7 +377,16 @@ impl ProcessCommand {
                 // Simple split on whitespace - could be improved with shell_words
                 command.split_whitespace().map(String::from).collect()
             }
+            ProcessCommand::Typed { .. } => {
+                // Typed tasks don't have YAML-specified commands
+                Vec::new()
+            }
         }
+    }
+
+    /// Returns true if this is a typed task (command provided by Rust implementation)
+    pub fn is_typed(&self) -> bool {
+        matches!(self, ProcessCommand::Typed { .. })
     }
 }
 
@@ -457,7 +497,7 @@ impl ServiceTarget {
                 ports,
                 resources,
                 working_dir,
-                validation,
+                complete_if,
                 ..
             } => ServiceTarget::Process {
                 command: command.clone(),
@@ -465,13 +505,14 @@ impl ServiceTarget {
                 ports: ports.clone(),
                 resources: resources.clone(),
                 working_dir: working_dir.clone(),
-                validation: validation.clone(),
+                complete_if: complete_if.clone(),
             },
             ServiceTarget::Docker {
                 params,
                 image,
                 command_template,
                 ports,
+                container_ports,
                 volumes,
                 ..
             } => ServiceTarget::Docker {
@@ -480,6 +521,7 @@ impl ServiceTarget {
                 command_template: command_template.clone(),
                 env: new_env,
                 ports: ports.clone(),
+                container_ports: container_ports.clone(),
                 volumes: volumes.clone(),
             },
             ServiceTarget::DockerAttach { container, .. } => ServiceTarget::DockerAttach {
@@ -541,10 +583,10 @@ impl ServiceTarget {
 
     /// Get the port configuration for this target.
     ///
-    /// Returns the port config if available (Process targets only for now).
+    /// Returns the port config if available (Process and Docker targets).
     pub fn port_config(&self) -> Option<&PortConfig> {
         match self {
-            ServiceTarget::Process { ports, .. } => {
+            ServiceTarget::Process { ports, .. } | ServiceTarget::Docker { ports, .. } => {
                 if ports.is_empty() {
                     None
                 } else {
@@ -555,18 +597,18 @@ impl ServiceTarget {
         }
     }
 
-    /// Apply parameter substitution to process validation/command fields
+    /// Apply parameter substitution to process complete_if/command fields
     ///
-    /// For Process targets, substitutes `{param}` in validation and command strings
+    /// For Process targets, substitutes `{param}` in complete_if and command strings
     pub fn substitute_process_fields(&mut self, params: &HashMap<String, ParamValue>) {
         if let ServiceTarget::Process {
-            validation,
+            complete_if,
             command,
             ..
         } = self
         {
-            // Substitute in validation
-            if let Some(val) = validation {
+            // Substitute in complete_if
+            if let Some(val) = complete_if {
                 for (key, value) in params {
                     let placeholder = format!("{{{}}}", key);
                     *val = val.replace(&placeholder, &value.as_string());
@@ -587,6 +629,20 @@ impl ServiceTarget {
 }
 
 impl ServiceConfig {
+    /// Create a new ServiceConfig with just the required fields.
+    ///
+    /// This is useful for tests and simple configurations.
+    pub fn new(name: impl Into<String>, target: ServiceTarget) -> Self {
+        Self {
+            name: name.into(),
+            target,
+            depends_on: vec![],
+            health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
+        }
+    }
+
     /// Create a new config with updated environment variables
     pub fn with_env(&self, env: HashMap<String, String>) -> Self {
         ServiceConfig {
@@ -594,7 +650,27 @@ impl ServiceConfig {
             target: self.target.with_env(env),
             depends_on: self.depends_on.clone(),
             health_check: self.health_check.clone(),
+            templates: self.templates.clone(),
+            allocated_ports: self.allocated_ports.clone(),
         }
+    }
+
+    /// Builder method to add a health check
+    pub fn with_health_check(mut self, health_check: HealthCheck) -> Self {
+        self.health_check = Some(health_check);
+        self
+    }
+
+    /// Builder method to add dependencies
+    pub fn with_depends_on(mut self, depends_on: Vec<Dependency>) -> Self {
+        self.depends_on = depends_on;
+        self
+    }
+
+    /// Builder method to add templates
+    pub fn with_templates(mut self, templates: Vec<TemplateConfig>) -> Self {
+        self.templates = templates;
+        self
     }
 }
 
@@ -671,7 +747,7 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: Some("/tmp".to_string()),
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![Dependency::Service {
                 service: "database".to_string(),
@@ -683,6 +759,8 @@ mod tests {
                 retries: 3,
                 timeout: 10,
             }),
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -704,7 +782,7 @@ mod tests {
             ports: HashMap::new(),
             resources: None,
             working_dir: None,
-            validation: None,
+            complete_if: None,
         };
 
         let updated = target.with_env(env.clone());
@@ -718,7 +796,14 @@ mod tests {
             image: "nginx:latest".to_string(),
             command_template: None,
             env: HashMap::from([("ENV_VAR".to_string(), "value".to_string())]),
-            ports: vec![80, 443],
+            ports: HashMap::from([
+                ("http".to_string(), crate::ports::PortSpec::Fixed(80)),
+                ("https".to_string(), crate::ports::PortSpec::Fixed(443)),
+            ]),
+            container_ports: HashMap::from([
+                ("http".to_string(), 80),
+                ("https".to_string(), 443),
+            ]),
             volumes: vec!["/data:/app/data".to_string()],
         };
 

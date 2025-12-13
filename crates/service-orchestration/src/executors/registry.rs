@@ -91,10 +91,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let executor = registry.find_executor(&config);
@@ -104,19 +106,18 @@ mod tests {
     #[test]
     fn test_find_docker_executor() {
         let registry = ExecutorRegistry::new();
-        let config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Docker {
+        let config = ServiceConfig::new(
+            "test",
+            ServiceTarget::Docker {
                 params: HashMap::new(),
                 image: "test:latest".to_string(),
                 command_template: None,
                 env: HashMap::new(),
-                ports: vec![],
+                ports: HashMap::new(),
+                container_ports: HashMap::new(),
                 volumes: vec![],
             },
-            depends_on: vec![],
-            health_check: None,
-        };
+        );
 
         let executor = registry.find_executor(&config);
         assert!(executor.is_ok());

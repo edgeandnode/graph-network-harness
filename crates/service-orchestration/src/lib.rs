@@ -8,8 +8,8 @@
 //!
 //! ## Example
 //!
-//! ```rust
-//! use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget};
+//! ```rust,ignore
+//! use service_orchestration::{ServiceManager, ServiceConfig, ServiceTarget, ProcessCommand};
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let mut manager = ServiceManager::new().await?;
@@ -17,13 +17,17 @@
 //! let config = ServiceConfig {
 //!     name: "test-service".to_string(),
 //!     target: ServiceTarget::Process {
-//!         binary: "echo".to_string(),
-//!         args: vec!["hello".to_string()],
+//!         command: ProcessCommand::Legacy { command: "echo hello".to_string() },
 //!         env: Default::default(),
+//!         ports: Default::default(),
+//!         resources: None,
 //!         working_dir: None,
+//!         complete_if: None,
 //!     },
 //!     depends_on: vec![],
 //!     health_check: None,
+//!     templates: vec![],
+//!     allocated_ports: Default::default(),
 //! };
 //!
 //! manager.start_service("test-service", config).await?;
@@ -45,13 +49,14 @@ mod manager;
 mod ports;
 mod resources;
 mod state;
+mod template;
 mod task_config;
 mod task_executors;
 mod task_manager;
 
 pub use config::{
     CommandSpec, Dependency, HealthCheck, ParamValue, ProcessCommand, RemoteMode, ServiceConfig,
-    ServiceStatus, ServiceTarget,
+    ServiceStatus, ServiceTarget, TemplateConfig,
 };
 pub use ports::{PortAllocator, PortConfig, PortError, PortRegistry, PortSpec};
 pub use resources::{ByteSize, CpuLimit, ResourceLimits};
@@ -72,6 +77,7 @@ pub use state::{
 pub use task_config::{ServiceInstanceConfig, StackConfig, TaskConfig};
 pub use task_executors::ProcessTaskExecutor;
 pub use task_manager::{TaskExecution, TaskExecutor, TaskManager, TaskStatus, TypedTaskProvider};
+pub use template::{RunContext, TemplateError, TemplateProcessor};
 
 // Re-export with the old name for backwards compatibility during transition
 #[deprecated(note = "Use OrchestrationError instead")]

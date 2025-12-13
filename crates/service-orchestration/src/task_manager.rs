@@ -485,31 +485,30 @@ impl TaskManager {
 
     /// Wait for a task to complete
     pub async fn wait_for_completion(&self, name: &str) -> Result<TaskStatus, OrchestrationError> {
-        // If we have a state receiver, wait for updates
-        let execution = {
-            let executions = self.task_executions.read().unwrap();
-            executions.get(name).cloned()
-        };
+        // Poll status until no longer Running
+        // The spawn_state_monitor handles updating the status from channel events
+        loop {
+            let status = {
+                let executions = self.task_executions.read().unwrap();
+                executions.get(name).map(|e| e.status.clone())
+            };
 
-        if let Some(exec) = execution {
-            if let Some(rx) = exec.state_receiver {
-                // Consume all state updates
-                while let Ok(_state) = rx.recv().await {
-                    // State updates are being monitored by the spawned task
+            match status {
+                Some(TaskStatus::Running) => {
+                    // Still running, yield and check again
+                    smol::Timer::after(std::time::Duration::from_millis(50)).await;
+                }
+                Some(status) => {
+                    return Ok(status);
+                }
+                None => {
+                    return Err(OrchestrationError::Config(format!(
+                        "Task {} not found",
+                        name
+                    )));
                 }
             }
-
-            // Get the final status
-            let executions = self.task_executions.read().unwrap();
-            if let Some(final_exec) = executions.get(name) {
-                return Ok(final_exec.status.clone());
-            }
         }
-
-        Err(OrchestrationError::Config(format!(
-            "Task {} not found",
-            name
-        )))
     }
 
     /// Get the status of a task

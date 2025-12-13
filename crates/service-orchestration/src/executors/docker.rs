@@ -175,7 +175,7 @@ impl ServiceExecutor for DockerExecutor {
         let ServiceTarget::Docker {
             image,
             env,
-            ports,
+            container_ports,
             volumes,
             ..
         } = &config.target
@@ -221,22 +221,25 @@ impl ServiceExecutor for DockerExecutor {
             "run".to_string(),
             "-d".to_string(), // Detached mode
             "--name".to_string(),
-            format!("orchestrator-{}", config.name),
+            format!("orchestrator-{}-harness-test", config.name),
         ];
 
         // Add environment variables
         for (key, value) in env {
-            args.extend(vec!["-e".to_string(), format!("{}={}", key, value)]);
+            args.extend(["-e".to_string(), format!("{}={}", key, value)]);
         }
 
-        // Add port mappings
-        for port in ports {
-            args.extend(vec!["-p".to_string(), format!("{}:{}", port, port)]);
+        // Add port mappings: host_port:container_port
+        // Uses allocated_ports (from manager) mapped to container_ports
+        for (port_name, host_port) in &config.allocated_ports {
+            if let Some(container_port) = container_ports.get(port_name) {
+                args.extend(["-p".to_string(), format!("{}:{}", host_port, container_port)]);
+            }
         }
 
         // Add volume mounts
         for volume in volumes {
-            args.extend(vec!["-v".to_string(), volume.clone()]);
+            args.extend(["-v".to_string(), volume.clone()]);
         }
 
         // Add image
@@ -435,19 +438,18 @@ mod tests {
     fn test_can_handle() {
         let executor = DockerExecutor::new();
 
-        let docker_config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Docker {
+        let docker_config = ServiceConfig::new(
+            "test",
+            ServiceTarget::Docker {
                 params: HashMap::new(),
                 image: "nginx".to_string(),
                 command_template: None,
                 env: HashMap::new(),
-                ports: vec![8080],
+                ports: HashMap::new(),
+                container_ports: HashMap::new(),
                 volumes: vec![],
             },
-            depends_on: vec![],
-            health_check: None,
-        };
+        );
 
         assert!(executor.can_handle(&docker_config));
 
@@ -461,10 +463,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         assert!(!executor.can_handle(&process_config));

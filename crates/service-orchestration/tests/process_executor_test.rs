@@ -13,9 +13,9 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
     let spawner = AsyncSpawner::new();
 
     // Create a simple echo service config
-    let config = ServiceConfig {
-        name: "test-echo".to_string(),
-        target: ServiceTarget::Process {
+    let config = ServiceConfig::new(
+        "test-echo",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "echo hello world".to_string(),
             },
@@ -25,9 +25,7 @@ async fn test_process_executor_starts_echo() -> anyhow::Result<()> {
             working_dir: None,
             validation: None,
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;
@@ -55,9 +53,9 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
     let spawner = AsyncSpawner::new();
 
     // Create a sleep service that stays alive
-    let config = ServiceConfig {
-        name: "test-sleep".to_string(),
-        target: ServiceTarget::Process {
+    let config = ServiceConfig::new(
+        "test-sleep",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "sleep 2".to_string(),
             }, // Sleep for 2 seconds
@@ -67,9 +65,7 @@ async fn test_process_executor_starts_sleep() -> anyhow::Result<()> {
             working_dir: None,
             validation: None,
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;
@@ -120,9 +116,9 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
     let mut env = HashMap::new();
     env.insert("TEST_VAR".to_string(), "test_value".to_string());
 
-    let config = ServiceConfig {
-        name: "test-env".to_string(),
-        target: ServiceTarget::Process {
+    let config = ServiceConfig::new(
+        "test-env",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "sh -c 'echo TEST_VAR=$TEST_VAR && sleep 1'".to_string(),
             },
@@ -132,9 +128,7 @@ async fn test_process_executor_environment_variables() -> anyhow::Result<()> {
             working_dir: None,
             validation: None,
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Start the service
     let running_service = executor.start(config.clone(), &spawner).await?;

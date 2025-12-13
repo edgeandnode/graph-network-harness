@@ -11,9 +11,9 @@ use std::collections::HashMap;
 
 #[test]
 fn test_service_config_yaml_roundtrip() {
-    let config = ServiceConfig {
-        name: "test-service".to_string(),
-        target: ServiceTarget::Process {
+    let config = ServiceConfig::new(
+        "test-service",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "echo hello world".to_string(),
             },
@@ -26,22 +26,22 @@ fn test_service_config_yaml_roundtrip() {
             working_dir: Some("/tmp".to_string()),
             validation: None,
         },
-        depends_on: vec![
-            service_orchestration::Dependency::Service {
-                service: "database".to_string(),
-            },
-            service_orchestration::Dependency::Service {
-                service: "cache".to_string(),
-            },
-        ],
-        health_check: Some(HealthCheck {
-            command: "curl".to_string(),
-            args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
-            interval: 30,
-            retries: 3,
-            timeout: 10,
-        }),
-    };
+    )
+    .with_depends_on(vec![
+        service_orchestration::Dependency::Service {
+            service: "database".to_string(),
+        },
+        service_orchestration::Dependency::Service {
+            service: "cache".to_string(),
+        },
+    ])
+    .with_health_check(HealthCheck {
+        command: "curl".to_string(),
+        args: vec!["-f".to_string(), "http://localhost:8080/health".to_string()],
+        interval: 30,
+        retries: 3,
+        timeout: 10,
+    });
 
     // Test YAML serialization
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -54,25 +54,25 @@ fn test_service_config_yaml_roundtrip() {
 
 #[test]
 fn test_docker_service_config() {
-    let config = ServiceConfig {
-        name: "nginx-service".to_string(),
-        target: ServiceTarget::Docker {
+    let config = ServiceConfig::new(
+        "nginx-service",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "nginx:latest".to_string(),
             command_template: None,
             env: HashMap::from([("NGINX_PORT".to_string(), "80".to_string())]),
-            ports: vec![80, 443],
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec!["/data:/usr/share/nginx/html".to_string()],
         },
-        depends_on: vec![],
-        health_check: Some(HealthCheck {
-            command: "curl".to_string(),
-            args: vec!["-f".to_string(), "http://localhost/health".to_string()],
-            interval: 15,
-            retries: 2,
-            timeout: 5,
-        }),
-    };
+    )
+    .with_health_check(HealthCheck {
+        command: "curl".to_string(),
+        args: vec!["-f".to_string(), "http://localhost/health".to_string()],
+        interval: 15,
+        retries: 2,
+        timeout: 5,
+    });
 
     // Test that Docker executor can handle this config
     let executor = DockerExecutor::new();
@@ -147,9 +147,9 @@ async fn test_service_manager_initialization() {
     let manager = ServiceManager::new().await.unwrap();
 
     // Test that all executors are registered
-    let _process_config = ServiceConfig {
-        name: "test-process".to_string(),
-        target: ServiceTarget::Process {
+    let _process_config = ServiceConfig::new(
+        "test-process",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "echo test".to_string(),
             },
@@ -159,23 +159,20 @@ async fn test_service_manager_initialization() {
             working_dir: None,
             validation: None,
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
-    let _docker_config = ServiceConfig {
-        name: "test-docker".to_string(),
-        target: ServiceTarget::Docker {
+    let _docker_config = ServiceConfig::new(
+        "test-docker",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "hello-world".to_string(),
             command_template: None,
             env: HashMap::new(),
-            ports: vec![],
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec![],
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // The manager should be able to find appropriate executors
     // (We can't test the actual service starting without infrastructure)
@@ -216,9 +213,9 @@ fn test_executor_type_detection() {
     let process_executor = ProcessExecutor::new();
     let docker_executor = DockerExecutor::new();
 
-    let process_config = ServiceConfig {
-        name: "test".to_string(),
-        target: ServiceTarget::Process {
+    let process_config = ServiceConfig::new(
+        "test",
+        ServiceTarget::Process {
             command: ProcessCommand::Legacy {
                 command: "test".to_string(),
             },
@@ -228,23 +225,20 @@ fn test_executor_type_detection() {
             working_dir: None,
             validation: None,
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
-    let docker_config = ServiceConfig {
-        name: "test".to_string(),
-        target: ServiceTarget::Docker {
+    let docker_config = ServiceConfig::new(
+        "test",
+        ServiceTarget::Docker {
             params: HashMap::new(),
             image: "test".to_string(),
             command_template: None,
             env: HashMap::new(),
-            ports: vec![],
+            ports: HashMap::new(),
+            container_ports: HashMap::new(),
             volumes: vec![],
         },
-        depends_on: vec![],
-        health_check: None,
-    };
+    );
 
     // Test that each executor only handles its own type
     assert!(process_executor.can_handle(&process_config));
@@ -274,6 +268,8 @@ fn test_service_config_env_injection() {
             service: "db".to_string(),
         }],
         health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
     };
 
     // Test environment injection (simulating network config injection)
@@ -318,6 +314,8 @@ async fn test_service_manager_port_allocation() {
         },
         depends_on: vec![],
         health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
     };
 
     let graph_node_config = ServiceConfig {
@@ -339,6 +337,8 @@ async fn test_service_manager_port_allocation() {
         },
         depends_on: vec![],
         health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
     };
 
     // Allocate ports for all services
@@ -383,6 +383,8 @@ fn test_port_config_yaml_roundtrip() {
         },
         depends_on: vec![],
         health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
     };
 
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");
@@ -418,6 +420,8 @@ fn test_resource_limits_yaml_roundtrip() {
         },
         depends_on: vec![],
         health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
     };
 
     let yaml = serde_yaml::to_string(&config).expect("Failed to serialize");

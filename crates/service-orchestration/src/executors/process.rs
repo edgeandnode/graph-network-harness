@@ -306,27 +306,28 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         assert!(executor.can_handle(&process_config));
 
-        let docker_config = ServiceConfig {
-            name: "test".to_string(),
-            target: ServiceTarget::Docker {
+        let docker_config = ServiceConfig::new(
+            "test",
+            ServiceTarget::Docker {
                 params: HashMap::new(),
                 image: "nginx".to_string(),
                 command_template: None,
                 env: HashMap::new(),
-                ports: vec![],
+                ports: HashMap::new(),
+                container_ports: HashMap::new(),
                 volumes: vec![],
             },
-            depends_on: vec![],
-            health_check: None,
-        };
+        );
 
         assert!(!executor.can_handle(&docker_config));
     }
@@ -347,10 +348,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let service = executor.start(config, &spawner).await.unwrap();
@@ -375,10 +378,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let config2 = ServiceConfig {
@@ -391,10 +396,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         // Start services - this should store handles
@@ -441,10 +448,12 @@ mod tests {
                         ports: HashMap::new(),
                         resources: None,
                         working_dir: None,
-                        validation: None,
+                        complete_if: None,
                     },
                     depends_on: vec![],
                     health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
                 };
 
                 let spawner = AsyncSpawner::new();
@@ -485,10 +494,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let service = executor.start(config, &spawner).await.unwrap();
@@ -526,10 +537,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let service = executor.start(config, &spawner).await.unwrap();
@@ -583,10 +596,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let config2 = ServiceConfig {
@@ -600,10 +615,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let service1 = executor.start(config1, &spawner).await.unwrap();

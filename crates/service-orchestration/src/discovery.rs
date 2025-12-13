@@ -268,6 +268,8 @@ mod tests {
             depends_on: vec![],
             state: RegistryServiceState::Running,
             last_health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
             registered_at: Utc::now(),
             last_state_change: Utc::now(),
         };
@@ -301,12 +303,14 @@ mod tests {
                 },
                 env: HashMap::new(),
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![crate::config::Dependency::Service {
                 service: "postgres-1".to_string(),
             }],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let config = discovery

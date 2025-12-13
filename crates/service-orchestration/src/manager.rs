@@ -12,6 +12,7 @@ use crate::{
     },
     health::{HealthChecker, HealthMonitor, HealthStatus},
     ports::{PortAllocator, PortRegistry},
+    template::{RunContext, TemplateProcessor},
 };
 use async_channel::Receiver;
 use async_runtime_compat::Spawner;
@@ -28,6 +29,7 @@ use tracing::{debug, info, warn};
 /// - `active_services`: RwLock allows concurrent reads, exclusive writes for service lifecycle
 /// - `health_monitors`: RwLock for health check state updates
 /// - `port_allocator`: RwLock for port allocation during service startup
+/// - `run_context`: RwLock for run directory management
 pub struct ServiceManager {
     /// Service executors by type
     executors: HashMap<String, Arc<dyn ServiceExecutor>>,
@@ -37,6 +39,8 @@ pub struct ServiceManager {
     health_monitors: Arc<RwLock<HashMap<String, HealthMonitor>>>,
     /// Port allocator for dynamic port assignment (interior mutability for allocation)
     port_allocator: Arc<RwLock<PortAllocator>>,
+    /// Run context for template processing and runtime file management
+    run_context: Option<RunContext>,
 }
 
 impl ServiceManager {
@@ -74,6 +78,7 @@ impl ServiceManager {
             active_services: Arc::new(RwLock::new(HashMap::new())),
             health_monitors: Arc::new(RwLock::new(HashMap::new())),
             port_allocator: Arc::new(RwLock::new(PortAllocator::with_default_range())),
+            run_context: None,
         })
     }
 
@@ -128,10 +133,62 @@ impl ServiceManager {
         self.port_allocator.read().unwrap().registry().clone()
     }
 
-    /// Substitute port references in a service configuration.
+    /// Set the run context for template processing.
     ///
-    /// This replaces patterns like `{port.http}` and `{postgres.port.main}` in
-    /// the service's command, environment variables, and health check.
+    /// This should be called before launching any services that have templates.
+    /// The run context determines where generated config files are written.
+    pub fn set_run_context(&mut self, run_context: RunContext) {
+        info!("Setting run context: run_id={}", run_context.run_id);
+        self.run_context = Some(run_context);
+    }
+
+    /// Get the run context if set.
+    pub fn run_context(&self) -> Option<&RunContext> {
+        self.run_context.as_ref()
+    }
+
+    /// Process all templates for a service.
+    ///
+    /// This reads template files from the templates directory, substitutes
+    /// port references, and writes the output to the run directory.
+    ///
+    /// Returns the paths of generated config files.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No run context has been set
+    /// - Template file cannot be read
+    /// - Port substitution fails
+    /// - Output file cannot be written
+    pub fn process_templates(
+        &self,
+        service_name: &str,
+        config: &ServiceConfig,
+    ) -> Result<Vec<std::path::PathBuf>, OrchestrationError> {
+        if config.templates.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let run_context = self.run_context.as_ref().ok_or_else(|| {
+            OrchestrationError::Config(
+                "Run context not set - call set_run_context before processing templates".to_string(),
+            )
+        })?;
+
+        let allocator = self.port_allocator.read().unwrap();
+        let processor = TemplateProcessor::new(&allocator, run_context);
+
+        processor
+            .process_templates(service_name, &config.templates)
+            .map_err(|e| OrchestrationError::Config(format!("Template processing failed: {}", e)))
+    }
+
+    /// Substitute port and run context references in a service configuration.
+    ///
+    /// This replaces patterns like:
+    /// - `{port.http}` and `{postgres.port.main}` for ports
+    /// - `{run.config_dir}`, `{run.id}`, etc. for run context paths
     fn substitute_ports_in_config(
         &self,
         service_name: &str,
@@ -139,13 +196,19 @@ impl ServiceManager {
     ) -> Result<ServiceConfig, OrchestrationError> {
         let allocator = self.port_allocator.read().unwrap();
 
-        // If this service has no ports allocated, return config unchanged
-        if allocator.get_port(service_name, "").is_none()
-            && allocator.registry().get(service_name).is_none()
-        {
-            // Check if config has port references that need resolving
-            // For now, we'll try substitution anyway in case it references other services
-        }
+        // Helper to apply both port and run context substitution
+        let substitute = |s: &str| -> Result<String, OrchestrationError> {
+            let mut result = allocator
+                .substitute_ports(s, Some(service_name))
+                .map_err(OrchestrationError::Port)?;
+
+            // Apply run context substitution if available
+            if let Some(ctx) = &self.run_context {
+                result = ctx.substitute(&result, service_name);
+            }
+
+            Ok(result)
+        };
 
         let mut new_config = config.clone();
 
@@ -157,37 +220,30 @@ impl ServiceManager {
             } => {
                 // Substitute in environment variables
                 for value in env.values_mut() {
-                    *value = allocator
-                        .substitute_ports(value, Some(service_name))
-                        .map_err(OrchestrationError::Port)?;
+                    *value = substitute(value)?;
                 }
 
                 // Substitute in command template if present
                 match command {
                     crate::config::ProcessCommand::Template { command_template, .. } => {
-                        *command_template = allocator
-                            .substitute_ports(command_template, Some(service_name))
-                            .map_err(OrchestrationError::Port)?;
+                        *command_template = substitute(command_template)?;
                     }
                     crate::config::ProcessCommand::Legacy { command: cmd } => {
-                        *cmd = allocator
-                            .substitute_ports(cmd, Some(service_name))
-                            .map_err(OrchestrationError::Port)?;
+                        *cmd = substitute(cmd)?;
+                    }
+                    crate::config::ProcessCommand::Typed { .. } => {
+                        // No command to substitute for typed tasks
                     }
                 }
             }
             ServiceTarget::Docker { env, command_template, .. } => {
                 // Substitute in environment variables
                 for value in env.values_mut() {
-                    *value = allocator
-                        .substitute_ports(value, Some(service_name))
-                        .map_err(OrchestrationError::Port)?;
+                    *value = substitute(value)?;
                 }
                 // Substitute in command template if present
                 if let Some(template) = command_template {
-                    *template = allocator
-                        .substitute_ports(template, Some(service_name))
-                        .map_err(OrchestrationError::Port)?;
+                    *template = substitute(template)?;
                 }
             }
             // Other target types don't have port substitution
@@ -196,14 +252,15 @@ impl ServiceManager {
 
         // Substitute in health check if present
         if let Some(health_check) = &mut new_config.health_check {
-            health_check.command = allocator
-                .substitute_ports(&health_check.command, Some(service_name))
-                .map_err(OrchestrationError::Port)?;
+            health_check.command = substitute(&health_check.command)?;
             for arg in &mut health_check.args {
-                *arg = allocator
-                    .substitute_ports(arg, Some(service_name))
-                    .map_err(OrchestrationError::Port)?;
+                *arg = substitute(arg)?;
             }
+        }
+
+        // Populate allocated_ports from registry (for Docker executor)
+        if let Some(ports) = allocator.registry().get(service_name) {
+            new_config.allocated_ports = ports.clone();
         }
 
         Ok(new_config)
@@ -358,6 +415,28 @@ impl ServiceManager {
         // Service has been removed from active_services, nothing more to do
 
         debug!("Successfully stopped service: {}", name);
+        Ok(())
+    }
+
+    /// Stop all running services
+    pub async fn stop_all_services(&self, spawner: &dyn Spawner) -> Result<(), OrchestrationError> {
+        info!("Stopping all services...");
+
+        // Get list of all running service names
+        let service_names: Vec<String> = {
+            let active = self.active_services.read().unwrap();
+            active.keys().cloned().collect()
+        };
+
+        // Stop each service (errors are logged but we continue stopping others)
+        for name in service_names {
+            match self.stop_service(&name, spawner).await {
+                Ok(_) => info!("Stopped service: {}", name),
+                Err(e) => tracing::warn!("Failed to stop service {}: {}", name, e),
+            }
+        }
+
+        info!("All services stopped");
         Ok(())
     }
 
@@ -575,10 +654,12 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: None,
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![],
             health_check: None,
+            templates: vec![],
+            allocated_ports: HashMap::new(),
         };
 
         let executor = manager.find_executor(&process_config).unwrap();

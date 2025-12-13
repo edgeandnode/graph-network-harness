@@ -132,7 +132,7 @@ mod tests {
                 ports: HashMap::new(),
                 resources: None,
                 working_dir: Some("./contracts".to_string()),
-                validation: None,
+                complete_if: None,
             },
             depends_on: vec![Dependency::Service {
                 service: "anvil".to_string(),
@@ -166,7 +166,7 @@ mod tests {
                         ports: HashMap::new(),
                         resources: None,
                         working_dir: None,
-                        validation: None,
+                        complete_if: None,
                     },
                 ),
             )]),

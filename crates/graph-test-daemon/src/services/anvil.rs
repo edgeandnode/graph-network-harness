@@ -251,12 +251,8 @@ impl ServiceFromConfig for AnvilService {
             .target
             .get_param_u16("port")
             .or_else(|| {
-                // For Docker, check ports array
-                if let ServiceTarget::Docker { ports, .. } = &config.target {
-                    ports.first().cloned()
-                } else {
-                    None
-                }
+                // Check allocated_ports first (populated at runtime)
+                config.allocated_ports.get("rpc").copied()
             })
             .unwrap_or(8545);
 

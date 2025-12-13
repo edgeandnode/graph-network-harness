@@ -4,11 +4,17 @@
 //! Graph Protocol components using the statig crate for proper state management,
 //! error recovery, and progress tracking.
 
+pub mod cargo_build;
 pub mod graph_contracts;
 pub mod subgraph_deploy;
 pub mod tap_contracts;
 
 // Re-export the task types and their state machines
+pub use cargo_build::{
+    CargoBuildEvent, CargoBuildOutput, CargoBuildTask, CargoBuildTaskState,
+    CargoBuildTaskStateMachine, run_cargo_build,
+};
+
 pub use graph_contracts::{
     GraphContractsContext, GraphContractsDeployTaskState, GraphContractsDeployTaskStateMachine,
     GraphContractsEvent, GraphContractsTask, deploy_graph_contracts,

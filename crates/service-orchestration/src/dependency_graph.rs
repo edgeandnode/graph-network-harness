@@ -210,9 +210,9 @@ mod tests {
             "service-a".to_string(),
             ServiceInstanceConfig {
                 service_type: "type-a".to_string(),
-                orchestration: ServiceConfig {
-                    name: "service-a".to_string(),
-                    target: ServiceTarget::Process {
+                orchestration: ServiceConfig::new(
+                    "service-a",
+                    ServiceTarget::Process {
                         command: ProcessCommand::Legacy {
                             command: "test-service-a".to_string(),
                         },
@@ -220,11 +220,9 @@ mod tests {
                         ports: HashMap::new(),
                         resources: None,
                         working_dir: None,
-                        validation: None,
+                        complete_if: None,
                     },
-                    depends_on: vec![],
-                    health_check: None,
-                },
+                ),
             },
         );
 
@@ -233,19 +231,18 @@ mod tests {
             "service-b".to_string(),
             ServiceInstanceConfig {
                 service_type: "type-b".to_string(),
-                orchestration: ServiceConfig {
-                    name: "service-b".to_string(),
-                    target: ServiceTarget::Docker {
+                orchestration: ServiceConfig::new(
+                    "service-b",
+                    ServiceTarget::Docker {
                         params: HashMap::new(),
                         image: "test-image:latest".to_string(),
                         command_template: None,
                         env: HashMap::new(),
-                        ports: vec![8080],
+                        ports: HashMap::new(),
+                        container_ports: HashMap::new(),
                         volumes: vec![],
                     },
-                    depends_on: vec![],
-                    health_check: None,
-                },
+                ),
             },
         );
 
@@ -254,9 +251,9 @@ mod tests {
             "service-c".to_string(),
             ServiceInstanceConfig {
                 service_type: "type-c".to_string(),
-                orchestration: ServiceConfig {
-                    name: "service-c".to_string(),
-                    target: ServiceTarget::Process {
+                orchestration: ServiceConfig::new(
+                    "service-c",
+                    ServiceTarget::Process {
                         command: ProcessCommand::Legacy {
                             command: "test-service-c".to_string(),
                         },
@@ -264,13 +261,11 @@ mod tests {
                         ports: HashMap::new(),
                         resources: None,
                         working_dir: None,
-                        validation: None,
+                        complete_if: None,
                     },
-                    depends_on: vec![Dependency::Service {
-                        service: "service-b".to_string(),
-                    }],
-                    health_check: None,
-                },
+                ).with_depends_on(vec![Dependency::Service {
+                    service: "service-b".to_string(),
+                }]),
             },
         );
 
@@ -287,7 +282,7 @@ mod tests {
                     ports: HashMap::new(),
                     resources: None,
                     working_dir: None,
-                    validation: None,
+                    complete_if: None,
                 },
                 depends_on: vec![Dependency::Service {
                     service: "service-a".to_string(),
@@ -309,7 +304,7 @@ mod tests {
                     ports: HashMap::new(),
                     resources: None,
                     working_dir: None,
-                    validation: None,
+                    complete_if: None,
                 },
                 depends_on: vec![
                     Dependency::Service {

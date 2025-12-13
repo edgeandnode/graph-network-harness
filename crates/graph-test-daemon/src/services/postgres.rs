@@ -215,11 +215,8 @@ impl ServiceFromConfig for PostgresService {
             .target
             .get_param_u16("port")
             .or_else(|| {
-                if let ServiceTarget::Docker { ports, .. } = &config.target {
-                    ports.first().cloned()
-                } else {
-                    None
-                }
+                // Check allocated_ports (populated during port allocation phase)
+                config.allocated_ports.get("main").copied()
             })
             .unwrap_or(5432);
 

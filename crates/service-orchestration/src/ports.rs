@@ -148,6 +148,10 @@ pub enum PortError {
     /// Port not found for service.
     #[error("Port '{1}' not found for service '{0}'")]
     PortNotFound(String, String),
+
+    /// Unresolved placeholder in template.
+    #[error("Unresolved placeholder in template: {0}")]
+    UnresolvedPlaceholder(String),
 }
 
 /// Port allocator that manages dynamic port assignment.
@@ -348,6 +352,10 @@ impl PortAllocator {
                 result = result.replace(full_match, &port.to_string());
             }
         }
+
+        // Note: We don't check for remaining {placeholders} here because
+        // other substitution systems (like params) may handle them.
+        // Template file processing should do a final validation.
 
         Ok(result)
     }

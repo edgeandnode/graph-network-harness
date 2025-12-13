@@ -258,6 +258,11 @@ impl TaskFromConfig for YamlTask {
                         cmd
                     }
                     service_orchestration::ProcessCommand::Legacy { command } => command.clone(),
+                    service_orchestration::ProcessCommand::Typed { .. } => {
+                        return Err(Error::validation(
+                            "Typed tasks must use TypedTaskProvider, not YamlTask",
+                        ));
+                    }
                 }
             }
             _ => {
@@ -267,10 +272,10 @@ impl TaskFromConfig for YamlTask {
             }
         };
 
-        // Get validation and working_dir from the target config
+        // Get complete_if and working_dir from the target config
         // These should be top-level fields in ServiceTarget, not in params
         let validation_command = match &config.target {
-            ServiceTarget::Process { validation, .. } => validation.clone(),
+            ServiceTarget::Process { complete_if, .. } => complete_if.clone(),
             _ => None,
         };
 
